@@ -28,7 +28,7 @@ class Message:
         out = [
             f"message w/ Action: {self.action}",
             f"Leader Address: {hex(self.leader_id)}",
-            f"Follower Address: {hex(self.follow_id)}",
+            f"Follower Address: {hex(self.follower_id)}",
             f"Options: {self.option}",
         ]
         return "\n\t".join(out)
