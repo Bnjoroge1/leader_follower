@@ -1,5 +1,5 @@
 import random
-
+import message_classes
 
 class Device:
     """ Lightweight device object for storing in a DeviceList. """
@@ -87,8 +87,9 @@ class ThisDevice(Device):
         self.leader_started_operating = None
         self.task_folder_idx = None  # multiple operations can be preloaded
 
-    def send(self):
-        pass
+    def send(self, action, payload, option, leader_id, follower_id):
+        msg = message_classes.Message(action, payload, option, leader_id, follower_id).msg
+        """ Send message through whatever communication method """
 
     def receive(self):
         pass
