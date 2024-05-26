@@ -102,9 +102,9 @@ class ThisDevice(Device):
 
         while time.time() < end_time:
             received = self.receive()
-            if self.received != None:
+            if received != None:
                 self.make_follower()
-                self.follower_receive_attendance()
+                self.follower_receive_attendance(received)
         
         if self.leader:
             self.leader_send_attendance()
@@ -148,8 +148,15 @@ class ThisDevice(Device):
     # TODO: leader send task stop
 
     # TODO: follower receive attendance
-    def follower_receive_attendance(self):
-        pass
+    def follower_receive_attendance(self, received_msg):
+        while received_msg.action != Action.ATTENDANCE.value:
+            # could get stuck here - potential error case
+            received_msg = self.receive()
+        self.leader_id = received_msg.leader_id
+
+        # send response
+        self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id)
+
     # TODO: follower receive device list
 
     # TODO: follower receive check in
