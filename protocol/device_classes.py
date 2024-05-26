@@ -83,6 +83,7 @@ class ThisDevice(Device):
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
         """
         super().__init__(id)
+        self.leader = True # start ThisDevice as leader then change accordingly in setup
         self.device_list = DeviceList()  # default sizing
         self.leader_id = None
         self.leader_started_operating = None
@@ -92,11 +93,21 @@ class ThisDevice(Device):
         msg = Message(action, payload, option, leader_id, follower_id).msg
         """ Send message through whatever communication method """
 
-    def receive(self):
+    def receive(self) -> Message:
         pass
 
     def setup(self):
-        pass
+        # TODO: change number once constants defined
+        end_time = time.time() + 3
+
+        while time.time() < end_time:
+            received = self.receive()
+            if self.received != None:
+                self.make_follower()
+                self.follower_receive_attendance()
+        
+        if self.leader:
+            self.leader_send_attendance()
 
     # TODO: Model communication channel first
     # TODO: leader send attendance
@@ -105,7 +116,7 @@ class ThisDevice(Device):
         # attendance action=1, payload=0, option=0, leader=thisid, follower = 0
         self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0)
 
-        # TODO: define the send/receive time constants
+        # TODO: define the send/receive time constants, change this number after
         end_time = time.time() + 2
         new_device = False
         while (time.time() < end_time):
@@ -137,7 +148,8 @@ class ThisDevice(Device):
     # TODO: leader send task stop
 
     # TODO: follower receive attendance
-
+    def follower_receive_attendance(self):
+        pass
     # TODO: follower receive device list
 
     # TODO: follower receive check in
@@ -207,7 +219,7 @@ class DeviceList:
         device.set_task(task)
         self.devices.append(device)
 
-    def find_device(self, id: int) -> int or None:
+    def find_device(self, id: int) -> int:
         """
         Finds Device object with target id in DeviceList.
         :param id: identifier for target device.
@@ -231,7 +243,7 @@ class DeviceList:
             return True
         return False
 
-    def unused_tasks(self) -> [int]:
+    def unused_tasks(self) -> list[int]:
         """
         Gets list of tasks not currently assigned to a device.
         :return: list of unused task indices.
