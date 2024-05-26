@@ -1,8 +1,7 @@
 import unittest
 import sys
 sys.path.append('../protocol')
-
-from device_classes import Device, ThisDevice, DeviceList
+from protocol import device_classes as dc
 
 class TestDeviceClass(unittest.TestCase):
     def setUp(self):
