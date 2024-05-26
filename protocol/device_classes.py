@@ -1,5 +1,6 @@
 import random
-import message_classes
+import time
+from message_classes import Message, Action
 
 class Device:
     """ Lightweight device object for storing in a DeviceList. """
@@ -88,7 +89,7 @@ class ThisDevice(Device):
         self.task_folder_idx = None  # multiple operations can be preloaded
 
     def send(self, action, payload, option, leader_id, follower_id):
-        msg = message_classes.Message(action, payload, option, leader_id, follower_id).msg
+        msg = Message(action, payload, option, leader_id, follower_id).msg
         """ Send message through whatever communication method """
 
     def receive(self):
@@ -99,8 +100,33 @@ class ThisDevice(Device):
 
     # TODO: Model communication channel first
     # TODO: leader send attendance
+    def leader_send_attendance(self):
+        # maybe change so message created here?
+        # attendance action=1, payload=0, option=0, leader=thisid, follower = 0
+        self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0)
+
+        # TODO: define the send/receive time constants
+        end_time = time.time() + 2
+        new_device = False
+        while (time.time() < end_time):
+            # are we returning received message or boolean?
+            # assuming returning message
+            received = self.receive()
+            if (received != None):
+                if (received.action == Action.ATT_RESPONSE.value):
+                    # should we assume the device isnt already in list?
+                    self.device_list.add_device(received.follower_id)
+                    new_device = True
+                else:
+                    continue
+        
+        if new_device:
+            self.leader_send_device_list()
+
 
     # TODO: leader send device list
+    def leader_send_device_list(self):
+        pass
 
     # TODO: leader send check in
 
