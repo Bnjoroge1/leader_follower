@@ -24,8 +24,9 @@ def main():
     for i in range(len(nodes)):
         nodes[i] = nc.Node('localhost', port + i, 'Node' + str(i), network)
 
+    # devices get set up in series but run in parallel (prevents accidental leaders)
     for device in devices:
-        time.sleep(3)
+        print("Setting up device " + str(device))
         device.setup()
 
     network.visualize()
@@ -66,3 +67,7 @@ def main():
 # node1.close()
 # node2.close()
 # node3.close()
+
+
+if __name__ == "__main__":
+    main()
