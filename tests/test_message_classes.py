@@ -10,7 +10,7 @@ class TestMessageClass(unittest.TestCase):
 
     def test_basic_constructor(self):
         # basic test
-        basic_msg = Message(1, 0, 0, 0, 0)
+        basic_msg = mc.Message(1, 0, 0, 0, 0)
         corr_msg = 1e26
         message = "Basic constructor message not equal to 1e26"
         self.assertEqual(basic_msg.msg, corr_msg, message)
