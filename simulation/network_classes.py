@@ -1,67 +1,73 @@
 import socket
 import threading
-
-
-class Graph:
-    """
-    Dense graph representation of mesh network, uses adjacency matrix.
-    """
-
-    def __init__(self, size):
-        self.size = size
-        self.adjacency_matrix = [[0] * size for _ in range(size)]
-
-    def add_node(self, node_id):
-        # In an adjacency matrix, nodes are implicit in the matrix size
-        # No need to explicitly add a node
-        pass
-
-    def add_edge(self, node1, node2):
-        self.adjacency_matrix[node1 - 1][node2 - 1] = 1
-        self.adjacency_matrix[node2 - 1][node1 - 1] = 1
-
-    def get_neighbors(self, node_id):
-        neighbors = []
-        for idx, is_neighbor in enumerate(self.adjacency_matrix[node_id - 1]):
-            if is_neighbor:
-                neighbors.append(idx + 1)
-        return neighbors
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 
 
 class Node:
-    """
-    Node class representing a device in the protocol.
-    """
-
-    def __init__(self, node_id, port, graph):
-        self.node_id = node_id
+    def __init__(self, host, port, node_id, network):
+        self.host = host
         self.port = port
-        self.graph = graph
-        self.running = True
+        self.node_id = node_id
+        self.network = network
+        self.neighbors = {}
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(5)
+        self.server_thread = threading.Thread(target=self.listen_for_neighbors)
+        self.server_thread.start()
+        self.network.add_node(self.node_id)  # Add the node to the network graph
 
-    def listen(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind(('localhost', self.port))
-        while self.running:
-            message, addr = s.recvfrom(1024)
-            print(f"Node {self.node_id} received message: {message.decode()} from {addr}")
-            self.handle_message(message.decode(), addr)
+    def listen_for_neighbors(self):
+        print(f"Node {self.node_id} listening on {self.host}:{self.port}")
+        while True:
+            conn, addr = self.server_socket.accept()
+            threading.Thread(target=self.handle_neighbor, args=(conn, addr)).start()
 
-    def handle_message(self, message, addr):
-        # Basic handling: just print out the message
-        print(f"Node {self.node_id} processing message: {message}")
+    def handle_neighbor(self, conn, addr):
+        print(f"Node {self.node_id} connected by {addr}")
+        while True:
+            try:
+                data = conn.recv(1024)
+                if not data:
+                    break
+                print(f"Node {self.node_id} received: {data.decode()}")
+            except:
+                break
+        conn.close()
 
-    def send_message(self, message, target_port):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.sendto(message.encode(), ('localhost', target_port))
+    def connect_to_neighbor(self, neighbor_host, neighbor_port, neighbor_id):
+        neighbor_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        neighbor_socket.connect((neighbor_host, neighbor_port))
+        self.neighbors[(neighbor_host, neighbor_port)] = neighbor_socket
+        self.network.add_edge(self.node_id, neighbor_id)  # Add the connection to the network graph
 
-    def broadcast(self, message):
-        neighbors = self.graph.get_neighbors(self.node_id)
-        for neighbor_id in neighbors:
-            # Here we assume that the node_id maps directly to the port (e.g., node_id 1 -> port 5001)
-            target_port = 5000 + neighbor_id
-            self.send_message(message, target_port)
+    def send_message(self, neighbor_host, neighbor_port, message):
+        if (neighbor_host, neighbor_port) in self.neighbors:
+            self.neighbors[(neighbor_host, neighbor_port)].sendall(message.encode())
+        else:
+            print(f"Neighbor {neighbor_host}:{neighbor_port} not found!")
 
-    def start(self):
-        thread = threading.Thread(target=self.listen)
-        thread.start()
+    def close(self):
+        for neighbor in self.neighbors.values():
+            neighbor.close()
+        self.server_socket.close()
+
+
+class NetworkVisualizer:
+    def __init__(self):
+        self.graph = nx.Graph()
+
+    def add_node(self, node_id):
+        self.graph.add_node(node_id)
+
+    def add_edge(self, node_id1, node_id2):
+        self.graph.add_edge(node_id1, node_id2)
+
+    def visualize(self):
+        plt.figure(figsize=(10, 7))
+        pos = nx.spring_layout(self.graph)
+        nx.draw(self.graph, pos, with_labels=True, node_size=700, node_color="skyblue",
+                font_size=15, font_color="black", font_weight="bold", edge_color="gray")
+        plt.show()

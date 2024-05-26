@@ -1,25 +1,38 @@
+import time
 import network_classes as nc
 
-num_devices = 8
 
-# Create graph
-mesh_network = nc.Graph(num_devices)
+# Create a NetworkVisualizer instance
+network = nc.NetworkVisualizer()
 
-# Add nodes to the graph
-for i in range(1, 4):
-    mesh_network.add_node(i)
+# Create nodes with the network visualizer
+node1 = nc.Node('localhost', 5000, 'Node1', network)
+node2 = nc.Node('localhost', 5001, 'Node2', network)
+node3 = nc.Node('localhost', 5002, 'Node3', network)
 
-# Define edges (mesh network topology)
-mesh_network.add_edge(1, 2)
-mesh_network.add_edge(1, 3)
-mesh_network.add_edge(2, 3)
+# Wait for servers to start
+time.sleep(1)
 
-# Create nodes with the graph reference
-node1 = nc.Node(1, 5001, mesh_network)
-node2 = nc.Node(2, 5002, mesh_network)
-node3 = nc.Node(3, 5003, mesh_network)
+# Connect nodes to form a mesh
+node1.connect_to_neighbor('localhost', 5001, 'Node2')
+node1.connect_to_neighbor('localhost', 5002, 'Node3')
+node2.connect_to_neighbor('localhost', 5000, 'Node1')
+node2.connect_to_neighbor('localhost', 5002, 'Node3')
+node3.connect_to_neighbor('localhost', 5000, 'Node1')
+node3.connect_to_neighbor('localhost', 5001, 'Node2')
 
-# Start nodes
-node1.start()
-node2.start()
-node3.start()
+# Send messages between nodes
+node1.send_message('localhost', 5001, 'Hello from Node1 to Node2')
+node2.send_message('localhost', 5002, 'Hello from Node2 to Node3')
+node3.send_message('localhost', 5000, 'Hello from Node3 to Node1')
+
+# Allow some time for messages to be received
+time.sleep(2)
+
+# Visualize the network
+network.visualize()
+
+# Close nodes
+node1.close()
+node2.close()
+node3.close()
