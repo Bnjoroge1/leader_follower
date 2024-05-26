@@ -98,7 +98,33 @@ class ThisDevice(Device):
         pass
 
     # TODO: Model communication channel first
-    # TODO: Additional ThisDevice methods
+    # TODO: leader send attendance
+
+    # TODO: leader send device list
+
+    # TODO: leader send check in
+
+    # TODO: leader send delete
+
+    # TODO: leader send task start
+
+    # TODO: leader send task stop
+
+    # TODO: follower receive attendance
+
+    # TODO: follower receive device list
+
+    # TODO: follower receive check in
+
+    # TODO: follower receive delete
+
+    # TODO: follower receive task start
+
+    # TODO: follower receive task stop
+
+    # TODO: add edge case takeover situations after
+
+    
 
 
 class DeviceList:

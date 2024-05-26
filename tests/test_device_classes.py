@@ -8,7 +8,11 @@ class TestDeviceClass(unittest.TestCase):
     def setUp(self):
         pass
 
+    # waiting till after hash function made then will stress test
     def testContructorId(self):
+        pass
+
+    def testSetNegativeTask(self):
         pass
 
     # TODO: test potential getter/setter edge cases if necessary (negatives)
@@ -19,10 +23,15 @@ class TestThisDevice(unittest.TestCase):
 
     # below tests will be based on communication channel model created 
     # TODO: test send function
-
+    def sendStressTest(self):
+        pass
+        
     # TODO: test receive function
-
+    def receiveStressTest(self):
+        pass
     # TODO: test setup function
+
+
 
 class TestDeviceList(unittest.TestCase):
     def setUp(self):
