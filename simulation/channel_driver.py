@@ -4,7 +4,6 @@ import time
 import network_classes as nc
 import sys
 sys.path.append('../protocol')
-from protocol import device_classes as dc
 
 def main():
     """
@@ -31,7 +30,7 @@ def main():
 
     print(threads)
 
-    # startup visualization
+    # visualization
     network.visualize()
 
     for node in nodes:

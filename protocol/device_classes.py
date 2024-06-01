@@ -78,7 +78,7 @@ class Device:
 class ThisDevice(Device):
     """ Object for main protocol to use, subclass of Device. """
 
-    def __init__(self, id):  # inclusive bounds
+    def __init__(self, id, transceiver):  # inclusive bounds
         """
         Constructor (default/non-default) for ThisDevice, creates additional fields.
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
@@ -90,10 +90,11 @@ class ThisDevice(Device):
         self.leader_started_operating = None
         self.task_folder_idx = None  # multiple operations can be preloaded
         self.received = None  # will be a message
+        self.transceiver = transceiver  # plugin object for sending and receiving messages
 
     def send(self, action, payload, option, leader_id, follower_id):
         msg = Message(action, payload, option, leader_id, follower_id).msg
-        """ Send message through whatever communication method """
+        self.transceiver.send(msg)
 
     def receive(self) -> Message:
         pass

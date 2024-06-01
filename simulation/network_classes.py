@@ -6,6 +6,7 @@ import sys
 import random
 sys.path.append('../protocol')
 from protocol import device_classes as dc
+from protocol.message_classes import Message
 
 
 class Node:
@@ -14,9 +15,10 @@ class Node:
         self.port = port
         self.node_id = node_id
         self.network = network
-        self.neighbors = {}
+        self.neighbors = {}  # dictionary of {(host, port) = socket}, pass by reference - how to update with devicelist?
+        self.transceiver = Transceiver(self.neighbors)  # both ThisDevice and Node have the same transceiver
         # user takes responsibility of assigning ids
-        self.thisDevice = dc.ThisDevice(self.__hash__())
+        self.thisDevice = dc.ThisDevice(self.__hash__(), self.transceiver)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
@@ -47,12 +49,6 @@ class Node:
         self.neighbors[(neighbor_host, neighbor_port)] = neighbor_socket
         self.network.add_edge(self.node_id, neighbor_id)  # Add the connection to the network graph
 
-    def send_message(self, neighbor_host, neighbor_port, message):
-        if (neighbor_host, neighbor_port) in self.neighbors:
-            self.neighbors[(neighbor_host, neighbor_port)].sendall(message.encode())
-        else:
-            print(f"Neighbor {neighbor_host}:{neighbor_port} not found!")
-
     def close(self):
         for neighbor in self.neighbors.values():
             neighbor.close()
@@ -75,3 +71,14 @@ class NetworkVisualizer:
         nx.draw(self.graph, pos, with_labels=True, node_size=700, node_color="skyblue",
                 font_size=15, font_color="black", font_weight="bold", edge_color="gray")
         plt.show()
+
+
+class Transceiver:
+    def __init__(self, neighbors: dict):
+        self.neighbors = neighbors
+
+    def send(self, msg: Message):
+        # send to entire channel (this is how the protocol is designed
+        # realistically we can't send to only one socket wirelessly
+        for ((host, port), neighbor) in self.neighbors:
+            self.neighbors[(host, port)].sendall(msg)
