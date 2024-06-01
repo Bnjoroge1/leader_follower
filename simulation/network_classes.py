@@ -78,10 +78,10 @@ class Transceiver:
         self.neighbors = neighbors
         self.lock = threading.Lock()
 
-    def send(self, msg: Message):
+    def send(self, message: Message):
         for (host, port), neighbor in self.neighbors.items():
             try:
-                neighbor.sendall(msg)
+                neighbor.sendall(int.to_bytes(message.msg))  # socket sends as bytes, right?
             except:
                 with self.lock:
                     print(f"Failed to send message to {(host, port)}")
@@ -94,13 +94,15 @@ class Transceiver:
         while True:
             try:
                 data = neighbor_socket.recv(1024)
+                int_data = int.from_bytes(data)  # TODO: check byteorder in socket.recv()
                 if not data:
                     with self.lock:
                         print(f"Connection to {(host, port)} closed by the peer")
                     break
                 with self.lock:
-                    print(f"Received message from {(host, port)}: {data.decode()}")
+                    print(f"Received message from {(host, port)}: {int_data}")
                 # Here you can process the message, e.g., by passing it to a handler function
+                return int_data
             except:
                 with self.lock:
                     print(f"Connection to {(host, port)} encountered an error")

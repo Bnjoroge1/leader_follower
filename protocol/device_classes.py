@@ -96,8 +96,8 @@ class ThisDevice(Device):
         msg = Message(action, payload, option, leader_id, follower_id).msg
         self.transceiver.send(msg)
 
-    def receive(self) -> Message:
-        pass
+    def receive(self) -> int:  # int representation of the message (Message.msg)
+        return self.transceiver.receive()
 
     def setup(self):
         # TODO: change number once constants defined
