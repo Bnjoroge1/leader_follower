@@ -89,29 +89,38 @@ class ThisDevice(Device):
         self.leader_id = None
         self.leader_started_operating = None
         self.task_folder_idx = None  # multiple operations can be preloaded
-        self.received = None  # will be a message
+        self.received = None  # will be an int representation of message
         self.transceiver = transceiver  # plugin object for sending and receiving messages
 
     def send(self, action, payload, option, leader_id, follower_id):
         msg = Message(action, payload, option, leader_id, follower_id).msg
-        self.transceiver.send(msg)
+        self.transceiver.send(msg)  # transceiver only deals with integers
 
     def receive(self) -> int:  # int representation of the message (Message.msg)
         return self.transceiver.receive()
+
+    def received_action(self):
+        return self.received // 1e26
+
+    def received_leader_id(self):
+        return self.received % 1e16 // 1e8
+
+    def received_follower_id(self):
+        return self.received % 1e8
 
     def setup(self):
         # TODO: change number once constants defined
         print("Listening for leader, device " + str(self.id))
 
         end_time = time.time() + 3
-
         while time.time() < end_time:
             self.received = self.receive()
-            if self.received is not None and self.received.action == Action.ATTENDANCE.value:
+            if self.received is not None and self.received_action() == Action.ATTENDANCE.value:
                 print("Becoming follower, device " + str(self.id))
                 self.make_follower()
                 self.follower_receive_attendance()
                 return  # early exit if follower
+            time.sleep(0.25)
 
         print("Becoming leader, device " + str(self.id))
         self.make_leader()
@@ -122,7 +131,10 @@ class ThisDevice(Device):
     def leader_send_attendance(self):
         # maybe change so message created here?
         # attendance action=1, payload=0, option=0, leader=thisid, follower = 0
-        self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0)
+        end_time = time.time() + 3
+        while time.time() < end_time:
+            self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0)
+            time.sleep(0.25)
 
         # TODO: define the send/receive time constants, change this number after
         end_time = time.time() + 2
@@ -130,16 +142,17 @@ class ThisDevice(Device):
         while time.time() < end_time:
             # are we returning received message or boolean?
             # assuming returning message
-            received = self.receive()
-            if received is not None:
-                if received.action == Action.ATT_RESPONSE.value:
+            self.received = self.receive()
+            if self.received is not None:
+                if self.received_action() == Action.ATT_RESPONSE.value:
                     # should we assume the device isn't already in list?
 
                     # should we assign task now or later?
-                    self.device_list.add_device(received.follower_id, -1)
+                    self.device_list.add_device(self.received_follower_id(), -1)
                     new_device = True
                 else:
                     continue
+            time.sleep(0.25)
         
         if new_device:
             self.leader_send_device_list()
@@ -166,10 +179,10 @@ class ThisDevice(Device):
 
     # TODO: follower receive attendance
     def follower_receive_attendance(self):
-        while self.received.action != Action.ATTENDANCE.value:
+        while self.received_action() != Action.ATTENDANCE.value:
             # could get stuck here - potential error case
             received_msg = self.receive()
-        self.leader_id = self.received.leader_id
+        self.leader_id = self.received_leader_id()
 
         # send response
         self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id)
@@ -211,7 +224,7 @@ class ThisDevice(Device):
             print("--------Follower, listening...--------")
 
         # global looping
-        for i in range(100):  # while True:
+        while True:
             print("This is device " + str(self.id))
             print(self.device_list)
 
@@ -230,9 +243,9 @@ class ThisDevice(Device):
                 # handle depending on action code
 
                 if self.receive():
-                    action = self.received.action
+                    action = self.received_action()
 
-                    if self.received.leader_addr != self.leader_id:
+                    if self.received_leader_id() != self.leader_id:
                         # device.leader_address = max(device.received.leader_addr, device.leader_address)
                         continue
 

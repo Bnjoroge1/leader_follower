@@ -77,11 +77,13 @@ class Transceiver:
     def __init__(self, neighbors: dict):
         self.neighbors = neighbors
         self.lock = threading.Lock()
+        self.received_data = None
 
-    def send(self, message: Message):
+    def send(self, message: int):
+        print("Socket sending message " + str(message))
         for (host, port), neighbor in self.neighbors.items():
             try:
-                neighbor.sendall(int.to_bytes(message.msg))  # socket sends as bytes, right?
+                neighbor.sendall(int.to_bytes(message))  # socket sends as bytes, right?
             except:
                 with self.lock:
                     print(f"Failed to send message to {(host, port)}")
@@ -89,20 +91,21 @@ class Transceiver:
     def receive(self):
         for (host, port), neighbor in self.neighbors.items():
             threading.Thread(target=self._listen_to_neighbor, args=(neighbor, host, port)).start()
+        print("Socket received message " + str(self.received_data))
+        return self.received_data
 
     def _listen_to_neighbor(self, neighbor_socket, host, port):
         while True:
             try:
                 data = neighbor_socket.recv(1024)
-                int_data = int.from_bytes(data)  # TODO: check byteorder in socket.recv()
+                self.received_data = int.from_bytes(data)  # TODO: check byteorder in socket.recv()
                 if not data:
                     with self.lock:
                         print(f"Connection to {(host, port)} closed by the peer")
                     break
                 with self.lock:
-                    print(f"Received message from {(host, port)}: {int_data}")
+                    print(f"Received message from {(host, port)}: {self.received_data}")
                 # Here you can process the message, e.g., by passing it to a handler function
-                return int_data
             except:
                 with self.lock:
                     print(f"Connection to {(host, port)} encountered an error")

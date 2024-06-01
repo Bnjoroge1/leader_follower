@@ -5,6 +5,7 @@ import network_classes as nc
 import sys
 sys.path.append('../protocol')
 
+
 def main():
     """
     Main driver for protocol simulation.
@@ -26,7 +27,7 @@ def main():
         print("Starting device " + str(node.__hash__()))
         node.thread.start()
         threads.append(node.thread)
-        time.sleep(3)
+        time.sleep(5)
 
     print(threads)
 
