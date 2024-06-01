@@ -76,9 +76,36 @@ class NetworkVisualizer:
 class Transceiver:
     def __init__(self, neighbors: dict):
         self.neighbors = neighbors
+        self.lock = threading.Lock()
 
     def send(self, msg: Message):
-        # send to entire channel (this is how the protocol is designed
-        # realistically we can't send to only one socket wirelessly
-        for ((host, port), neighbor) in self.neighbors:
-            self.neighbors[(host, port)].sendall(msg)
+        for (host, port), neighbor in self.neighbors.items():
+            try:
+                neighbor.sendall(msg)
+            except:
+                with self.lock:
+                    print(f"Failed to send message to {(host, port)}")
+
+    def receive(self):
+        for (host, port), neighbor in self.neighbors.items():
+            threading.Thread(target=self._listen_to_neighbor, args=(neighbor, host, port)).start()
+
+    def _listen_to_neighbor(self, neighbor_socket, host, port):
+        while True:
+            try:
+                data = neighbor_socket.recv(1024)
+                if not data:
+                    with self.lock:
+                        print(f"Connection to {(host, port)} closed by the peer")
+                    break
+                with self.lock:
+                    print(f"Received message from {(host, port)}: {data.decode()}")
+                # Here you can process the message, e.g., by passing it to a handler function
+            except:
+                with self.lock:
+                    print(f"Connection to {(host, port)} encountered an error")
+                break
+        # Do not close the socket immediately; instead, handle disconnection appropriately
+        with self.lock:
+            print(f"Cleaning up resources for {(host, port)}")
+        # Optionally attempt to reconnect or handle the disconnection
