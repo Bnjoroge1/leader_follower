@@ -1,4 +1,5 @@
 import random
+import threading
 import time
 import network_classes as nc
 import sys
@@ -10,26 +11,29 @@ def main():
     Main driver for protocol simulation.
     :return:
     """
-
-    # Right now just focusing on getting devices connected and running.
-    # TODO: Implement connecting/disconnecting
-    num_devices = 8
-    devices = list(range(num_devices))  # protocol ThisDevice objects
-    for i in range(len(devices)):
-        devices[i] = dc.ThisDevice()
-
+    # startup
+    num_devices = 2
+    # each ThisDevice is a field of a Node instance
     network = nc.NetworkVisualizer()
     nodes = list(range(num_devices))
     port = 6000
     for i in range(len(nodes)):
+        print("Making node " + str(i))
         nodes[i] = nc.Node('localhost', port + i, 'Node' + str(i), network)
 
+    threads = []
     # devices get set up in series but run in parallel (prevents accidental leaders)
-    for device in devices:
-        print("Setting up device " + str(device))
-        device.setup()
+    for node in nodes:
+        print("Starting device " + str(node.__hash__()))
+        node.thread.start()
+        threads.append(node.thread)
+        time.sleep(3)
 
+    print(threads)
+
+    # startup visualization
     network.visualize()
+
     for node in nodes:
         node.close()
 

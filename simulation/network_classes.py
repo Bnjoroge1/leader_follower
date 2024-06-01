@@ -2,6 +2,10 @@ import socket
 import threading
 import networkx as nx
 import matplotlib.pyplot as plt
+import sys
+import random
+sys.path.append('../protocol')
+from protocol import device_classes as dc
 
 
 class Node:
@@ -11,11 +15,12 @@ class Node:
         self.node_id = node_id
         self.network = network
         self.neighbors = {}
+        # user takes responsibility of assigning ids
+        self.thisDevice = dc.ThisDevice(self.__hash__())
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
-        self.server_thread = threading.Thread(target=self.listen_for_neighbors)
-        self.server_thread.start()
+        self.thread = threading.Thread(target=self.thisDevice.device_main)
         self.network.add_node(self.node_id)  # Add the node to the network graph
 
     def listen_for_neighbors(self):

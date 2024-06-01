@@ -78,7 +78,7 @@ class Device:
 class ThisDevice(Device):
     """ Object for main protocol to use, subclass of Device. """
 
-    def __init__(self, id=random.randint(1, int(1e8))):  # inclusive bounds
+    def __init__(self, id):  # inclusive bounds
         """
         Constructor (default/non-default) for ThisDevice, creates additional fields.
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
@@ -100,16 +100,21 @@ class ThisDevice(Device):
 
     def setup(self):
         # TODO: change number once constants defined
+        print("Listening for leader, device " + str(self.id))
+
         end_time = time.time() + 3
 
         while time.time() < end_time:
             self.received = self.receive()
             if self.received is not None and self.received.action == Action.ATTENDANCE.value:
+                print("Becoming follower, device " + str(self.id))
                 self.make_follower()
                 self.follower_receive_attendance()
-        
-        if self.leader:
-            self.leader_send_attendance()
+                return  # early exit if follower
+
+        print("Becoming leader, device " + str(self.id))
+        self.make_leader()
+        self.leader_send_attendance()
 
     # TODO: Model communication channel first
     # TODO: leader send attendance
@@ -195,6 +200,7 @@ class ThisDevice(Device):
 
     # TODO: change print to individual files
     def device_main(self):
+        print("Starting main on device " + str(self.id))
         # create device object
         self.setup()
 
@@ -204,7 +210,8 @@ class ThisDevice(Device):
             print("--------Follower, listening...--------")
 
         # global looping
-        while True:
+        for i in range(100):  # while True:
+            print("This is device " + str(self.id))
             print(self.device_list)
 
             if self.get_leader():  # Leader loop
