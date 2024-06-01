@@ -2,6 +2,7 @@ import random
 import time
 from message_classes import Message, Action
 
+
 class Device:
     """ Lightweight device object for storing in a DeviceList. """
 
@@ -83,11 +84,12 @@ class ThisDevice(Device):
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
         """
         super().__init__(id)
-        self.leader = True # start ThisDevice as leader then change accordingly in setup
+        self.leader = True  # start ThisDevice as leader then change accordingly in setup
         self.device_list = DeviceList()  # default sizing
         self.leader_id = None
         self.leader_started_operating = None
         self.task_folder_idx = None  # multiple operations can be preloaded
+        self.received = None  # will be a message
 
     def send(self, action, payload, option, leader_id, follower_id):
         msg = Message(action, payload, option, leader_id, follower_id).msg
@@ -101,10 +103,10 @@ class ThisDevice(Device):
         end_time = time.time() + 3
 
         while time.time() < end_time:
-            received = self.receive()
-            if received != None:
+            self.received = self.receive()
+            if self.received is not None and self.received.action == Action.ATTENDANCE.value:
                 self.make_follower()
-                self.follower_receive_attendance(received)
+                self.follower_receive_attendance()
         
         if self.leader:
             self.leader_send_attendance()
@@ -134,42 +136,128 @@ class ThisDevice(Device):
         if new_device:
             self.leader_send_device_list()
 
-
     # TODO: leader send device list
     def leader_send_device_list(self):
         pass
 
     # TODO: leader send check in
+    def leader_send_check_in(self):
+        pass
 
     # TODO: leader send delete
+    def leader_send_delete(self):
+        pass
 
     # TODO: leader send task start
+    def leader_send_task_start(self):
+        pass
 
     # TODO: leader send task stop
+    def leader_send_task_stop(self):
+        pass
 
     # TODO: follower receive attendance
-    def follower_receive_attendance(self, received_msg):
-        while received_msg.action != Action.ATTENDANCE.value:
+    def follower_receive_attendance(self):
+        while self.received.action != Action.ATTENDANCE.value:
             # could get stuck here - potential error case
             received_msg = self.receive()
-        self.leader_id = received_msg.leader_id
+        self.leader_id = self.received.leader_id
 
         # send response
         self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id)
 
     # TODO: follower receive device list
+    def follower_receive_device_list(self):
+        pass
 
     # TODO: follower receive check in
+    def follower_receive_check_in(self):
+        pass
 
     # TODO: follower receive delete
+    def follower_receive_delete(self):
+        pass
 
     # TODO: follower receive task start
+    def follower_receive_task_start(self):
+        pass
 
     # TODO: follower receive task stop
+    def follower_receive_task_stop(self):
+        pass
+
+    def handle_promotion(self):
+        pass
 
     # TODO: add edge case takeover situations after
 
-    
+    # TODO: change print to individual files
+    def device_main(self):
+        # create device object
+        self.setup()
+
+        if self.get_leader():
+            print("--------Leader---------")
+        else:
+            print("--------Follower, listening...--------")
+
+        # global looping
+        while True:
+            print(self.device_list)
+
+            if self.get_leader():  # Leader loop
+                # send check in messages and wait for responses
+                self.leader_send_check_in()
+                # send delete message if response not heard from device after threshold (handled in leader_check_in)
+
+                # send attendance message
+                self.leader_send_attendance()
+                # listen for new followers
+                # send revised list if new followers are heard (handled in leader_send_attendance)
+
+            if not self.get_leader():  # follower loop
+                # listen for message
+                # handle depending on action code
+
+                if self.receive():
+                    action = self.received.action
+
+                    if self.received.leader_addr != self.leader_id:
+                        # device.leader_address = max(device.received.leader_addr, device.leader_address)
+                        continue
+
+                    # messages for all followers
+                    if action == Action.DELETE.value:
+                        reserve_promotion = self.follower_receive_delete()
+                        if reserve_promotion is not None:
+                            self.task = reserve_promotion
+
+                    elif action == Action.D_LIST.value:
+                        print("Updating list on follower side***")
+                        self.follower_receive_device_list()
+
+                    elif (
+                            action == Action.ATTENDANCE.value
+                    ) and self.task is None:  # meaning follower was wrongly deleted
+                        self.follower_receive_attendance()
+
+                    elif action == Action.TASK_STOP.value:
+                        continue
+
+                    elif action == Action.TASK_START.value:
+                        continue
+
+                else:  # no message heard, start takeover protocol
+                    print("Is there anybody out there?")
+
+                    if len(self.device_list) == 0:
+                        break
+
+                    # Leader dropped out
+                    if self.handle_promotion():
+                        print("--------Taking over as new leader--------")
+                    else:
+                        print("Staying as follower under a new leader")
 
 
 class DeviceList:
