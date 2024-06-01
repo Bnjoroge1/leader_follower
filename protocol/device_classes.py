@@ -121,14 +121,16 @@ class ThisDevice(Device):
         # TODO: define the send/receive time constants, change this number after
         end_time = time.time() + 2
         new_device = False
-        while (time.time() < end_time):
+        while time.time() < end_time:
             # are we returning received message or boolean?
             # assuming returning message
             received = self.receive()
-            if (received != None):
-                if (received.action == Action.ATT_RESPONSE.value):
-                    # should we assume the device isnt already in list?
-                    self.device_list.add_device(received.follower_id)
+            if received is not None:
+                if received.action == Action.ATT_RESPONSE.value:
+                    # should we assume the device isn't already in list?
+
+                    # should we assign task now or later?
+                    self.device_list.add_device(received.follower_id, -1)
                     new_device = True
                 else:
                     continue
@@ -314,7 +316,7 @@ class DeviceList:
         device.set_task(task)
         self.devices.append(device)
 
-    def find_device(self, id: int) -> int:
+    def find_device(self, id: int) -> int or None:
         """
         Finds Device object with target id in DeviceList.
         :param id: identifier for target device.
