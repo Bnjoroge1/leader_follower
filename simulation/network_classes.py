@@ -1,116 +1,76 @@
-import socket
-import threading
-import networkx as nx
-import matplotlib.pyplot as plt
 import sys
-import random
 sys.path.append('../protocol')
 from protocol import device_classes as dc
-from protocol.message_classes import Message
+import multiprocessing
+import queue as q
 
 
 class Node:
-    def __init__(self, host, port, node_id, network):
-        self.host = host
-        self.port = port
+    def __init__(self, node_id):
         self.node_id = node_id
-        self.network = network
-        self.neighbors = {}  # dictionary of {(host, port) = socket}, pass by reference - how to update with devicelist?
-        self.transceiver = Transceiver(self.neighbors)  # both ThisDevice and Node have the same transceiver
-        # user takes responsibility of assigning ids
-        self.thisDevice = dc.ThisDevice(self.__hash__(), self.transceiver)
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(5)
-        self.thread = threading.Thread(target=self.thisDevice.device_main)
-        self.network.add_node(self.node_id)  # Add the node to the network graph
+        self.transceiver = Transceiver()
+        self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
+        self.process = multiprocessing.Process(target=self.thisDevice.device_main)
 
-    def listen_for_neighbors(self):
-        print(f"Node {self.node_id} listening on {self.host}:{self.port}")
-        while True:
-            conn, addr = self.server_socket.accept()
-            threading.Thread(target=self.handle_neighbor, args=(conn, addr)).start()
+    def start(self):
+        self.process.start()
 
-    def handle_neighbor(self, conn, addr):
-        print(f"Node {self.node_id} connected by {addr}")
-        while True:
-            try:
-                data = conn.recv(1024)
-                if not data:
-                    break
-                print(f"Node {self.node_id} received: {data.decode()}")
-            except:
-                break
-        conn.close()
+    def stop(self):
+        self.process.terminate()
+        self.process.join()
 
-    def connect_to_neighbor(self, neighbor_host, neighbor_port, neighbor_id):
-        neighbor_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        neighbor_socket.connect((neighbor_host, neighbor_port))
-        self.neighbors[(neighbor_host, neighbor_port)] = neighbor_socket
-        self.network.add_edge(self.node_id, neighbor_id)  # Add the connection to the network graph
-
-    def close(self):
-        for neighbor in self.neighbors.values():
-            neighbor.close()
-        self.server_socket.close()
+    def set_channel(self, target_node_id, queue):
+        self.transceiver.set_channel(target_node_id, queue)
 
 
-class NetworkVisualizer:
+class Network:
     def __init__(self):
-        self.graph = nx.Graph()
+        self.nodes = {}
+        self.channels = {}
 
-    def add_node(self, node_id):
-        self.graph.add_node(node_id)
+    def add_node(self, node_id, node):
+        self.nodes[node_id] = node
 
-    def add_edge(self, node_id1, node_id2):
-        self.graph.add_edge(node_id1, node_id2)
+    def get_node(self, node_id):
+        return self.nodes.get(node_id)
 
-    def visualize(self):
-        plt.figure(figsize=(10, 7))
-        pos = nx.spring_layout(self.graph)
-        nx.draw(self.graph, pos, with_labels=True, node_size=700, node_color="skyblue",
-                font_size=15, font_color="black", font_weight="bold", edge_color="gray")
-        plt.show()
+    def create_channel(self, node_id1, node_id2):  # bidirectional
+        queue1 = multiprocessing.Queue()
+        queue2 = multiprocessing.Queue()
+        self.channels[(node_id1, node_id2)] = (queue1, queue2)
+        self.channels[(node_id2, node_id1)] = (queue2, queue1)
+        self.nodes[node_id1].set_channel(node_id2, queue1)
+        self.nodes[node_id2].set_channel(node_id1, queue2)
 
 
+# TODO: implement removing channels (node_ids) as devices get dropped from devicelist
+# similar implementation to send/receive calling transceiver functions
 class Transceiver:
-    def __init__(self, neighbors: dict):
-        self.neighbors = neighbors
-        self.lock = threading.Lock()
-        self.received_data = None
+    def __init__(self):
+        self.channels = {}  # hashmap between node_id and Queue (channel)
 
-    def send(self, message: int):
-        print("Socket sending message " + str(message))
-        for (host, port), neighbor in self.neighbors.items():
+    def set_channel(self, node_id, queue):
+        self.channels[node_id] = queue
+
+    def send(self, msg: int):  # send to all channels
+        for queue in self.channels.values():
+            if queue is not None:
+                queue.put(msg)
+
+    def receive(self, timeout: int) -> int | None:  # get from all queues
+        # TODO: maybe change to received message list?
+        # messages = []
+        # for channel in self.channels.values():
+        #     try:
+        #         messages.append(channel.get(timeout=timeout))
+        #     except queue.Empty:
+        #         pass
+        # return messages[0]
+        for queue in self.channels.values():
             try:
-                neighbor.sendall(int.to_bytes(message))  # socket sends as bytes, right?
-            except:
-                with self.lock:
-                    print(f"Failed to send message to {(host, port)}")
+                msg = queue.get(timeout=timeout)
+                return msg
+            except q.Empty:
+                pass
+        return None
 
-    def receive(self):
-        for (host, port), neighbor in self.neighbors.items():
-            threading.Thread(target=self._listen_to_neighbor, args=(neighbor, host, port)).start()
-        print("Socket received message " + str(self.received_data))
-        return self.received_data
-
-    def _listen_to_neighbor(self, neighbor_socket, host, port):
-        while True:
-            try:
-                data = neighbor_socket.recv(1024)
-                self.received_data = int.from_bytes(data)  # TODO: check byteorder in socket.recv()
-                if not data:
-                    with self.lock:
-                        print(f"Connection to {(host, port)} closed by the peer")
-                    break
-                with self.lock:
-                    print(f"Received message from {(host, port)}: {self.received_data}")
-                # Here you can process the message, e.g., by passing it to a handler function
-            except:
-                with self.lock:
-                    print(f"Connection to {(host, port)} encountered an error")
-                break
-        # Do not close the socket immediately; instead, handle disconnection appropriately
-        with self.lock:
-            print(f"Cleaning up resources for {(host, port)}")
-        # Optionally attempt to reconnect or handle the disconnection

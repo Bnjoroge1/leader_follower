@@ -1,4 +1,3 @@
-import random
 import time
 from message_classes import Message, Action
 
@@ -91,13 +90,14 @@ class ThisDevice(Device):
         self.task_folder_idx = None  # multiple operations can be preloaded
         self.received = None  # will be an int representation of message
         self.transceiver = transceiver  # plugin object for sending and receiving messages
+        self.TIMEOUT = 2
 
     def send(self, action, payload, option, leader_id, follower_id):
         msg = Message(action, payload, option, leader_id, follower_id).msg
         self.transceiver.send(msg)  # transceiver only deals with integers
 
     def receive(self) -> int:  # int representation of the message (Message.msg)
-        return self.transceiver.receive()
+        return self.transceiver.receive(timeout=self.TIMEOUT)
 
     def received_action(self):
         return self.received // 1e26
