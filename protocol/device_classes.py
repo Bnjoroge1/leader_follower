@@ -90,14 +90,17 @@ class ThisDevice(Device):
         self.task_folder_idx = None  # multiple operations can be preloaded
         self.received = None  # will be an int representation of message
         self.transceiver = transceiver  # plugin object for sending and receiving messages
-        self.TIMEOUT = 2
+        self.TIMEOUT = 0.25
 
     def send(self, action, payload, option, leader_id, follower_id):
         msg = Message(action, payload, option, leader_id, follower_id).msg
+        print("Device ", self.id, " sending ", msg)
         self.transceiver.send(msg)  # transceiver only deals with integers
 
     def receive(self) -> int:  # int representation of the message (Message.msg)
-        return self.transceiver.receive(timeout=self.TIMEOUT)
+        msg = self.transceiver.receive(timeout=self.TIMEOUT)
+        print("Device", self.id, "got message", msg)
+        return msg
 
     def received_action(self):
         return self.received // 1e26
@@ -115,12 +118,12 @@ class ThisDevice(Device):
         end_time = time.time() + 3
         while time.time() < end_time:
             self.received = self.receive()
+            print("Device " + str(self.id) + " receiving: " + str(self.received))
             if self.received is not None and self.received_action() == Action.ATTENDANCE.value:
                 print("Becoming follower, device " + str(self.id))
                 self.make_follower()
                 self.follower_receive_attendance()
                 return  # early exit if follower
-            time.sleep(0.25)
 
         print("Becoming leader, device " + str(self.id))
         self.make_leader()
@@ -225,8 +228,8 @@ class ThisDevice(Device):
 
         # global looping
         while True:
-            print("This is device " + str(self.id))
-            print(self.device_list)
+            # print("This is device " + str(self.id))
+            # print(self.device_list)
 
             if self.get_leader():  # Leader loop
                 # send check in messages and wait for responses
@@ -235,6 +238,7 @@ class ThisDevice(Device):
 
                 # send attendance message
                 self.leader_send_attendance()
+                print("Device " + str(self.id) + " sending attendance")
                 # listen for new followers
                 # send revised list if new followers are heard (handled in leader_send_attendance)
 

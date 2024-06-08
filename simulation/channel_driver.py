@@ -23,10 +23,12 @@ def main():
         for secondNode in nodes:
             if firstNode is not secondNode:
                 network.create_channel(firstNode.node_id, secondNode.node_id)
+                print("Channel is", firstNode.node_id, "and", secondNode.node_id)
 
     for node in nodes:
         node.start()
-        time.sleep(12)
+        time.sleep(10)
+
 
 
 if __name__ == "__main__":
