@@ -64,7 +64,7 @@ class Transceiver:
             if queue is not None:
                 queue.put(msg)
 
-    def receive(self, timeout: int) -> int | None:  # get from all queues
+    def receive(self, timeout: float) -> int | None:  # get from all queues
         # TODO: maybe change to received message list?
         # messages = []
         # for channel in self.channels.values():

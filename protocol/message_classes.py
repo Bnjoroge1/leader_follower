@@ -4,21 +4,19 @@ from enum import Enum
 class Message:
     """ Object carrying action, payload, option. """
 
-    def __init__(self, action: int, payload: int, option: int, leader_id: int, follower_id: int):
+    def __init__(self, action: int, payload: int, leader_id: int, follower_id: int):
         """
         Non-default constructor for Message object, MSD to LSD.
         :param action: indicator for type of message, 1 digit.
         :param payload: main message contents, 8 digits.
-        :param option: extra message contents, 2 digits.
         :param leader_id: id of device's leader, itself if device is leader, 8 digits
         :param follower_id: id of device's follower, itself if device is follower, 8 digits
         """
         self.action = action
         self.payload = payload
-        self.option = option
         self.leader_id = leader_id
         self.follower_id = follower_id
-        self.msg = int((action * 1e26) + (payload * 1e18) + (option * 1e16) + (leader_id * 1e8) + (follower_id))
+        self.msg = int((action * 1e24) + (payload * 1e16) + (leader_id * 1e8) + (follower_id))
 
     def __str__(self) -> str:
         """
@@ -26,10 +24,10 @@ class Message:
         :return: Concatenated string representation.
         """
         out = [
-            f"message w/ Action: {self.action}",
+            f"Action: {self.action}",
+            f"Payload: {self.payload}",
             f"Leader Address: {hex(self.leader_id)}",
             f"Follower Address: {hex(self.follower_id)}",
-            f"Options: {self.option}",
         ]
         return "\n\t".join(out)
 

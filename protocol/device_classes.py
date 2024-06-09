@@ -18,7 +18,7 @@ class Device:
         self.leader: bool = False  # initialized as follower
         self.received: int | None = None  # holds most recent message payload
         self.missed: int = 0  # number of missed check-ins, used by current leader
-        self.task: int = -1  # task identifier, -1 denotes reserve
+        self.task: int = 0  # task identifier, 0 denotes reserve
 
     def get_id(self) -> int:
         """
@@ -95,16 +95,16 @@ class ThisDevice(Device):
         self.received: int | None = None  # will be an int representation of message
         self.transceiver: Transceiver = transceiver  # plugin object for sending and receiving messages
 
-    def send(self, action, payload, option, leader_id, follower_id, duration=0.0):
-        msg = Message(action, payload, option, leader_id, follower_id).msg
-        print(msg)  # TODO: D_LIST Action 3 getting sent as 2999999 - memory issue?
+    def send(self, action, payload, leader_id, follower_id, duration=0.0):
+        msg = Message(action, payload, leader_id, follower_id).msg
+        print("Message", msg)
         end_time = time.time() + duration
         while time.time() < end_time:
             self.transceiver.send(msg)  # transceiver only deals with integers
             # print("Sending", msg)
             time.sleep(0.2)
 
-    def receive(self, duration, action_value=-1) -> bool:  # int representation of the message (Message.msg)
+    def receive(self, duration, action_value=-1) -> bool:  # action_value=-1 means accepts any action
         # must have low timeout and larger duration so we don't get hung up on a channel
         end_time = time.time() + duration
         while time.time() < end_time:
@@ -115,16 +115,16 @@ class ThisDevice(Device):
         return False
 
     def received_action(self) -> int:
-        return int(self.received // 1e26)
+        return self.received // int(1e24)
 
     def received_leader_id(self) -> int:
-        return int(self.received % 1e16 // 1e8)
+        return self.received % int(1e16) // int(1e8)
 
     def received_follower_id(self) -> int:
-        return int(self.received % 1e8)
+        return self.received % int(1e8)
 
-    def received_option(self) -> int:
-        return int(self.received % 1e18 // 1e16)
+    def received_payload(self) -> int:
+        return self.received % int(1e24) // int(1e16)
 
     def setup(self):
         print("Listening for leader's attendance")
@@ -139,26 +139,29 @@ class ThisDevice(Device):
 
         print("Assuming position of leader")
         self.make_leader()
+        self.device_list.add_device(id=self.id, task=1)  # put itself in devicelist with first task
         self.leader_send_attendance()
 
     def leader_send_attendance(self):
-        self.send(Action.ATTENDANCE.value, 0, 0, self.id, 0, 3)
+        self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=1)
 
-        new_device = False
+        new_devices = 0
         while self.receive(duration=2, action_value=Action.ATT_RESPONSE.value):
             if self.received_follower_id() not in self.device_list.get_ids():
-                self.device_list.add_device(self.received_follower_id(), -1)  # has not assigned task yet
-                new_device = True
+                self.device_list.add_device(id=self.received_follower_id(), task=0)  # has not assigned task yet
+                new_devices += 1
 
-        if new_device:
+        if new_devices:
+            time.sleep(2*new_devices)  # waiting for followers to finish attendance response
             self.leader_send_device_list()
 
     def leader_send_device_list(self):
         for id, device in self.device_list.get_device_list().items():
             # not using option since DeviceList.devices is a dictionary
             # simply sending all id's in its "list" in follower_id position
-            print("Sending D_LIST", id, device.task)
-            self.send(Action.D_LIST.value, 0, device.task, self.id, id, 1)
+            print("Leader sending D_LIST", id, device.task)
+            self.send(action=Action.D_LIST.value, payload=device.task, leader_id=self.id, follower_id=id, duration=1)
+            time.sleep(1)
 
     def follower_handle_attendance(self):
         """
@@ -167,11 +170,12 @@ class ThisDevice(Device):
         """
         self.leader_id = self.received_leader_id()
         if self.leader_id not in self.device_list.get_ids():
-            self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id, 2)
+            self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=2)
 
     def follower_handle_dlist(self):
+        print("Follower handling D_LIST")
         while self.receive(duration=1.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
-            self.device_list.add_device(id=self.received_follower_id(), task=self.received_option())
+            self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
 
     # TODO: print log to individual files
     def device_main(self):
@@ -186,22 +190,23 @@ class ThisDevice(Device):
 
         # global looping
         while True:
-            print(self.device_list)
+            print("Device:", self.id, self.leader, "\n", self.device_list)
 
             if self.get_leader():
                 self.leader_send_attendance()
 
             if not self.get_leader():
-                self.receive(duration=8)
-                # print(self.received)
-
-                if self.received is None:
+                if not self.receive(duration=8):
                     print("Is there anybody out there?")
                     # takeover
-                elif self.received_leader_id() != self.leader_id:
+                elif abs(self.received_leader_id() - self.leader_id) > 5:  # account for loss of precision
+                    # print(self.received_leader_id())
+                    # print(self.leader_id)
+                    # print("CONTINUE")
                     continue
 
                 action = self.received_action()
+                # print(action)
 
                 # messages for all followers
                 match action:
@@ -209,15 +214,14 @@ class ThisDevice(Device):
                         pass
                     case Action.D_LIST.value:
                         self.follower_handle_dlist()
-                    case Action.ATTENDANCE:
-                        # if not in device list
+                    case Action.ATTENDANCE.value:
                         pass
                     case Action.TASK_STOP.value:
                         pass
                     case Action.TASK_START.value:
                         pass
                     case _:
-                        pass
+                        print("Unknown action")
 
 
 class DeviceList:
@@ -239,7 +243,7 @@ class DeviceList:
 
         output = ["DeviceList:"]
         for id, device in self.devices.items():
-            task = device.get_task() if device.get_task() != -1 else "Reserve"
+            task = device.get_task() if device.get_task() != 0 else "Reserve"
             output.append(f"Device ID: {id}, Task: {task}")
         return "\n\t".join(output)
 
@@ -310,7 +314,7 @@ class DeviceList:
         """
         unused_tasks = self.task_options.copy()
         for d in self.devices.values():
-            if d.get_task() != -1 and d.get_task() in unused_tasks:
+            if d.get_task() != 0 and d.get_task() in unused_tasks:
                 unused_tasks.remove(d.get_task())
         return set(unused_tasks)  # hashtable
 
@@ -321,7 +325,7 @@ class DeviceList:
         """
         reserves = []
         for d in self.devices:
-            if d.get_task() == -1:
+            if d.get_task() == 0:
                 reserves.append(d)
         return reserves
 
