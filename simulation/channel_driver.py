@@ -10,7 +10,7 @@ def main():
     :return:
     """
     # startup
-    num_devices = 5
+    num_devices = 2
     network = nc.Network()
     nodes = []
     for i in range(num_devices):
@@ -25,8 +25,7 @@ def main():
 
     for node in nodes:
         node.start()
-        time.sleep(10)
-
+        time.sleep(12)
 
 
 if __name__ == "__main__":
