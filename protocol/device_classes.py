@@ -1,6 +1,6 @@
 import time
 from message_classes import Message, Action
-from typing import Dict, List
+from typing import Dict, List, Set
 
 
 class Device:
@@ -92,7 +92,7 @@ class ThisDevice(Device):
         self.received = None  # will be an int representation of message
         self.transceiver = transceiver  # plugin object for sending and receiving messages
 
-    def send(self, action, payload, option, leader_id, follower_id, duration=0):
+    def send(self, action, payload, option, leader_id, follower_id, duration=0.0):
         msg = Message(action, payload, option, leader_id, follower_id).msg
         end_time = time.time() + duration
         while time.time() < end_time:
@@ -127,16 +127,20 @@ class ThisDevice(Device):
         self.leader_send_attendance()
 
     def leader_send_attendance(self):
-        self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0, 3)
+        self.send(Action.ATTENDANCE.value, 0, 0, self.id, 0, 3)
 
         new_device = False
         while self.receive(timeout=2, action_value=Action.ATT_RESPONSE.value):
-            if self.received_follower_id() not in self.device_list.get_devices().keys():  # key lookup
+            if self.received_follower_id() not in self.device_list.get_ids():
                 self.device_list.add_device(self.received_follower_id(), None)
                 new_device = True
 
         if new_device:
             self.leader_send_device_list()
+
+    def leader_send_device_list(self):
+        for index, id in enumerate(self.device_list.get_ids()):
+            self.send(Action.D_LIST.value, 0, index, self.id, id, 0.8)
 
     def follower_handle_attendance(self):
         """
@@ -144,12 +148,10 @@ class ThisDevice(Device):
         :return:
         """
         self.leader_id = self.received_leader_id()
-        if self.leader_id not in self.device_list.get_devices():
+        if self.leader_id not in self.device_list.get_ids():
             self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id, 2)
 
-
-
-    # TODO: change print to individual files
+    # TODO: print log to individual files
     def device_main(self):
         print("Starting main on device " + str(self.id))
         # create device object
@@ -227,8 +229,14 @@ class DeviceList:
         """
         return len(self.devices)
 
-    def get_devices(self) -> Dict[int: Device]:
+    def get_device_list(self) -> Dict[int: Device]:
         return self.devices
+
+    def get_ids(self) -> List[int]:
+        return list(self.devices.keys())  # must be positioned
+
+    def get_devices(self) -> Set[Device]:
+        return set(self.devices.values())  # hashtable
 
     def update_num_tasks(self, num_tasks: int):
         """
@@ -267,7 +275,7 @@ class DeviceList:
         except KeyError:
             return False
 
-    def unused_tasks(self) -> list[int]:
+    def unused_tasks(self) -> Set[int]:
         """
         Gets list of tasks not currently assigned to a device.
         :return: list of unused task indices.
@@ -276,7 +284,7 @@ class DeviceList:
         for d in self.devices.values():
             if d.get_task() is not None and d.get_task() in unused_tasks:
                 unused_tasks.remove(d.get_task())
-        return unused_tasks
+        return set(unused_tasks)  # hashtable
 
     def get_reserves(self) -> List[Device]:
         """
