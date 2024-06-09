@@ -10,11 +10,10 @@ def main():
     :return:
     """
     # startup
-    num_devices = 2
+    num_devices = 5
     network = nc.Network()
     nodes = []
     for i in range(num_devices):
-        print("Making node " + str(i+1))
         new_node = nc.Node(i+1)
         nodes.append(new_node)
         network.add_node(new_node.node_id, new_node)
@@ -23,7 +22,6 @@ def main():
         for secondNode in nodes:
             if firstNode is not secondNode:
                 network.create_channel(firstNode.node_id, secondNode.node_id)
-                print("Channel is", firstNode.node_id, "and", secondNode.node_id)
 
     for node in nodes:
         node.start()

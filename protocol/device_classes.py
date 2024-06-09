@@ -94,12 +94,10 @@ class ThisDevice(Device):
 
     def send(self, action, payload, option, leader_id, follower_id):
         msg = Message(action, payload, option, leader_id, follower_id).msg
-        print("Device ", self.id, " sending ", msg)
         self.transceiver.send(msg)  # transceiver only deals with integers
 
-    def receive(self) -> int:  # int representation of the message (Message.msg)
+    def receive(self) -> int | None:  # int representation of the message (Message.msg)
         msg = self.transceiver.receive(timeout=self.TIMEOUT)
-        print("Device", self.id, "got message", msg)
         return msg
 
     def received_action(self):
@@ -118,102 +116,50 @@ class ThisDevice(Device):
         end_time = time.time() + 3
         while time.time() < end_time:
             self.received = self.receive()
-            print("Device " + str(self.id) + " receiving: " + str(self.received))
             if self.received is not None and self.received_action() == Action.ATTENDANCE.value:
                 print("Becoming follower, device " + str(self.id))
                 self.make_follower()
-                self.follower_receive_attendance()
+                self.follower_handle_attendance()
                 return  # early exit if follower
 
         print("Becoming leader, device " + str(self.id))
         self.make_leader()
         self.leader_send_attendance()
 
-    # TODO: Model communication channel first
-    # TODO: leader send attendance
     def leader_send_attendance(self):
-        # maybe change so message created here?
-        # attendance action=1, payload=0, option=0, leader=thisid, follower = 0
         end_time = time.time() + 3
         while time.time() < end_time:
             self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0)
             time.sleep(0.25)
 
-        # TODO: define the send/receive time constants, change this number after
         end_time = time.time() + 2
         new_device = False
         while time.time() < end_time:
-            # are we returning received message or boolean?
-            # assuming returning message
             self.received = self.receive()
-            if self.received is not None:
-                if self.received_action() == Action.ATT_RESPONSE.value:
-                    # should we assume the device isn't already in list?
+            if self.received is not None and self.received_action() == Action.ATT_RESPONSE.value:
+                # should we assume the device isn't already in list?
 
-                    # should we assign task now or later?
-                    self.device_list.add_device(self.received_follower_id(), -1)
-                    new_device = True
-                else:
-                    continue
+                # should we assign task now or later?
+                self.device_list.add_device(self.received_follower_id(), -1)
+                new_device = True
+            else:
+                continue
             time.sleep(0.25)
         
         if new_device:
             self.leader_send_device_list()
 
-    # TODO: leader send device list
-    def leader_send_device_list(self):
-        pass
 
-    # TODO: leader send check in
-    def leader_send_check_in(self):
-        pass
-
-    # TODO: leader send delete
-    def leader_send_delete(self):
-        pass
-
-    # TODO: leader send task start
-    def leader_send_task_start(self):
-        pass
-
-    # TODO: leader send task stop
-    def leader_send_task_stop(self):
-        pass
-
-    # TODO: follower receive attendance
-    def follower_receive_attendance(self):
-        while self.received_action() != Action.ATTENDANCE.value:
-            # could get stuck here - potential error case
-            received_msg = self.receive()
+    def follower_handle_attendance(self):
+        """
+        Called after follower has received attendance message and assigned to self.received.
+        :return:
+        """
         self.leader_id = self.received_leader_id()
-
-        # send response
+        if self.device_list.find_device()
         self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id)
 
-    # TODO: follower receive device list
-    def follower_receive_device_list(self):
-        pass
 
-    # TODO: follower receive check in
-    def follower_receive_check_in(self):
-        pass
-
-    # TODO: follower receive delete
-    def follower_receive_delete(self):
-        pass
-
-    # TODO: follower receive task start
-    def follower_receive_task_start(self):
-        pass
-
-    # TODO: follower receive task stop
-    def follower_receive_task_stop(self):
-        pass
-
-    def handle_promotion(self):
-        pass
-
-    # TODO: add edge case takeover situations after
 
     # TODO: change print to individual files
     def device_main(self):
@@ -228,63 +174,32 @@ class ThisDevice(Device):
 
         # global looping
         while True:
-            # print("This is device " + str(self.id))
-            # print(self.device_list)
-
-            if self.get_leader():  # Leader loop
-                # send check in messages and wait for responses
-                self.leader_send_check_in()
-                # send delete message if response not heard from device after threshold (handled in leader_check_in)
-
-                # send attendance message
+            if self.get_leader():
                 self.leader_send_attendance()
-                print("Device " + str(self.id) + " sending attendance")
-                # listen for new followers
-                # send revised list if new followers are heard (handled in leader_send_attendance)
 
-            if not self.get_leader():  # follower loop
-                # listen for message
-                # handle depending on action code
+            if not self.get_leader():
+                self.received = self.receive()
 
-                if self.receive():
-                    action = self.received_action()
+                if self.received is None or self.received_leader_id() != self.leader_id:
+                    continue
 
-                    if self.received_leader_id() != self.leader_id:
-                        # device.leader_address = max(device.received.leader_addr, device.leader_address)
-                        continue
+                action = self.received_action()
 
-                    # messages for all followers
-                    if action == Action.DELETE.value:
-                        reserve_promotion = self.follower_receive_delete()
-                        if reserve_promotion is not None:
-                            self.task = reserve_promotion
-
-                    elif action == Action.D_LIST.value:
-                        print("Updating list on follower side***")
-                        self.follower_receive_device_list()
-
-                    elif (
-                            action == Action.ATTENDANCE.value
-                    ) and self.task is None:  # meaning follower was wrongly deleted
-                        self.follower_receive_attendance()
-
-                    elif action == Action.TASK_STOP.value:
-                        continue
-
-                    elif action == Action.TASK_START.value:
-                        continue
-
-                else:  # no message heard, start takeover protocol
-                    print("Is there anybody out there?")
-
-                    if len(self.device_list) == 0:
-                        break
-
-                    # Leader dropped out
-                    if self.handle_promotion():
-                        print("--------Taking over as new leader--------")
-                    else:
-                        print("Staying as follower under a new leader")
+                # messages for all followers
+                match action:
+                    case Action.DELETE.value:
+                        pass
+                    case Action.D_LIST.value:
+                        pass
+                    case Action.ATTENDANCE:
+                        # if not in device list
+                        pass
+                    case Action.TASK_STOP.value:
+                        pass
+                    case Action.TASK_START.value:
+                        pass
+                    case _:
+                        print("Is there anybody out there?")
 
 
 class DeviceList:
