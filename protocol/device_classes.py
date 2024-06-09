@@ -1,5 +1,6 @@
 import time
 from message_classes import Message, Action
+from typing import Dict, List
 
 
 class Device:
@@ -90,15 +91,22 @@ class ThisDevice(Device):
         self.task_folder_idx = None  # multiple operations can be preloaded
         self.received = None  # will be an int representation of message
         self.transceiver = transceiver  # plugin object for sending and receiving messages
-        self.TIMEOUT = 0.25
 
-    def send(self, action, payload, option, leader_id, follower_id):
+    def send(self, action, payload, option, leader_id, follower_id, duration=0):
         msg = Message(action, payload, option, leader_id, follower_id).msg
-        self.transceiver.send(msg)  # transceiver only deals with integers
+        end_time = time.time() + duration
+        while time.time() < end_time:
+            self.transceiver.send(msg)  # transceiver only deals with integers
+            time.sleep(0.2)
 
-    def receive(self) -> int | None:  # int representation of the message (Message.msg)
-        msg = self.transceiver.receive(timeout=self.TIMEOUT)
-        return msg
+    def receive(self, timeout=2, action_value=-1) -> bool:  # int representation of the message (Message.msg)
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            self.received = self.transceiver.receive(timeout=timeout)
+            if self.received_action() == action_value:
+                return True
+        self.received = None
+        return False
 
     def received_action(self):
         return self.received // 1e26
@@ -110,45 +118,25 @@ class ThisDevice(Device):
         return self.received % 1e8
 
     def setup(self):
-        # TODO: change number once constants defined
-        print("Listening for leader, device " + str(self.id))
+        if self.receive(3) and self.received_action() == Action.ATTENDANCE.value:
+            self.make_follower()
+            self.follower_handle_attendance()
+            return  # early exit if follower
 
-        end_time = time.time() + 3
-        while time.time() < end_time:
-            self.received = self.receive()
-            if self.received is not None and self.received_action() == Action.ATTENDANCE.value:
-                print("Becoming follower, device " + str(self.id))
-                self.make_follower()
-                self.follower_handle_attendance()
-                return  # early exit if follower
-
-        print("Becoming leader, device " + str(self.id))
         self.make_leader()
         self.leader_send_attendance()
 
     def leader_send_attendance(self):
-        end_time = time.time() + 3
-        while time.time() < end_time:
-            self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0)
-            time.sleep(0.25)
+        self.send(Action.ATTENDANCE.value, 0, 0, self.get_id(), 0, 3)
 
-        end_time = time.time() + 2
         new_device = False
-        while time.time() < end_time:
-            self.received = self.receive()
-            if self.received is not None and self.received_action() == Action.ATT_RESPONSE.value:
-                # should we assume the device isn't already in list?
-
-                # should we assign task now or later?
-                self.device_list.add_device(self.received_follower_id(), -1)
+        while self.receive(timeout=2, action_value=Action.ATT_RESPONSE.value):
+            if self.received_follower_id() not in self.device_list.get_devices().keys():  # key lookup
+                self.device_list.add_device(self.received_follower_id(), None)
                 new_device = True
-            else:
-                continue
-            time.sleep(0.25)
-        
+
         if new_device:
             self.leader_send_device_list()
-
 
     def follower_handle_attendance(self):
         """
@@ -156,8 +144,8 @@ class ThisDevice(Device):
         :return:
         """
         self.leader_id = self.received_leader_id()
-        if self.device_list.find_device()
-        self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id)
+        if self.leader_id not in self.device_list.get_devices():
+            self.send(Action.ATT_RESPONSE.value, 0, 0, self.leader_id, self.id, 2)
 
 
 
@@ -210,7 +198,7 @@ class DeviceList:
         Non-default constructor for DeviceList object.
         :param num_tasks: size of DeviceList, number of tasks.
         """
-        self.devices = []
+        self.devices = {}  # hashmap of id: Device object
         self.task_options = list(range(num_tasks))
 
     def __str__(self):
@@ -220,9 +208,9 @@ class DeviceList:
         """
 
         output = ["DeviceList:"]
-        for device in self.devices:
-            task = device.get_task() if device.get_task() != -1 else "Reserve"
-            output.append(f"Device ID: {hex(device.get_id())}, Task: {task}")
+        for id, device in self.devices.items():
+            task = device.get_task() if device.get_task() is not None else "Reserve"
+            output.append(f"Device ID: {id}, Task: {task}")
         return "\n\t".join(output)
 
     def __iter__(self):
@@ -230,7 +218,7 @@ class DeviceList:
         Iterator for Devices in DeviceList.
         :return: iterator object.
         """
-        return iter(self.devices)
+        return iter(self.devices.items())  # dictionary iterator
 
     def __len__(self):
         """
@@ -239,6 +227,9 @@ class DeviceList:
         """
         return len(self.devices)
 
+    def get_devices(self) -> Dict[int: Device]:
+        return self.devices
+
     def update_num_tasks(self, num_tasks: int):
         """
         Resize DeviceList, used to upscale or downscale tasks.
@@ -246,7 +237,7 @@ class DeviceList:
         """
         self.task_options = list(range(num_tasks))
 
-    def add_device(self, id: int, task: int):
+    def add_device(self, id: int, task: int | None):
         """
         Creates Device object with id and task, stores in DeviceList.
         :param id: identifier for device, assigned to new Device object.
@@ -254,7 +245,7 @@ class DeviceList:
         """
         device = Device(id)
         device.set_task(task)
-        self.devices.append(device)
+        self.devices[id] = device
 
     def find_device(self, id: int) -> int or None:
         """
@@ -262,10 +253,7 @@ class DeviceList:
         :param id: identifier for target device.
         :return: Device object if found, None otherwise.
         """
-        for device in self.devices:
-            if device.get_id() == id:
-                return device
-        return None
+        return self.devices[id] if id in self.devices.keys() else None
 
     def remove_device(self, id: int) -> bool:
         """
@@ -273,12 +261,11 @@ class DeviceList:
         :param id: identifier for target device
         :return: True if found and removed, False otherwise.
         """
-
-        device = self.find_device(id)
-        if device:
-            self.devices.remove(device)
+        try:
+            self.devices.pop(id)
             return True
-        return False
+        except KeyError:
+            return False
 
     def unused_tasks(self) -> list[int]:
         """
@@ -286,19 +273,19 @@ class DeviceList:
         :return: list of unused task indices.
         """
         unused_tasks = self.task_options.copy()
-        for d in self.devices:
-            if d.get_task() != -1 and d.get_task() in unused_tasks:
+        for d in self.devices.values():
+            if d.get_task() is not None and d.get_task() in unused_tasks:
                 unused_tasks.remove(d.get_task())
         return unused_tasks
 
-    def get_reserves(self):
+    def get_reserves(self) -> List[Device]:
         """
         Gets list of reserve devices (not currently assigned a task).
         :return: list of reserve devices.
         """
         reserves = []
         for d in self.devices:
-            if d.get_task() == -1:
+            if d.get_task() is None:
                 reserves.append(d)
         return reserves
 
@@ -308,21 +295,12 @@ class DeviceList:
         :param id: identifier for target device.
         :param task: new task to be assigned to target.
         """
-        for device in self.devices:
-            if device.get_id() == id:
-                device.set_task(task)  # pass-by-reference enhanced for allows this?
-        # TODO: Exceptions
+        self.devices[id].set_task(task)
 
-    def get_highest_id(self) -> Device:
+    def get_highest_id(self) -> Device | None:
         """
         Gets Device with the largest id, used for leader takeover and tiebreaker.
         :return: Device object with the largest id
         """
-        max_device = None
-        max_id = 0
-        for device in self.devices:
-            if device.get_id() > max_id:
-                max_id = device.get_id()
-                max_device = device  # reference to max Device object
-        return max_device
+        return self.devices[max(self.devices.keys())] if len(self.devices) > 0 else None
 
