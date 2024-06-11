@@ -5,11 +5,16 @@ import queue as q
 
 
 class Node:
-    def __init__(self, node_id):
+    def __init__(self, node_id, target_func = None):
         self.node_id = node_id
         self.transceiver = Transceiver()
         self.thisDevice = dc.ThisDevice(self.__hash__() % 100000000, self.transceiver)
-        self.process = multiprocessing.Process(target=self.thisDevice.device_main)
+        # for testing purposes, so node can be tested without device protocol fully implemented
+        # can be removed later
+        if target_func == None:
+            target_func = target=self.thisDevice.device_main
+            
+        self.process = multiprocessing.Process(target=target_func)
 
     def start(self):
         self.process.start()

@@ -8,13 +8,14 @@ def worker():
     # send the test child processes here
 
 class TestNode(unittest.TestCase):
-
+    # Transceiver unit tests have passed
     def testConstructor(self):
         node1 = Node(1)
         self.assertEqual(node1.node_id, 1)
 
         hash_val = node1.__hash__() % 100000000
         self.assertEqual(node1.thisDevice.id, hash_val)
+        
 
     def testProcessStartStop(self):
         pass
