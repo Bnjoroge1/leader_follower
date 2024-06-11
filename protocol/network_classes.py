@@ -1,6 +1,5 @@
 import sys
-sys.path.append('../protocol')
-from protocol import device_classes as dc
+import device_classes as dc
 import multiprocessing
 import queue as q
 

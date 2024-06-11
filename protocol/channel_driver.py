@@ -1,7 +1,5 @@
 import time
 import network_classes as nc
-import sys
-sys.path.append('../protocol')
 
 
 def main():

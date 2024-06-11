@@ -1,9 +1,8 @@
 import time
 from message_classes import Message, Action
 from typing import Dict, List, Set
-import sys
-sys.path.append('../simulation')
-from simulation.network_classes import Transceiver
+#from network_classes import Transceiver
+#this import causes circular w network classes
 
 
 class Device:
@@ -81,7 +80,7 @@ class Device:
 class ThisDevice(Device):
     """ Object for main protocol to use, subclass of Device. """
 
-    def __init__(self, id, transceiver: Transceiver):  # inclusive bounds
+    def __init__(self, id, transceiver):  # inclusive bounds
         """
         Constructor (default/non-default) for ThisDevice, creates additional fields.
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
@@ -93,7 +92,7 @@ class ThisDevice(Device):
         self.leader_started_operating: float | None = None
         self.task_folder_idx: int | None = None  # multiple operations can be preloaded
         self.received: int | None = None  # will be an int representation of message
-        self.transceiver: Transceiver = transceiver  # plugin object for sending and receiving messages
+        self.transceiver = transceiver  # plugin object for sending and receiving messages
 
     def send(self, action, payload, leader_id, follower_id, duration=0.0):
         msg = Message(action, payload, leader_id, follower_id).msg
