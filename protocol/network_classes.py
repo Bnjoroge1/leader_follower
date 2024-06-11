@@ -1,4 +1,3 @@
-import sys
 import device_classes as dc
 import multiprocessing
 import queue as q
@@ -13,15 +12,16 @@ class Node:
         # can be removed later
         if target_func == None:
             target_func = target=self.thisDevice.device_main
-            
+
         self.process = multiprocessing.Process(target=target_func)
 
     def start(self):
         self.process.start()
 
     def stop(self):
+        # terminate will kill process so I don't think we need to join after - this can corrupt shared data
         self.process.terminate()
-        self.process.join()
+        # self.process.join()
 
     def set_outgoing_channel(self, target_node_id, queue):
         self.transceiver.set_outgoing_channel(target_node_id, queue)
