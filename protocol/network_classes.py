@@ -4,16 +4,19 @@ import queue as q
 
 
 class Node:
-    def __init__(self, node_id, target_func = None):
+    def __init__(self, node_id, target_func = None, target_args = None):
         self.node_id = node_id
         self.transceiver = Transceiver()
         self.thisDevice = dc.ThisDevice(self.__hash__() % 100000000, self.transceiver)
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
         if target_func == None:
-            target_func = target=self.thisDevice.device_main
-
-        self.process = multiprocessing.Process(target=target_func)
+            target_func = self.thisDevice.device_main
+        if target_args != None:
+            target_args = (self.transceiver, self.node_id)
+            self.process = multiprocessing.Process(target=target_func, args=target_args)
+        else:
+            self.process = multiprocessing.Process(target=target_func)
 
     def start(self):
         self.process.start()
@@ -22,6 +25,10 @@ class Node:
         # terminate will kill process so I don't think we need to join after - this can corrupt shared data
         self.process.terminate()
         # self.process.join()
+
+    def join(self):
+        # not sure if needed for protocol, but was used during testing
+        self.process.join()
 
     def set_outgoing_channel(self, target_node_id, queue):
         self.transceiver.set_outgoing_channel(target_node_id, queue)
