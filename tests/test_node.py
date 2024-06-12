@@ -13,8 +13,15 @@ def test_worker():
     # send the test child processes here
 
 def test_transmission(transceiver, node_id):
+    print("sending")
     transceiver.send(node_id)
 
+def test_send_and_receive(transceiver, node_id):
+    print("sending")
+    transceiver.send(node_id)
+    sleep(1)
+    result = transceiver.receive(2)
+    print(result)
 
 class TestNode(unittest.TestCase):
     # Transceiver unit tests have passed
@@ -71,6 +78,9 @@ class TestNode(unittest.TestCase):
 
         self.assertEqual(result1, 2)
         self.assertEqual(result2, 1)
+
+    def testProcessReceiveBetweenTwoProcesses(self):
+        pass
 
     def testProcessSendBetweenMultipleProcesses(self):
         pass
