@@ -49,8 +49,8 @@ class Network:
         return self.nodes.get(node_id)
 
     def create_channel(self, node_id1, node_id2):  # 2 channels for bidirectional comms
-        queue1 = multiprocessing.Queue()  # from 1 to 2
-        queue2 = multiprocessing.Queue()  # from 2 to 1
+        queue1 = multiprocessing.Queue(maxsize=1)  # from 1 to 2
+        queue2 = multiprocessing.Queue(maxsize=1)  # from 2 to 1
         self.nodes[node_id1].set_outgoing_channel(node_id2, queue1)  # (other node, channel)
         self.nodes[node_id1].set_incoming_channel(node_id2, queue2)
         self.nodes[node_id2].set_outgoing_channel(node_id1, queue2)

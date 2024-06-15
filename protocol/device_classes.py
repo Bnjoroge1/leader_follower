@@ -118,7 +118,7 @@ class ThisDevice(Device):
         return False
 
     def received_action(self) -> int:
-        return self.received // int(1e24)
+        return self.received // int(1e18)
 
     def received_leader_id(self) -> int:
         return self.received % int(1e16) // int(1e8)
@@ -127,7 +127,7 @@ class ThisDevice(Device):
         return self.received % int(1e8)
 
     def received_payload(self) -> int:
-        return self.received % int(1e24) // int(1e16)
+        return self.received % int(1e18) // int(1e16)
 
     def setup(self):
         print("Listening for leader's attendance")
