@@ -178,7 +178,7 @@ class ThisDevice(Device):
             # accounts for leader receiving another device's check-in response (which should never happen)
             while time.time() < end_time:  # times should line up with receive duration
                 if self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.CHECK_IN.value):
-                    if self.received_follower_id() == id:
+                    if abs(self.received_follower_id() - id) < 5:  # received message is same as sent message
                         # early exit if heard
                         got_response = True
                         print("Leader heard check-in response from", id)
@@ -201,6 +201,11 @@ class ThisDevice(Device):
         self.leader_id = self.received_leader_id()
         if self.leader_id not in self.device_list.get_ids():
             self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=2)
+
+    def follower_respond_check_in(self):
+        print("Follower responding to check-in")
+        self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=1)
+        # sending and receiving is along different channels for Transceiver, so this should not be a problem
 
     def follower_handle_dlist(self):
         print("Follower handling D_LIST")
@@ -238,13 +243,18 @@ class ThisDevice(Device):
                     # print(self.received_leader_id())
                     # print(self.leader_id)
                     # print("CONTINUE")
-                    continue
+                    continue  # message was not from this device's leader - ignore
 
                 action = self.received_action()
                 # print(action)
 
                 # messages for all followers
                 match action:
+                    case Action.CHECK_IN:
+                        if abs(self.received_follower_id() - self.id) < 5:  # check-in directed to this device
+                            self.follower_respond_check_in()
+                        else:
+                            continue  # not necessary?
                     case Action.DELETE.value:
                         pass
                     case Action.D_LIST.value:
