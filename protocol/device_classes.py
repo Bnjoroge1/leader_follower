@@ -162,6 +162,25 @@ class ThisDevice(Device):
             self.send(action=Action.D_LIST.value, payload=device.task, leader_id=self.id, follower_id=id, duration=1)
             time.sleep(1)
 
+    def leader_perform_check_in(self):
+        # leader should listen for check-in response before moving on to ensure scalability
+        for id, device in self.device_list.get_device_list().items():
+            got_response: bool = False
+            # sending check-in to individual device
+            self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id, duration=1)
+            # device hangs in send() until finished sending
+            response_allowance = 1  # subject to change
+            end_time = time.time() + response_allowance
+            # accounts for leader receiving another device's check-in response (which should never happen)
+            while time.time() < end_time:  # times should line up with receive duration
+                if self.receive(duration=response_allowance, action_value=Action.CHECK_IN.value):
+                    if self.received_follower_id() == id:
+                        # early exit if heard
+                        got_response = True
+                        break
+            if not got_response:
+                device.incr_missed()
+
     def follower_handle_attendance(self):
         """
         Called after follower has received attendance message and assigned to self.received.
@@ -192,7 +211,11 @@ class ThisDevice(Device):
             print("Device:", self.id, self.leader, "\n", self.device_list)
 
             if self.get_leader():
-                self.leader_send_attendance()
+                self.leader_send_attendance()  # device_list sending happens here
+                time.sleep(1)  # optional, to give followers a chance to finish responding
+                # will be helpful if leader works through followers in
+                # same order each time to increase clock speed
+                self.leader_perform_check_in()  # takes care of sending and receiving
 
             if not self.get_leader():
                 if not self.receive(duration=8):
