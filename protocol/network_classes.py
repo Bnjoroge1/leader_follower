@@ -7,7 +7,7 @@ class Node:
     def __init__(self, node_id, target_func = None, target_args = None):
         self.node_id = node_id
         self.transceiver = Transceiver()
-        self.thisDevice = dc.ThisDevice(self.__hash__() % 100000000, self.transceiver)
+        self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
         if target_func is None:
@@ -49,8 +49,8 @@ class Network:
         return self.nodes.get(node_id)
 
     def create_channel(self, node_id1, node_id2):  # 2 channels for bidirectional comms
-        queue1 = multiprocessing.Queue(maxsize=1)  # from 1 to 2
-        queue2 = multiprocessing.Queue(maxsize=1)  # from 2 to 1
+        queue1 = multiprocessing.Queue()  # from 1 to 2
+        queue2 = multiprocessing.Queue()  # from 2 to 1
         self.nodes[node_id1].set_outgoing_channel(node_id2, queue1)  # (other node, channel)
         self.nodes[node_id1].set_incoming_channel(node_id2, queue2)
         self.nodes[node_id2].set_outgoing_channel(node_id1, queue2)

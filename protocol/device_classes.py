@@ -118,16 +118,16 @@ class ThisDevice(Device):
         return False
 
     def received_action(self) -> int:
-        return self.received // int(1e18)
+        return self.received // int(1e10)
 
     def received_leader_id(self) -> int:
-        return self.received % int(1e16) // int(1e8)
+        return self.received % int(1e8) // int(1e4)
 
     def received_follower_id(self) -> int:
-        return self.received % int(1e8)
+        return self.received % int(1e4)
 
     def received_payload(self) -> int:
-        return self.received % int(1e18) // int(1e16)
+        return self.received % int(1e10) // int(1e8)
 
     def setup(self):
         print("Listening for leader's attendance")
@@ -256,7 +256,6 @@ class ThisDevice(Device):
                 match action:
                     case Action.CHECK_IN.value:
                         print("Follower heard directed check-in")
-                        print(self.received_follower_id())
                         if abs(self.received_follower_id() - self.id) < 5:  # check-in directed to this device
                             self.follower_respond_check_in()
                         else:

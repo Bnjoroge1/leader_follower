@@ -9,14 +9,14 @@ class Message:
         Non-default constructor for Message object, MSD to LSD.
         :param action: indicator for type of message, 1 digit.
         :param payload: main message contents, 2 digits.
-        :param leader_id: id of device's leader, itself if device is leader, 8 digits
-        :param follower_id: id of device's follower, itself if device is follower, 8 digits
+        :param leader_id: id of device's leader, itself if device is leader, 4 digits
+        :param follower_id: id of device's follower, itself if device is follower, 4 digits
         """
         self.action = action
         self.payload = payload
         self.leader_id = leader_id
         self.follower_id = follower_id
-        self.msg = int((action * 1e18) + (payload * 1e16) + (leader_id * 1e8) + (follower_id))
+        self.msg = int((action * 1e10) + (payload * 1e8) + (leader_id * 1e4) + (follower_id))
 
     def __str__(self) -> str:
         """
