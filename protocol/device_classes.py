@@ -167,11 +167,15 @@ class ThisDevice(Device):
             time.sleep(1)
 
     def leader_perform_check_in(self):
-        print("Leader performing check-in")
         # leader should listen for check-in response before moving on to ensure scalability
         for id, device in self.device_list.get_device_list().items():
+
+            if id == self.id:
+                continue
+
             got_response: bool = False
             # sending check-in to individual device
+            print("Leader sending check-in to", id)
             self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id, duration=1)
             # device hangs in send() until finished sending
             end_time = time.time() + RESPONSE_ALLOWANCE
@@ -250,7 +254,9 @@ class ThisDevice(Device):
 
                 # messages for all followers
                 match action:
-                    case Action.CHECK_IN:
+                    case Action.CHECK_IN.value:
+                        print("Follower heard directed check-in")
+                        print(self.received_follower_id())
                         if abs(self.received_follower_id() - self.id) < 5:  # check-in directed to this device
                             self.follower_respond_check_in()
                         else:

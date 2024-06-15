@@ -10,9 +10,9 @@ class Node:
         self.thisDevice = dc.ThisDevice(self.__hash__() % 100000000, self.transceiver)
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
-        if target_func == None:
+        if target_func is None:
             target_func = self.thisDevice.device_main
-        if target_args != None:
+        if target_args is not None:
             target_args = (self.transceiver, self.node_id)
             self.process = multiprocessing.Process(target=target_func, args=target_args)
         else:
