@@ -5,6 +5,10 @@ from typing import Dict, List, Set
 #this import causes circular w network classes
 
 
+MISSED_THRESHOLD = 3
+RESPONSE_ALLOWANCE = 1  # subject to change
+
+
 class Device:
     """ Lightweight device object for storing in a DeviceList. """
 
@@ -163,23 +167,31 @@ class ThisDevice(Device):
             time.sleep(1)
 
     def leader_perform_check_in(self):
+        print("Leader performing check-in")
         # leader should listen for check-in response before moving on to ensure scalability
         for id, device in self.device_list.get_device_list().items():
             got_response: bool = False
             # sending check-in to individual device
             self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id, duration=1)
             # device hangs in send() until finished sending
-            response_allowance = 1  # subject to change
-            end_time = time.time() + response_allowance
+            end_time = time.time() + RESPONSE_ALLOWANCE
             # accounts for leader receiving another device's check-in response (which should never happen)
             while time.time() < end_time:  # times should line up with receive duration
-                if self.receive(duration=response_allowance, action_value=Action.CHECK_IN.value):
+                if self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.CHECK_IN.value):
                     if self.received_follower_id() == id:
                         # early exit if heard
                         got_response = True
+                        print("Leader heard check-in response from", id)
                         break
             if not got_response:
                 device.incr_missed()
+
+    def leader_drop_disconnected(self):
+        for id, device in self.device_list.get_device_list().items():
+            if device.get_missed() > MISSED_THRESHOLD:
+                # sends a message for each disconnected device
+                self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=1)
+                # broadcasts to entire channel, does not need a response confirmation
 
     def follower_handle_attendance(self):
         """
@@ -216,6 +228,7 @@ class ThisDevice(Device):
                 # will be helpful if leader works through followers in
                 # same order each time to increase clock speed
                 self.leader_perform_check_in()  # takes care of sending and receiving
+                self.leader_drop_disconnected()
 
             if not self.get_leader():
                 if not self.receive(duration=8):
