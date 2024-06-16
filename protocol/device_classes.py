@@ -5,7 +5,7 @@ from typing import Dict, List, Set
 #this import causes circular w network classes
 
 
-MISSED_THRESHOLD: int = 3
+MISSED_THRESHOLD: int = 5
 RESPONSE_ALLOWANCE: float = 2  # subject to change
 PRECISION_ALLOWANCE: int = 5
 RECEIVE_TIMEOUT: float = 0.2
@@ -114,11 +114,15 @@ class ThisDevice(Device):
         :param duration: sending duration in seconds
         """
         msg = Message(action, payload, leader_id, follower_id).msg
+
+        if action == Action.ATT_RESPONSE.value:
+            print(msg)
+
         end_time = time.time() + duration
         while time.time() < end_time:
             self.transceiver.send(msg)  # transceiver only deals with integers
             # print("Sending", msg)
-            time.sleep(0.2)
+            time.sleep(0.1)
 
     def receive(self, duration, action_value=-1) -> bool:  # action_value=-1 means accepts any action
         """
@@ -132,6 +136,9 @@ class ThisDevice(Device):
         end_time = time.time() + duration
         while time.time() < end_time:
             self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
+
+            if action_value == Action.ATT_RESPONSE.value:
+                print(self.received)
             # print("Received", self.received)
             if self.received and (action_value == -1 or self.received_action() == action_value):
                 return True
@@ -158,8 +165,9 @@ class ThisDevice(Device):
         print("Listening for leader's attendance")
         if self.receive(duration=3):
             print("Heard someone, listening for attendance")
-            while self.received_action() != Action.ATTENDANCE.value:
-                self.receive(duration=3)
+            while not self.receive(duration=1, action_value=Action.ATTENDANCE.value):
+                print("STUCK")
+                pass
             self.make_follower()
             self.follower_handle_attendance()
             print("Leader heard, becoming follower")
@@ -175,11 +183,15 @@ class ThisDevice(Device):
         Sending and receiving attendance sequence for leader. Updates and
         broadcasts device list if new device is heard.
         """
-        self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION)
+        print("Leader sending attendance")
+        self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION*2)
 
-        end_time = time.time() + ATTENDANCE_DURATION
         # prevents deadlock
-        while time.time() < end_time and self.receive(duration=ATTENDANCE_DURATION, action_value=Action.ATT_RESPONSE.value):
+        # receive function takes care of time.time()
+        # TODO: is this the right way to do this while?
+        time.sleep(ATTENDANCE_DURATION/2)
+        while self.receive(duration=ATTENDANCE_DURATION*2, action_value=Action.ATT_RESPONSE.value):
+            print("Leader heard attendance response from", self.received_follower_id())
             if self.received_follower_id() not in self.device_list.get_ids():
                 unused_tasks = self.device_list.unused_tasks()
                 print("Unused tasks: ", unused_tasks)
@@ -246,8 +258,8 @@ class ThisDevice(Device):
         """
         print("Follower", self.id, "handling attendance")
         self.leader_id = self.received_leader_id()
-        if self.leader_id not in self.device_list.get_ids():
-            self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=ATTENDANCE_DURATION)
+        # preconditions handled - always send response
+        self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=ATTENDANCE_DURATION*2)
 
     def follower_respond_check_in(self):
         """
@@ -291,14 +303,16 @@ class ThisDevice(Device):
             if self.get_leader():
                 print("Device:", self.id, self.leader, "\n", self.device_list)
                 self.leader_send_attendance()
+
                 self.leader_send_device_list()
+
                 # will be helpful if leader works through followers in
                 # same order each time to increase clock speed
                 self.leader_perform_check_in()  # takes care of sending and receiving
+
                 self.leader_drop_disconnected()
 
             if not self.get_leader():
-                print("Device:", self.id, self.leader, "\n", self.device_list)
                 if not self.receive(duration=8):
                     print("Is there anybody out there?")
                     continue
@@ -316,8 +330,8 @@ class ThisDevice(Device):
                 match action:
                     case Action.ATTENDANCE.value:
                         # prevents deadlock between leader-follower first attendance state
-                        print(self.device_list.find_device(self.id))
-                        if self.numHeardDLIST > 2 and not self.device_list.find_device(self.id):  # O(1) operation, quick
+                        print(self.id, self.device_list, self.device_list.find_device(self.id))
+                        if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
                             self.follower_handle_attendance()
                             self.numHeardDLIST = 0
                     case Action.CHECK_IN.value:
