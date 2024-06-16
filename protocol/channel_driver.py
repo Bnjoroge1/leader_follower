@@ -9,7 +9,7 @@ def main():
     :return:
     """
     # startup
-    num_devices = 3
+    num_devices = 2
     network = nc.Network()
     nodes = []
     for i in range(num_devices):
@@ -20,6 +20,7 @@ def main():
     for firstNode in nodes:
         for secondNode in nodes:
             if firstNode is not secondNode:
+                print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
                 network.create_channel(firstNode.node_id, secondNode.node_id)
 
     for node in nodes:

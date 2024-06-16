@@ -5,7 +5,7 @@ from typing import Dict, List, Set
 #this import causes circular w network classes
 
 
-MISSED_THRESHOLD: int = 5
+MISSED_THRESHOLD: int = 1
 RESPONSE_ALLOWANCE: float = 2  # subject to change
 PRECISION_ALLOWANCE: int = 5
 RECEIVE_TIMEOUT: float = 0.2
@@ -115,9 +115,6 @@ class ThisDevice(Device):
         """
         msg = Message(action, payload, leader_id, follower_id).msg
 
-        if action == Action.ATT_RESPONSE.value:
-            print(msg)
-
         end_time = time.time() + duration
         while time.time() < end_time:
             self.transceiver.send(msg)  # transceiver only deals with integers
@@ -136,9 +133,6 @@ class ThisDevice(Device):
         end_time = time.time() + duration
         while time.time() < end_time:
             self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
-
-            if action_value == Action.ATT_RESPONSE.value:
-                print(self.received)
             # print("Received", self.received)
             if self.received and (action_value == -1 or self.received_action() == action_value):
                 return True
@@ -184,14 +178,14 @@ class ThisDevice(Device):
         broadcasts device list if new device is heard.
         """
         print("Leader sending attendance")
-        self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION*2)
+        self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION)
 
         # prevents deadlock
         # receive function takes care of time.time()
         # TODO: is this the right way to do this while?
         time.sleep(ATTENDANCE_DURATION/2)
-        while self.receive(duration=ATTENDANCE_DURATION*2, action_value=Action.ATT_RESPONSE.value):
-            print("Leader heard attendance response from", self.received_follower_id())
+        while self.receive(duration=ATTENDANCE_DURATION, action_value=Action.ATT_RESPONSE.value):
+            # print("Leader heard attendance response from", self.received_follower_id())
             if self.received_follower_id() not in self.device_list.get_ids():
                 unused_tasks = self.device_list.unused_tasks()
                 print("Unused tasks: ", unused_tasks)
@@ -226,7 +220,7 @@ class ThisDevice(Device):
             got_response: bool = False
             # sending check-in to individual device
             print("Leader sending check-in to", id)
-            self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id, duration=1)
+            self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id, duration=2)
             # device hangs in send() until finished sending
             end_time = time.time() + RESPONSE_ALLOWANCE
             # accounts for leader receiving another device's check-in response (which should never happen)
@@ -259,7 +253,7 @@ class ThisDevice(Device):
         print("Follower", self.id, "handling attendance")
         self.leader_id = self.received_leader_id()
         # preconditions handled - always send response
-        self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=ATTENDANCE_DURATION*2)
+        self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=ATTENDANCE_DURATION)
 
     def follower_respond_check_in(self):
         """
@@ -313,7 +307,8 @@ class ThisDevice(Device):
                 self.leader_drop_disconnected()
 
             if not self.get_leader():
-                if not self.receive(duration=8):
+                print("Device:", self.id, self.leader, "\n", self.device_list)
+                if not self.receive(duration=15):
                     print("Is there anybody out there?")
                     continue
                     # takeover
@@ -330,7 +325,7 @@ class ThisDevice(Device):
                 match action:
                     case Action.ATTENDANCE.value:
                         # prevents deadlock between leader-follower first attendance state
-                        print(self.id, self.device_list, self.device_list.find_device(self.id))
+                        # print(self.id, self.device_list, self.device_list.find_device(self.id))
                         if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
                             self.follower_handle_attendance()
                             self.numHeardDLIST = 0
