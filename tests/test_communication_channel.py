@@ -1,7 +1,7 @@
 import unittest
 import sys
-sys.path.append('../simulation')
-from simulation import channel_driver as cd
+sys.path.append('../protocol')
+from protocol import channel_driver as cd
 
 class TestCommunicationChannel(unittest.TestCase):
     def setUp(self):

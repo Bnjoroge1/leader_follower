@@ -4,7 +4,7 @@ from signal import SIGTERM
 import multiprocessing as mp
 import sys
 sys.path.append('../protocol')
-from network_classes import Node
+from protocol.network_classes import Node
 
 def test_worker():
     print("child process starting...")
@@ -31,7 +31,7 @@ class TestNode(unittest.TestCase):
         self.assertEqual(node1.node_id, 1)
 
         # check hash is correct
-        hash_val = node1.__hash__() % 100000000
+        hash_val = node1.__hash__() % 10000
         self.assertEqual(node1.thisDevice.id, hash_val)
 
         # check process created works
