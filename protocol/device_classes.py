@@ -5,8 +5,8 @@ from typing import Dict, List, Set
 #this import causes circular w network classes
 
 
-MISSED_THRESHOLD: int = 1
-RESPONSE_ALLOWANCE: float = 2  # subject to change
+MISSED_THRESHOLD: int = 2
+RESPONSE_ALLOWANCE: float = 1  # subject to change
 PRECISION_ALLOWANCE: int = 5
 RECEIVE_TIMEOUT: float = 0.2
 ATTENDANCE_DURATION: float = 2
@@ -51,6 +51,9 @@ class Device:
         :return: number of missed check-ins for this Device.
         """
         return self.missed
+
+    def reset_missed(self):
+        self.missed = 0
 
     def get_task(self) -> int:
         """
@@ -231,7 +234,9 @@ class ThisDevice(Device):
                         got_response = True
                         print("Leader heard check-in response from", id)
                         break
-            if not got_response:
+            if got_response:
+                device.reset_missed()
+            else:
                 device.incr_missed()
 
     def leader_drop_disconnected(self):
@@ -243,6 +248,7 @@ class ThisDevice(Device):
             if device.get_missed() > MISSED_THRESHOLD:
                 self.device_list.remove_device(id=id)  # remove from own list
                 # sends a message for each disconnected device
+                print("Leader sending DELETE message")
                 self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
                 # broadcasts to entire channel, does not need a response confirmation
 
@@ -306,6 +312,8 @@ class ThisDevice(Device):
 
                 self.leader_drop_disconnected()
 
+                time.sleep(2)
+
             if not self.get_leader():
                 print("Device:", self.id, self.leader, "\n", self.device_list)
                 if not self.receive(duration=15):
@@ -330,7 +338,7 @@ class ThisDevice(Device):
                             self.follower_handle_attendance()
                             self.numHeardDLIST = 0
                     case Action.CHECK_IN.value:
-                        print("Follower heard directed check-in")
+                        print("Follower", self.id, "heard directed check-in")
                         if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
                             self.follower_respond_check_in()
                         else:
@@ -347,6 +355,9 @@ class ThisDevice(Device):
                         pass
                     case _:
                         pass
+
+            # TODO: this is a temporary fix until we set up message buffer and remove duplicate messages
+            self.transceiver.clear()
 
 
 class DeviceList:
