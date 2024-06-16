@@ -23,7 +23,7 @@ def main():
 
     for node in nodes:
         node.start()
-        time.sleep(12)
+        time.sleep(5)
 
 
 if __name__ == "__main__":
