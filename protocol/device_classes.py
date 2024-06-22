@@ -163,7 +163,7 @@ class ThisDevice(Device):
         if self.receive(duration=3):
             print("Heard someone, listening for attendance")
             while not self.receive(duration=3, action_value=Action.ATTENDANCE.value):
-                print("Device", self.id, "is STUCK")
+                # print("Device", self.id, "is STUCK")
                 pass
             self.make_follower()
             self.follower_handle_attendance()
@@ -374,7 +374,7 @@ class ThisDevice(Device):
 class DeviceList:
     """ Container for lightweight Device objects, held by ThisDevice. """
 
-    def __init__(self, num_tasks=4):
+    def __init__(self, num_tasks=8):
         """
         Non-default constructor for DeviceList object.
         :param num_tasks: size of DeviceList, number of tasks.
