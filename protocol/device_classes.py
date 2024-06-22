@@ -118,11 +118,11 @@ class ThisDevice(Device):
         """
         msg = Message(action, payload, leader_id, follower_id).msg
 
-        end_time = time.time() + duration
-        while time.time() < end_time:
-            self.transceiver.send(msg)  # transceiver only deals with integers
+        # end_time = time.time() + duration
+        # while time.time() < end_time:
+        self.transceiver.send(msg)  # transceiver only deals with integers
             # print("Sending", msg)
-            time.sleep(0.1)
+            # time.sleep(0.1)
 
     def receive(self, duration, action_value=-1) -> bool:  # action_value=-1 means accepts any action
         """
@@ -186,9 +186,8 @@ class ThisDevice(Device):
         # prevents deadlock
         # receive function takes care of time.time()
         # TODO: is this the right way to do this while?
-        time.sleep(ATTENDANCE_DURATION/2)
-        while self.receive(duration=ATTENDANCE_DURATION, action_value=Action.ATT_RESPONSE.value):
-            # print("Leader heard attendance response from", self.received_follower_id())
+        while self.receive(duration=ATTENDANCE_DURATION*2, action_value=Action.ATT_RESPONSE.value):
+            print("Leader heard attendance response from", self.received_follower_id())
             if self.received_follower_id() not in self.device_list.get_ids():
                 unused_tasks = self.device_list.unused_tasks()
                 print("Unused tasks: ", unused_tasks)
@@ -274,7 +273,7 @@ class ThisDevice(Device):
         Called after follower receives D_LIST action from leader. Updates device list.
         """
         print("Follower handling D_LIST")
-        while self.receive(duration=1.5*D_LIST_DURATION, action_value=Action.D_LIST.value):  # while still receiving D_LIST
+        while self.receive(duration=0.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
             self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
 
     def follower_drop_disconnected(self):
@@ -306,16 +305,20 @@ class ThisDevice(Device):
 
                 self.leader_send_device_list()
 
+                time.sleep(2)
+
                 # will be helpful if leader works through followers in
                 # same order each time to increase clock speed
                 self.leader_perform_check_in()  # takes care of sending and receiving
+
+                time.sleep(2)
 
                 self.leader_drop_disconnected()
 
                 time.sleep(2)
 
             if not self.get_leader():
-                print("Device:", self.id, self.leader, "\n", self.device_list)
+                # print("Device:", self.id, self.leader, "\n", self.device_list)
                 if not self.receive(duration=15):
                     print("Is there anybody out there?")
                     continue
@@ -327,6 +330,7 @@ class ThisDevice(Device):
                     continue  # message was not from this device's leader - ignore
 
                 action = self.received_action()
+                print(action)
                 # print(action)
 
                 # messages for all followers
@@ -338,8 +342,8 @@ class ThisDevice(Device):
                             self.follower_handle_attendance()
                             self.numHeardDLIST = 0
                     case Action.CHECK_IN.value:
-                        print("Follower", self.id, "heard directed check-in")
                         if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
+                            print("Follower", self.id, "heard directed check-in")
                             self.follower_respond_check_in()
                         else:
                             continue  # not necessary?
@@ -357,7 +361,7 @@ class ThisDevice(Device):
                         pass
 
             # TODO: this is a temporary fix until we set up message buffer and remove duplicate messages
-            self.transceiver.clear()
+            # self.transceiver.clear()
 
 
 class DeviceList:

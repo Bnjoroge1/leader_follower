@@ -8,7 +8,8 @@ class Node:
     def __init__(self, node_id, target_func = None, target_args = None):
         self.node_id = node_id
         self.transceiver = Transceiver()
-        self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
+        self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)
+        # self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
         if target_func is None:
