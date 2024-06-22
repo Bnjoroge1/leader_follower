@@ -209,16 +209,20 @@ class ThisDevice(Device):
         broadcasts device list if new device is heard.
         """
         print("Leader sending attendance")
+        self.log_status("SENDING ATTENDANCE")
         self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION)
 
         # prevents deadlock
         while self.receive(duration=ATTENDANCE_DURATION*2, action_value=Action.ATT_RESPONSE.value):
             print("Leader heard attendance response from", self.received_follower_id())
+            self.log_status("HEARD ATT_RESP FROM " + str(self.received_follower_id()))
             if self.received_follower_id() not in self.device_list.get_ids():
                 unused_tasks = self.device_list.unused_tasks()
                 print("Unused tasks: ", unused_tasks)
+                self.log_status("UNUSED TASKS: " + str(unused_tasks))
                 task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", self.received_follower_id())
+                self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
                 self.device_list.add_device(id=self.received_follower_id(), task=task)  # has not assigned task yet
 
     def leader_send_device_list(self):
@@ -229,7 +233,7 @@ class ThisDevice(Device):
         for id, device in self.device_list.get_device_list().items():
             # not using option since DeviceList.devices is a dictionary
             # simply sending all id's in its "list" in follower_id position
-            # print("Leader sending D_LIST", id, device.task)
+            print("Leader sending D_LIST", id, device.task)
             self.send(action=Action.D_LIST.value, payload=device.task, leader_id=self.id, follower_id=id, duration=D_LIST_DURATION)
 
     # TODO: maybe handle leader collisions/tiebreakers here
@@ -248,6 +252,7 @@ class ThisDevice(Device):
             got_response: bool = False
             # sending check-in to individual device
             print("Leader sending check-in to", id)
+            self.log_status("SENDING CHECKIN TO " + str(id))
             self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id, duration=2)
             # device hangs in send() until finished sending
             end_time = time.time() + RESPONSE_ALLOWANCE
@@ -258,6 +263,7 @@ class ThisDevice(Device):
                         # early exit if heard
                         got_response = True
                         print("Leader heard check-in response from", id)
+                        self.log_status("HEARD CHECKIN RESPONSE FROM " + str(id))
                         break
             if got_response:
                 device.reset_missed()
@@ -274,6 +280,7 @@ class ThisDevice(Device):
                 self.device_list.remove_device(id=id)  # remove from own list
                 # sends a message for each disconnected device
                 print("Leader sending DELETE message")
+                self.log_status("SENDING DELETE")
                 self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
                 # broadcasts to entire channel, does not need a response confirmation
 
@@ -282,6 +289,7 @@ class ThisDevice(Device):
         Called after follower has received attendance message and assigned to self.received.
         """
         print("Follower", self.id, "handling attendance")
+        self.log_status("HANDLING ATTENDANCE")
         self.leader_id = self.received_leader_id()
         # preconditions handled - always send response
         time.sleep(ATTENDANCE_DURATION/2)
@@ -292,6 +300,7 @@ class ThisDevice(Device):
         Called after follower has received check-in message. Responds with same message.
         """
         print("Follower responding to check-in")
+        self.log_status("RESPONDING TO CHECKIN")
         self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=2)
         # sending and receiving is along different channels for Transceiver, so this should not be a problem
 
@@ -300,7 +309,9 @@ class ThisDevice(Device):
         Called after follower receives D_LIST action from leader. Updates device list.
         """
         print("Follower handling D_LIST")
+        self.log_status("HANDLING DLIST")
         while self.receive(duration=0.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
+            self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
             self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
 
     def follower_drop_disconnected(self):
