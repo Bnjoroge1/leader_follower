@@ -412,7 +412,7 @@ class DeviceList:
         device.set_task(task)
         self.devices[id] = device
 
-    def find_device(self, id: int) -> int or None:
+    def find_device(self, id: int) -> int | None:
         """
         Finds Device object with target id in DeviceList.
         :param id: identifier for target device.
