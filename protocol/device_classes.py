@@ -162,8 +162,8 @@ class ThisDevice(Device):
         print("Listening for leader's attendance")
         if self.receive(duration=3):
             print("Heard someone, listening for attendance")
-            while not self.receive(duration=1, action_value=Action.ATTENDANCE.value):
-                print("STUCK")
+            while not self.receive(duration=3, action_value=Action.ATTENDANCE.value):
+                print("Device", self.id, "is STUCK")
                 pass
             self.make_follower()
             self.follower_handle_attendance()
@@ -186,6 +186,11 @@ class ThisDevice(Device):
         # prevents deadlock
         # receive function takes care of time.time()
         # TODO: is this the right way to do this while?
+        # end_time = time.time() + ATTENDANCE_DURATION
+        # while time.time() < end_time:  # times should line up with receive duration
+        #     print("Leader receiving")
+        #     if self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.ATT_RESPONSE.value):
+
         while self.receive(duration=ATTENDANCE_DURATION*2, action_value=Action.ATT_RESPONSE.value):
             print("Leader heard attendance response from", self.received_follower_id())
             if self.received_follower_id() not in self.device_list.get_ids():
@@ -258,6 +263,7 @@ class ThisDevice(Device):
         print("Follower", self.id, "handling attendance")
         self.leader_id = self.received_leader_id()
         # preconditions handled - always send response
+        time.sleep(ATTENDANCE_DURATION/2)
         self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=ATTENDANCE_DURATION)
 
     def follower_respond_check_in(self):
@@ -317,6 +323,8 @@ class ThisDevice(Device):
 
                 time.sleep(2)
 
+                self.transceiver.clear()
+
             if not self.get_leader():
                 # print("Device:", self.id, self.leader, "\n", self.device_list)
                 if not self.receive(duration=15):
@@ -330,7 +338,6 @@ class ThisDevice(Device):
                     continue  # message was not from this device's leader - ignore
 
                 action = self.received_action()
-                print(action)
                 # print(action)
 
                 # messages for all followers

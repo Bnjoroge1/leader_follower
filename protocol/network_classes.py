@@ -56,7 +56,7 @@ class Network:
         self.nodes[node_id1].set_outgoing_channel(node_id2, queue1)  # (other node, channel)
         self.nodes[node_id1].set_incoming_channel(node_id2, queue2)
         self.nodes[node_id2].set_outgoing_channel(node_id1, queue2)
-        self.nodes[node_id2].set_incoming_channel(node_id2, queue1)
+        self.nodes[node_id2].set_incoming_channel(node_id1, queue1)
 
 
 class ChannelQueue:
@@ -115,14 +115,20 @@ class Transceiver:
         self.incoming_channels[node_id] = queue
 
     def send(self, msg: int):  # send to all channels
-        for queue in self.outgoing_channels.values():
+        # if msg // int(1e10) == 2:
+        #     print(msg)
+        #     print(self.outgoing_channels.keys())
+        for id, queue in self.outgoing_channels.items():
             if queue is not None:
                 queue.put(msg)
+                # print("msg", msg, "put in device", id)
 
     def receive(self, timeout: float) -> int | None:  # get from all queues
-        for queue in self.incoming_channels.values():
+        # print(self.incoming_channels.keys())
+        for id, queue in self.incoming_channels.items():
             try:
                 msg = queue.get(timeout=timeout)
+                # print("Message", msg, "gotton from", id)
                 return msg
             except q.Empty:
                 pass
