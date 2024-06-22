@@ -24,6 +24,8 @@ def main():
             print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
             network.create_channel(firstNode.node_id, secondNode.node_id)
 
+    nc.NetworkVisualizer.ui_main()
+
     for node in nodes:
         node.start()
         time.sleep(5)

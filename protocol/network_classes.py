@@ -59,6 +59,15 @@ class Network:
         self.nodes[node_id2].set_incoming_channel(node_id1, queue1)
 
 
+class NetworkVisualizer:
+
+    def __init__(self):
+        pass
+
+    def ui_main(self):
+        pass
+
+
 class ChannelQueue:
     """
     Wrapper class for multiprocessing.Queue that keeps track of number of
