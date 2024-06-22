@@ -118,11 +118,9 @@ class ThisDevice(Device):
         """
         msg = Message(action, payload, leader_id, follower_id).msg
 
-        # end_time = time.time() + duration
-        # while time.time() < end_time:
+        # single-send with assumed perfect channel
+        # users take responsibility of implementing duration send where needed
         self.transceiver.send(msg)  # transceiver only deals with integers
-            # print("Sending", msg)
-            # time.sleep(0.1)
 
     def receive(self, duration, action_value=-1) -> bool:  # action_value=-1 means accepts any action
         """
@@ -136,21 +134,44 @@ class ThisDevice(Device):
         end_time = time.time() + duration
         while time.time() < end_time:
             self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
-            # print("Received", self.received)
             if self.received and (action_value == -1 or self.received_action() == action_value):
                 return True
         return False
 
     def received_action(self) -> int:
+        """
+        :return: action bit of last received message
+        :raise: ValueError if no message was received
+        """
+        if not self.received:
+            raise ValueError("No message was received")
         return self.received // int(1e10)
 
     def received_leader_id(self) -> int:
+        """
+        :return: leader id of last received message
+        :raise: ValueError if no message was received
+        """
+        if not self.received:
+            raise ValueError("No message was received")
         return self.received % int(1e8) // int(1e4)
 
     def received_follower_id(self) -> int:
+        """
+        :return: follower id of last received message
+        :raise: ValueError if no message was received
+        """
+        if not self.received:
+            raise ValueError("No message was received")
         return self.received % int(1e4)
 
     def received_payload(self) -> int:
+        """
+        :return: payload of last received message
+        :raise: ValueError if no message was received
+        """
+        if not self.received:
+            raise ValueError("No message was received")
         return self.received % int(1e10) // int(1e8)
 
     def setup(self):
@@ -167,7 +188,7 @@ class ThisDevice(Device):
                 pass
             self.make_follower()
             self.follower_handle_attendance()
-            print("Leader heard, becoming follower")
+            print("Leader was heard, becoming follower")
             return  # early exit if follower
 
         print("Assuming position of leader")
@@ -184,13 +205,6 @@ class ThisDevice(Device):
         self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION)
 
         # prevents deadlock
-        # receive function takes care of time.time()
-        # TODO: is this the right way to do this while?
-        # end_time = time.time() + ATTENDANCE_DURATION
-        # while time.time() < end_time:  # times should line up with receive duration
-        #     print("Leader receiving")
-        #     if self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.ATT_RESPONSE.value):
-
         while self.receive(duration=ATTENDANCE_DURATION*2, action_value=Action.ATT_RESPONSE.value):
             print("Leader heard attendance response from", self.received_follower_id())
             if self.received_follower_id() not in self.device_list.get_ids():
@@ -208,7 +222,7 @@ class ThisDevice(Device):
         for id, device in self.device_list.get_device_list().items():
             # not using option since DeviceList.devices is a dictionary
             # simply sending all id's in its "list" in follower_id position
-            print("Leader sending D_LIST", id, device.task)
+            # print("Leader sending D_LIST", id, device.task)
             self.send(action=Action.D_LIST.value, payload=device.task, leader_id=self.id, follower_id=id, duration=D_LIST_DURATION)
 
     # TODO: maybe handle leader collisions/tiebreakers here
@@ -344,7 +358,6 @@ class ThisDevice(Device):
                 match action:
                     case Action.ATTENDANCE.value:
                         # prevents deadlock between leader-follower first attendance state
-                        # print(self.id, self.device_list, self.device_list.find_device(self.id))
                         if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
                             self.follower_handle_attendance()
                             self.numHeardDLIST = 0
@@ -367,8 +380,8 @@ class ThisDevice(Device):
                     case _:
                         pass
 
-            # TODO: this is a temporary fix until we set up message buffer and remove duplicate messages
-            # self.transceiver.clear()
+                    # probably do not need to clear follower channel
+                    # self.transceiver.clear()
 
 
 class DeviceList:
@@ -409,13 +422,22 @@ class DeviceList:
         return len(self.devices)
 
     def get_device_list(self) -> Dict[int, Device]:
+        """
+        :return: dictionary of {id : Device}
+        """
         return self.devices
 
     def get_ids(self) -> Set[int]:
-        return set(self.devices.keys())  # hashtable
+        """
+        :return: hashable set of device ids
+        """
+        return set(self.devices.keys())
 
     def get_devices(self) -> Set[Device]:
-        return set(self.devices.values())  # hashtable
+        """
+        :return: hashable set of Device objects
+        """
+        return set(self.devices.values())
 
     def update_num_tasks(self, num_tasks: int):
         """
