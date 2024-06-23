@@ -1,7 +1,8 @@
 import unittest
 import sys
-sys.path.append('../protocol')
-from protocol import device_classes as dc
+from base_test import PROTOCOL_DIR
+sys.path.append(str(PROTOCOL_DIR))
+import device_classes as dc
 
 class TestDeviceClass(unittest.TestCase):
     def setUp(self):

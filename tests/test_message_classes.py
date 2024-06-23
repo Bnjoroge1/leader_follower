@@ -1,7 +1,8 @@
 import unittest
 import sys
-sys.path.append('../protocol')
-from protocol import message_classes as mc
+from base_test import PROTOCOL_DIR
+sys.path.append(str(PROTOCOL_DIR))
+import message_classes as mc
 
 class TestMessageClass(unittest.TestCase):
 

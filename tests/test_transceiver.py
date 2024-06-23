@@ -1,7 +1,8 @@
 import unittest
 import queue
 import sys
-sys.path.append('../protocol')
+from base_test import PROTOCOL_DIR
+sys.path.append(str(PROTOCOL_DIR))
 from network_classes import Transceiver
 
 class TestTransceiver(unittest.TestCase):

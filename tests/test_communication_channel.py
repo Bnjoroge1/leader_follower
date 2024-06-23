@@ -1,7 +1,8 @@
 import unittest
 import sys
-sys.path.append('../protocol')
-from protocol import channel_driver as cd
+from base_test import PROTOCOL_DIR
+sys.path.append(str(PROTOCOL_DIR))
+import channel_driver as cd
 
 class TestCommunicationChannel(unittest.TestCase):
     def setUp(self):

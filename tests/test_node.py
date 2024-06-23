@@ -3,8 +3,9 @@ from time import sleep
 from signal import SIGTERM
 import multiprocessing as mp
 import sys
-sys.path.append('../protocol')
-from protocol.network_classes import Node
+from base_test import PROTOCOL_DIR
+sys.path.append(str(PROTOCOL_DIR))
+from network_classes import Node
 
 def test_worker():
     print("child process starting...")
