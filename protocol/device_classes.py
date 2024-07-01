@@ -323,16 +323,16 @@ class ThisDevice(Device):
 
         # handle already received device from original message
         # only add devices which are not already in device list
-        if self.received_follower_id() not in self.device_list.get_ids():
-            self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-            self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
+        # if self.received_follower_id() not in self.device_list.get_ids():
+        self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
+        self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
 
         # handle the rest of the list
         while self.receive(duration=0.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
             # only add new devices
-            if self.received_follower_id() not in self.device_list.get_ids():
-                self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-                self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
+            #if self.received_follower_id() not in self.device_list.get_ids():
+            self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
+            self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
 
     def follower_drop_disconnected(self):
         """
