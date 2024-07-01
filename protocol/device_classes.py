@@ -377,8 +377,6 @@ class ThisDevice(Device):
 
 
     # TODO: print log to individual files
-    # within ThisDevice class
-
     def device_main(self):
         """
         Main looping protocol for ThisDevice.
@@ -426,7 +424,7 @@ class ThisDevice(Device):
                         print("Is there anybody out there?")
                         continue
 
-                    if abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:
+                    elif abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:
                         continue
 
                     action = self.received_action()
@@ -603,4 +601,3 @@ class DeviceList:
         :return: Device object with the largest id
         """
         return self.devices[max(self.devices.keys())] if len(self.devices) > 0 else None
-
