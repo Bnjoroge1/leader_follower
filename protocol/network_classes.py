@@ -1,15 +1,13 @@
 import device_classes as dc
 import multiprocessing
 import queue as q
-from typing import Dict, Union
-from xbee import ZigBee
-import serial
-import time
+from typing import Dict
+
 
 class Node:
-    def __init__(self, node_id, target_func=None, target_args=None):
+    def __init__(self, node_id, target_func = None, target_args = None):
         self.node_id = node_id
-        self.transceiver = ZigbeeTransceiver()  # Use ZigbeeTransceiver here
+        self.transceiver = Transceiver()
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
@@ -62,6 +60,7 @@ class Network:
 
 
 class NetworkVisualizer:
+
     def __init__(self):
         pass
 
@@ -111,6 +110,8 @@ class ChannelQueue:
                 break
 
 
+# TODO: implement removing channels (node_ids) as devices get dropped from devicelist
+# similar implementation to send/receive calling transceiver functions
 class Transceiver:
     def __init__(self):
         self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
@@ -123,14 +124,20 @@ class Transceiver:
         self.incoming_channels[node_id] = queue
 
     def send(self, msg: int):  # send to all channels
+        # if msg // int(1e10) == 2:
+        #     print(msg)
+        #     print(self.outgoing_channels.keys())
         for id, queue in self.outgoing_channels.items():
             if queue is not None:
                 queue.put(msg)
+                # print("msg", msg, "put in device", id)
 
-    def receive(self, timeout: float) -> Union[int, None]:  # get from all queues
+    def receive(self, timeout: float) -> int | None:  # get from all queues
+        # print(self.incoming_channels.keys())
         for id, queue in self.incoming_channels.items():
             try:
                 msg = queue.get(timeout=timeout)
+                # print("Message", msg, "gotton from", id)
                 return msg
             except q.Empty:
                 pass
@@ -150,37 +157,3 @@ class Transceiver:
                 except q.Empty:
                     pass
 
-
-class ZigbeeTransceiver:
-    def __init__(self, serial_port='/dev/ttyUSB0', baud_rate=9600):
-        self.serial_port = serial.Serial(serial_port, baud_rate)
-        self.xbee = ZigBee(self.serial_port)
-        self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
-        self.incoming_channels = q.Queue()
-
-    def set_outgoing_channel(self, node_id, address):
-        self.outgoing_channels[node_id] = address
-
-    def send(self, msg: str):  # send to all channels
-        for node_id, address in self.outgoing_channels.items():
-            if address:
-                self.xbee.send('tx', dest_addr=address, data=msg.encode())
-                print(f"Message '{msg}' sent to device {node_id}")
-
-    def receive(self, timeout: float) -> Union[str, None]:
-        end_time = time.time() + timeout
-        while time.time() < end_time:
-            try:
-                response = self.xbee.wait_read_frame()
-                msg = response.get('rf_data').decode()
-                self.incoming_channels.put(msg)
-                return msg
-            except q.Empty:
-                pass
-            except Exception as e:
-                print(f"Error receiving message: {e}")
-        return None
-
-    def clear(self):
-        with self.incoming_channels.mutex:
-            self.incoming_channels.queue.clear()
