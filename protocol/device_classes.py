@@ -371,19 +371,20 @@ class ThisDevice(Device):
 
     def log_message(self, msg: int, direction: str):
         self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
+        self.file.flush()
 
     def log_status(self, status: str):
         self.csvWriter.writerow([str(time.time()), 'STATUS', status])
-
+        self.file.flush()
 
     # TODO: print log to individual files
     def device_main(self):
         """
         Main looping protocol for ThisDevice.
         """
-        with self.outPath.open("w", encoding="utf-8", newline='') as file:
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
             # format is TIME, TYPE (STATUS, SENT, RECEIVED), CONTENT (<MSG>, <STATUS UPDATE>)
-            self.csvWriter = csv.writer(file, dialect='excel')
+            self.csvWriter = csv.writer(self.file, dialect='excel')
             
             print("Starting main on device " + str(self.id))
             # create device object
