@@ -1,5 +1,5 @@
 import time
-from simulation_network import SimulationNode, NetworkVisualizer
+from simulation_network import SimulationNode, NetworkVisualizer, Network
 import itertools
 
 
@@ -10,7 +10,7 @@ def main():
     """
     # startup
     num_devices = 10
-    network = sn.Network()
+    network = Network()
     nodes = []
     for i in range(num_devices):
         new_node = SimulationNode(i+1)
