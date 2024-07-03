@@ -5,7 +5,7 @@ import multiprocessing as mp
 import sys
 from base_test import PROTOCOL_DIR
 sys.path.append(str(PROTOCOL_DIR))
-from network_classes import Node
+from simulation_network import SimulationNode
 
 def test_worker():
     print("child process starting...")
@@ -28,7 +28,7 @@ class TestNode(unittest.TestCase):
     # Transceiver unit tests have passed
     def testConstructor(self):
         # test with nodeid of 1, no process function passed
-        node1 = Node(1, test_worker)
+        node1 = SimulationNode(1, test_worker)
         self.assertEqual(node1.node_id, 1)
 
         # check hash is correct
@@ -43,7 +43,7 @@ class TestNode(unittest.TestCase):
         self.assertFalse(node1.process.is_alive())
 
     def testProcessStartStop(self):
-        node = Node(1, test_worker)
+        node = SimulationNode(1, test_worker)
         node.start()
         self.assertTrue(node.process.is_alive())
         node.stop()
@@ -53,8 +53,8 @@ class TestNode(unittest.TestCase):
         self.assertEqual(node.process.exitcode, -SIGTERM)
 
     def testProcessSendBetweenTwoProcesses(self):
-        node1 = Node(1, test_transmission, "not none")
-        node2 = Node(2, test_transmission, "not none")
+        node1 = SimulationNode(1, test_transmission, "not none")
+        node2 = SimulationNode(2, test_transmission, "not none")
 
         q1 = mp.Queue() # 1 to 2
         q2 = mp.Queue() # 2 to 1
