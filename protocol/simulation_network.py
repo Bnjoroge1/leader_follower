@@ -2,12 +2,14 @@ import device_classes as dc
 import multiprocessing
 import queue as q
 from typing import Dict
+from abstract_network import AbstractNode, AbstractTransceiver
 
 
-class Node:
+class SimulationNode(AbstractNode):
+
     def __init__(self, node_id, target_func = None, target_args = None):
         self.node_id = node_id
-        self.transceiver = Transceiver()
+        self.transceiver = SimulationTransceiver()
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
@@ -40,6 +42,7 @@ class Node:
 
 
 class Network:
+
     def __init__(self):
         self.nodes = {}
         # self.channels - add later
@@ -112,7 +115,8 @@ class ChannelQueue:
 
 # TODO: implement removing channels (node_ids) as devices get dropped from devicelist
 # similar implementation to send/receive calling transceiver functions
-class Transceiver:
+class SimulationTransceiver(AbstractTransceiver):
+
     def __init__(self):
         self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
         self.incoming_channels = {}
