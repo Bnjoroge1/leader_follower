@@ -1,5 +1,6 @@
 import time
 from message_classes import Message, Action
+from abstract_network import AbstractTransceiver
 from typing import Dict, List, Set
 from pathlib import Path
 import csv
@@ -96,7 +97,7 @@ class Device:
 class ThisDevice(Device):
     """ Object for main protocol to use, subclass of Device. """
 
-    def __init__(self, id, transceiver):  # inclusive bounds
+    def __init__(self, id, transceiver: AbstractTransceiver):  # inclusive bounds
         """
         Constructor (default/non-default) for ThisDevice, creates additional fields.
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
@@ -108,7 +109,7 @@ class ThisDevice(Device):
         self.leader_started_operating: float | None = None
         self.task_folder_idx: int | None = None  # multiple operations can be preloaded
         self.received: int | None = None  # will be an int representation of message
-        self.transceiver = transceiver  # plugin object for sending and receiving messages
+        self.transceiver: AbstractTransceiver = transceiver  # plugin object for sending and receiving messages
         self.numHeardDLIST: int = 0
         self.outPath = OUTPUT_DIR / ("device_log_" + str(self.id) + ".csv")
 
@@ -323,16 +324,16 @@ class ThisDevice(Device):
 
         # handle already received device from original message
         # only add devices which are not already in device list
-        if self.received_follower_id() not in self.device_list.get_ids():
-            self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-            self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
+        # if self.received_follower_id() not in self.device_list.get_ids():
+        self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
+        self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
 
         # handle the rest of the list
         while self.receive(duration=0.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
             # only add new devices
-            if self.received_follower_id() not in self.device_list.get_ids():
-                self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-                self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
+            #if self.received_follower_id() not in self.device_list.get_ids():
+            self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
+            self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
 
     def follower_drop_disconnected(self):
         """
@@ -371,19 +372,21 @@ class ThisDevice(Device):
 
     def log_message(self, msg: int, direction: str):
         self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
+        self.file.flush()
 
     def log_status(self, status: str):
         self.csvWriter.writerow([str(time.time()), 'STATUS', status])
-
+        self.file.flush()
 
     # TODO: print log to individual files
     def device_main(self):
         """
         Main looping protocol for ThisDevice.
         """
-        with self.outPath.open("w", encoding="utf-8", newline='') as file:
-            self.csvWriter = csv.writer(file, dialect='excel')
-
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            # format is TIME, TYPE (STATUS, SENT, RECEIVED), CONTENT (<MSG>, <STATUS UPDATE>)
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            
             print("Starting main on device " + str(self.id))
             self.setup()
 
