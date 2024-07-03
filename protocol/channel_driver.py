@@ -1,5 +1,5 @@
 import time
-import simulation_network as sn
+from simulation_network import SimulationNode, NetworkVisualizer
 import itertools
 
 
@@ -13,7 +13,7 @@ def main():
     network = sn.Network()
     nodes = []
     for i in range(num_devices):
-        new_node = sn.Node(i+1)
+        new_node = SimulationNode(i+1)
         nodes.append(new_node)
         network.add_node(new_node.node_id, new_node)
 
@@ -24,7 +24,7 @@ def main():
             print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
             network.create_channel(firstNode.node_id, secondNode.node_id)
 
-    visualizer = sn.NetworkVisualizer()
+    visualizer = NetworkVisualizer()
     visualizer.ui_main()
 
     for node in nodes:
