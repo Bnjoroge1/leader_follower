@@ -3,15 +3,15 @@ import queue
 import sys
 from base_test import PROTOCOL_DIR
 sys.path.append(str(PROTOCOL_DIR))
-from network_classes import Transceiver
+from simulation_network import SimulationTransceiver
 
 class TestTransceiver(unittest.TestCase):
 
     def setUp(self):
         # nodeid=1
-        self.transceiver1 = Transceiver()
+        self.transceiver1 = SimulationTransceiver()
         # nodeid=2
-        self.transceiver2 = Transceiver()
+        self.transceiver2 = SimulationTransceiver()
 
         q1 = queue.Queue() # 1 to 2
         q2 = queue.Queue() # 2 to 1
@@ -63,7 +63,7 @@ class TestTransceiver(unittest.TestCase):
 
     def testSendWithMultipleDevices(self):
         # nodeid=3
-        self.transceiver3 = Transceiver()
+        self.transceiver3 = SimulationTransceiver()
 
         q3 = queue.Queue() # 1 to 3
         q4 = queue.Queue() # 3 to 1
