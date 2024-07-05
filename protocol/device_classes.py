@@ -378,6 +378,43 @@ class ThisDevice(Device):
         self.csvWriter.writerow([str(time.time()), 'STATUS', status])
         self.file.flush()
 
+    def leader_send_task_start(self, task, devices):
+        """
+        Leader sends task start which updates its own device list then send this out.
+        After device list sent, leader sends updated tasks
+        """     
+        self.log_status("LEADER SENDING TASK START")
+
+        for device_id in devices:
+            self.device_list.update_task(device_id, task)
+
+        self.leader_send_device_list()
+
+        for device_id in devices:
+            self.send(action=Action.TASK_START.value, payload=task, leader_id=self.id, follower_id=device_id, duration=2)
+
+
+    def handle_task_start(self):
+        """
+        Handle the start of a task.
+        """
+
+        task_id = self.received_payload()
+        self.set_task(task_id)
+        print(f"Task {task_id} started for device {self.id}")
+        self.log_status(f"TASK {task_id} STARTED")
+        # TODO: Run driver class which will use the robot mecanum class & line following class to navigate to assigned quadrant
+
+    def handle_task_stop(self):
+        """
+        Handle the stop of a task.
+        """
+        self.set_task(None)
+        print(f"Task stopped for device {self.id}")
+        self.log_status("TASK STOPPED")
+        # TODO: Call on mecanum class & line follower class (the one that traces perimeter) to return robot back to the standy area
+
+
     # TODO: print log to individual files
     def device_main(self):
         """
@@ -455,27 +492,6 @@ class ThisDevice(Device):
                         case _:
                             pass
 
-        def handle_task_start(self):
-            """
-            Handle the start of a task.
-            """
-            task_id = self.received_payload()
-            self.device_list.find_device(self.id).set_task(task_id)
-            print(f"Task {task_id} started for device {self.id}")
-            self.log_status(f"TASK {task_id} STARTED")
-            # TODO: Run driver class which will use the robot mecanum class & line following class to navigate to assigned quadrant
-
-        def handle_task_stop(self):
-            """
-            Handle the stop of a task.
-            """
-            self.device_list.find_device(self.id).set_task(0)
-            print(f"Task stopped for device {self.id}")
-            self.log_status("TASK STOPPED")
-            # TODO: Call on mecanum class & line follower class (the one that traces perimeter) to return robot back to the standy area
-
-
-
 class DeviceList:
     """ Container for lightweight Device objects, held by ThisDevice. """
 
@@ -512,7 +528,7 @@ class DeviceList:
         :return: number of Devices in DeviceList as an int.
         """
         return len(self.devices)
-
+    
     def get_device_list(self) -> Dict[int, Device]:
         """
         :return: dictionary of {id : Device}
