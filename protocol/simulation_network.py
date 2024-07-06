@@ -6,12 +6,13 @@ from abstract_network import AbstractNode, AbstractTransceiver
 import asyncio
 import websockets
 import threading
+from message_classes import Message
 
 class SimulationNode(AbstractNode):
 
     def __init__(self, node_id, target_func = None, target_args = None):
         self.node_id = node_id
-        self.transceiver = SimulationTransceiver()
+        self.transceiver = SimulationTransceiver(parent=self)
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
@@ -24,7 +25,7 @@ class SimulationNode(AbstractNode):
         else:
             self.process = multiprocessing.Process(target=target_func)
 
-    async def async_init(self):
+    async def async_init(self):  # SimulationTransceiver
         await self.transceiver.websocket_client()
 
     def start(self):
@@ -122,9 +123,11 @@ class ChannelQueue:
 # similar implementation to send/receive calling transceiver functions
 class SimulationTransceiver(AbstractTransceiver):
 
-    def __init__(self):
+    def __init__(self, parent: SimulationNode):
         self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
         self.incoming_channels = {}
+        self.parent = parent
+        self.active = True  # can activate or deactivate device with special message
 
     def set_outgoing_channel(self, node_id, queue: ChannelQueue):
         self.outgoing_channels[node_id] = queue
@@ -141,7 +144,10 @@ class SimulationTransceiver(AbstractTransceiver):
                 queue.put(msg)
                 # print("msg", msg, "put in device", id)
 
-    def receive(self, timeout: float) -> int | None:  # get from all queues
+    def receive(self, timeout: float) -> int | None:  # get from all queues\
+        if not self.active:
+            print("returning DEACTIVATE")
+            return Message.DEACTIVATE
         # print(self.incoming_channels.keys())
         for id, queue in self.incoming_channels.items():
             try:
@@ -172,4 +178,10 @@ class SimulationTransceiver(AbstractTransceiver):
             await websocket.send("Hello from the Python transceiver!")
 
             async for message in websocket:
+                if isinstance(message, bytes):
+                    message = message.decode("utf-8")
                 print(f"Received message: {message}")
+                if message == "Toggle Device":
+                    print("Toggling device")
+                    self.active = not self.active
+                    print(self.active)
