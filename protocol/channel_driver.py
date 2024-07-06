@@ -1,8 +1,9 @@
 import time
 from simulation_network import SimulationNode, NetworkVisualizer, Network
+from multiprocessing import Value
 import itertools
 import asyncio
-
+from copy import copy
 
 async def main():
     """
@@ -15,7 +16,8 @@ async def main():
     nodes = []
     init_tasks = []
     for i in range(num_devices):
-        new_node = SimulationNode(i+1)
+        shared_active = Value('i', 2)  # 0 == off, 1 == just reactivated, 2 == active
+        new_node = SimulationNode(i+1, active=shared_active)
         nodes.append(new_node)
         init_tasks.append(new_node.async_init())
         network.add_node(new_node.node_id, new_node)

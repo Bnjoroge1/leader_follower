@@ -10,16 +10,16 @@ from message_classes import Message
 
 class SimulationNode(AbstractNode):
 
-    def __init__(self, node_id, target_func = None, target_args = None):
+    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):
         self.node_id = node_id
-        self.transceiver = SimulationTransceiver(parent=self)
+        self.transceiver = SimulationTransceiver(parent=self, active=active)
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
-        if target_func is None:
+        if not target_func:
             target_func = self.thisDevice.device_main
-        if target_args is not None:
+        if target_args:
             target_args = (self.transceiver, self.node_id)
             self.process = multiprocessing.Process(target=target_func, args=target_args)
         else:
@@ -123,11 +123,23 @@ class ChannelQueue:
 # similar implementation to send/receive calling transceiver functions
 class SimulationTransceiver(AbstractTransceiver):
 
-    def __init__(self, parent: SimulationNode):
+    def __init__(self, parent: SimulationNode, active: multiprocessing.Value):
         self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
         self.incoming_channels = {}
         self.parent = parent
-        self.active = True  # can activate or deactivate device with special message
+        self.active: multiprocessing.Value = active  # can activate or deactivate device with special message
+
+    def deactivate(self):
+        self.active.value = 0
+
+    def reactivate(self):
+        self.active.value = 1
+
+    def stay_active(self):
+        self.active.value = 2
+
+    def active_status(self):
+        return self.active.value
 
     def set_outgoing_channel(self, node_id, queue: ChannelQueue):
         self.outgoing_channels[node_id] = queue
@@ -145,9 +157,12 @@ class SimulationTransceiver(AbstractTransceiver):
                 # print("msg", msg, "put in device", id)
 
     def receive(self, timeout: float) -> int | None:  # get from all queues\
-        if not self.active:
+        if self.active_status() == 0:
             print("returning DEACTIVATE")
             return Message.DEACTIVATE
+        if self.active_status() == 1:  # can change to Enum
+            self.stay_active()
+            return Message.ACTIVATE
         # print(self.incoming_channels.keys())
         for id, queue in self.incoming_channels.items():
             try:
@@ -183,5 +198,7 @@ class SimulationTransceiver(AbstractTransceiver):
                 print(f"Received message: {message}")
                 if message == "Toggle Device":
                     print("Toggling device")
-                    self.active = not self.active
-                    print(self.active)
+                    if self.active_status() == 0:  # been off
+                        self.reactivate()  # goes through process to full activation
+                    else:
+                        self.deactivate()  # recently just turned on
