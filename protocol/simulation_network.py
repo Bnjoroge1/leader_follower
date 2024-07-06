@@ -3,13 +3,16 @@ import multiprocessing
 import queue as q
 from typing import Dict
 from abstract_network import AbstractNode, AbstractTransceiver
-
+import asyncio
+import websockets
+import threading
 
 class SimulationNode(AbstractNode):
 
     def __init__(self, node_id, target_func = None, target_args = None):
         self.node_id = node_id
         self.transceiver = SimulationTransceiver()
+        self.transceiver.run_in_thread()
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
@@ -160,4 +163,18 @@ class SimulationTransceiver(AbstractTransceiver):
                     queue.get_nowait()
                 except q.Empty:
                     pass
+    
+    async def websocket_handler(self, websocket, path):
+        async for message in websocket:
+            print("Received message", message)
+            await websocket.send("Message received", message)
 
+    def start_websocket_server(self):
+        asyncio.set_event_loop(asyncio.new_event_loop())  # need to create new event loop for each thread
+        start_server = websockets.serve(self.websocket_handler, "localhost", 3001)
+        asyncio.get_event_loop().run_until_complete(start_server)
+        asyncio.get_event_loop().run_forever()
+
+    def run_in_thread(self):
+        thread = threading.Thread(target=self.start_websocket_server)
+        thread.start()
