@@ -10,7 +10,16 @@ wss.on('connection', function connection(ws) {
 
     ws.on('message', function incoming(message) {
         console.log('received: %s', message);
-        ws.send('You said: ' + message);
+
+        // relay message to all clients (protocol generalized to one channel)
+        // the protocol is responsible for virtual directed messages and filtering
+        // TODO: message encryption
+        wss.clients.forEach(function each(client) {
+            // filter out the sender
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send('Relayed: ' + message);
+            }
+        });
     });
 });
 
