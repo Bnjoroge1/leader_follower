@@ -17,7 +17,8 @@ wss.on('connection', function connection(ws) {
         wss.clients.forEach(function each(client) {
             // filter out the sender
             if (client !== ws && client.readyState === WebSocket.OPEN) {
-                client.send('Relayed: ' + message);
+                // client.send('Relayed: ' + message);
+                client.send(message);  // no relay tag
             }
         });
     });
