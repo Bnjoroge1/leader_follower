@@ -20,7 +20,14 @@ function App() {
   const sendMessage = () => {
     socket.send('Hello from the client!');
   };
-  
+
+  return (
+    <div>
+      <h1>WebSockets Example</h1>
+      <button onClick={sendMessage}>Send Message</button>
+    </div>
+  );
+
 }
 
 export default App;
