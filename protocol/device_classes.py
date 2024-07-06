@@ -145,10 +145,13 @@ class ThisDevice(Device):
             if self.received == Message.DEACTIVATE:
                 print("Device got deactivated by user")
                 self.active = False
+                self.make_follower()  # essentially wipe data
+                self.device_list = DeviceList()  # TODO: make this helper
                 return False
             if self.received == Message.ACTIVATE:
                 print("Device got reactivated by user")
                 self.active = True
+                return False  # wait for next cycle, prevents interpreting injection as device
             # if a new leader is recognized, move into tiebreak scenario
             if self.received and (self.leader_id != None) and (self.received_leader_id() != self.leader_id):
                 print(self.received_leader_id(), self.leader_id)
@@ -480,7 +483,9 @@ class ThisDevice(Device):
                             # probably do not need to clear follower channel
                             # self.transceiver.clear()
                 while not self.active:
-                    self.receive(duration=10)  # waiting for reactivation
+                    self.receive(duration=2)  # waiting for reactivation
+                    time.sleep(2)  # can slow down clock speed here
+                    # TODO: more formal dynamic clock
                 
 
 
