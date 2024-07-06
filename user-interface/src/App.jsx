@@ -1,59 +1,57 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 
 // Define the App component
 function App() {
+  const socket = useRef(null);
 
   useEffect(() => {
-    const buttons = document.querySelectorAll('#control-buttons button');
-    buttons.forEach((button) => {
-      button.addEventListener('click', (event) => {
-        button.style.animation = 'flash 0.5s';
-        socket.send(event.target.textContent);
-        button.addEventListener('animationend', () => {
-          button.style.animation = 'none';
-        });
-      })
-  });
-}, []);
-
-
-    // Connect to the server
-  const socket = new WebSocket('ws://localhost:3000');
-  socket.addEventListener('open', () => {
+  // Connect to the server
+  socket.current = new WebSocket('ws://localhost:3000');
+  // log when the connection is opened
+  socket.current.addEventListener('open', () => {
     console.log('Connected to WS server!');
-    socket.send('Hello from the client!')
+    socket.current.send('Hello from the client!')
   });
-  socket.addEventListener('message', (event) => {
+
+  // receive messages from the server
+  socket.current.addEventListener('message', (event) => {
     console.log('Message from server:', event.data);
   });
 
-  const createDevice = () => {
-    socket.send('Create a new device!');
-  };
+  const buttons = document.querySelectorAll('#control-buttons button');
+  const handleClicks = [];
 
-  const deleteDevice = () => {
-    socket.send('Delete a device!');
-  };
+  buttons.forEach((button, index) => {
+    const handleClick = (event) => {
+      button.style.animation = 'flash 0.5s';
+      console.log("Button clicked:", event.target.textContent)
+      socket.current.send(event.target.textContent);
+      button.addEventListener('animationend', () => {
+        button.style.animation = 'none';
+      });
+    };
 
-  const pauseDevice = () => {
-    socket.send('Pause a device!');
-  };
+    handleClicks[index] = handleClick;  // storing reference for cleanup
+    button.addEventListener('click', handleClick);
+  });
 
-  const toggleSimulation = () => {
-    socket.send('Toggle simulation!');
+  // cleanup function to remove event listeners
+  return () => {
+    buttons.forEach((button, index) => {
+      button.removeEventListener('click', handleClicks[index]);
+    });
   };
-
-  document.getElementById
+}, []);
 
   return (
     <div id="control-div">
       <h1 id="control-title">Control Panel</h1>
       <div id="control-buttons">
-        <button onClick={createDevice}>Create Device</button>
-        <button onClick={deleteDevice}>Delete Device</button>
-        <button onClick={pauseDevice}>Toggle Device</button>
-        <button onClick={toggleSimulation}>Toggle Simulation</button>
+        <button>Create Device</button>
+        <button>Delete Device</button>
+        <button>Toggle Device</button>
+        <button>Toggle Simulation</button>
       </div>
     </div>
   );
