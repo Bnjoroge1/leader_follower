@@ -9,7 +9,7 @@ def main():
     :return:
     """
     # startup
-    num_devices = 10
+    num_devices = 1
     network = Network()
     nodes = []
     for i in range(num_devices):
