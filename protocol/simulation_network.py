@@ -170,6 +170,7 @@ class SimulationTransceiver(AbstractTransceiver):
             try:
                 msg = queue.get(timeout=timeout)
                 # print("Message", msg, "gotton from", id)
+                asyncio.run(self.notify_server(f"Transceiver RECEIVE: {self.parent.node_id}"))
                 return msg
             except q.Empty:
                 pass
