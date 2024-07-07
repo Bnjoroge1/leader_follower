@@ -153,7 +153,7 @@ class ThisDevice(Device):
                 self.active = True
                 return False  # wait for next cycle, prevents interpreting injection as device
             # if a new leader is recognized, move into tiebreak scenario
-            if self.received and (self.leader_id != None) and (self.received_leader_id() != self.leader_id):
+            if self.received and self.leader_id and self.received_leader_id() != self.leader_id:  # another follower out there
                 print(self.received_leader_id(), self.leader_id)
                 self.handle_tiebreaker(self.received_leader_id())
                 break
@@ -443,8 +443,8 @@ class ThisDevice(Device):
                         # print("Device:", self.id, self.leader, "\n", self.device_list)
                         if not self.receive(duration=15):
                             print("Is there anybody out there?")
+                            self.make_leader()
                             continue
-                            # takeover
                         elif abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:  # account for loss of precision
                             # print(self.received_leader_id())
                             # print(self.leader_id)
