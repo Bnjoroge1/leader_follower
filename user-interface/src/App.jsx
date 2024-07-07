@@ -11,7 +11,7 @@ function App() {
   // log when the connection is opened
   socket.current.addEventListener('open', () => {
     console.log('Connected to WS server!');
-    socket.current.send('Hello from the client!')  // placement should wait for connection
+    socket.current.send('CONNECTED,FRONTEND')  // placement should wait for connection
   });
 
   // receive messages from the server
@@ -28,7 +28,7 @@ function App() {
       console.log("Button clicked:", event.target.textContent)
       // ensure the socket is open before sending
       if (socket.current.readyState === WebSocket.OPEN) {
-        socket.current.send(event.target.textContent);
+        socket.current.send(`INJECT,${event.target.textContent}`);
       } else {
         console.error("WebSocket is not open. Current state:", socket.current.readyState);
       }

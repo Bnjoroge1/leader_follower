@@ -156,7 +156,7 @@ class SimulationTransceiver(AbstractTransceiver):
                 queue.put(msg)
                 # print("msg", msg, "put in device", id)
         # no need to wait for this task to finish before returning to protocol
-        asyncio.run(self.notify_server(f"Transceiver SEND: {self.parent.node_id}"))
+        asyncio.run(self.notify_server(f"SENT,{self.parent.node_id}"))
 
     def receive(self, timeout: float) -> int | None:  # get from all queues\
         if self.active_status() == 0:
@@ -170,7 +170,7 @@ class SimulationTransceiver(AbstractTransceiver):
             try:
                 msg = queue.get(timeout=timeout)
                 # print("Message", msg, "gotton from", id)
-                asyncio.run(self.notify_server(f"Transceiver RECEIVE: {self.parent.node_id}"))
+                asyncio.run(self.notify_server(f"RCVD,{self.parent.node_id}"))
                 return msg
             except q.Empty:
                 pass
@@ -193,7 +193,7 @@ class SimulationTransceiver(AbstractTransceiver):
     async def websocket_client(self):
         uri = "ws://localhost:3000"  # server.js websocket server
         async with websockets.connect(uri) as websocket:
-            await websocket.send(f"Transceiver connected: {self.parent.node_id}")
+            await websocket.send(f"CONNECTED,{self.parent.node_id}")
 
             async for message in websocket:
                 if isinstance(message, bytes):
