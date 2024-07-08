@@ -24,19 +24,26 @@ wss.on('connection', function connection(ws) {
         // the protocol is responsible for virtual directed messages and filtering
         // TODO: message encryption
 
+        // TODO: format inject into INJECT:ACTION,ID
         if (parts[0] === 'INJECT') {
             wss.clients.forEach(function each(client) {
                 // filter out the sender
                 if (client !== ws && client.readyState === WebSocket.OPEN) {
                     // client.send('Relayed: ' + message);
-                    client.send(parts[1]);  // no relay tag
+                    client.send(parts[1]);  // TODO: may want to send ACTION,ID instead
                 }
             });
-        } else if (parts[0] === 'CONNECTED') {
+        // messages take the form of ACTION,ID
+        } else if (parts[0] === 'CONNECTED') {  
+            // transceiver websockets will connect and disconnect (to stay async?), ignore those
+            // only CONNECTED and DISCONNECTED messages are relevant
             if (parts[1] === 'FRONTEND') {
                 frontend = ws;  // store frontend reference
             } else {
-                devices[parts[1]] = ws;  // store device reference
+                devices[parts[1]] = ws;  // store device reference by id
+                if (frontend) {
+                    frontend.send(message);  // relay to frontend
+                }
             }
         } else if (parts[0] === 'SENT' || parts[0] === 'RCVD') {
             if (frontend) {
