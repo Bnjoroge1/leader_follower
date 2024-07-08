@@ -4,7 +4,6 @@ const server = require('http').Server(app);
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({ server: server });
 var frontend = null;
-var devices = {};
 
 // TODO: should we save a ws : node id mapping or have transceivers send their id?
 wss.on('connection', function connection(ws) {
@@ -25,6 +24,7 @@ wss.on('connection', function connection(ws) {
         // TODO: message encryption
 
         // TODO: format inject into INJECT:ACTION,ID
+        // right now is just INJECT,ACTION and hits all devices
         if (parts[0] === 'INJECT') {
             wss.clients.forEach(function each(client) {
                 // filter out the sender
@@ -34,13 +34,13 @@ wss.on('connection', function connection(ws) {
                 }
             });
         // messages take the form of ACTION,ID
-        } else if (parts[0] === 'CONNECTED') {  
+        // TODO: can probably clean this logic up
+        } else if (parts[0] === 'CONNECTED' || parts[0] === 'DISCONNECTED') {  
             // transceiver websockets will connect and disconnect (to stay async?), ignore those
             // only CONNECTED and DISCONNECTED messages are relevant
             if (parts[1] === 'FRONTEND') {
                 frontend = ws;  // store frontend reference
             } else {
-                devices[parts[1]] = ws;  // store device reference by id
                 if (frontend) {
                     frontend.send(message);  // relay to frontend
                 }

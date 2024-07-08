@@ -21,45 +21,69 @@ function App() {
     const parts = message.split(',');
     
     if (parts[0] === 'CONNECTED') {
-      displayDevice(parts[1]);
+      updateActiveDevices(parts[1], 'ACTIVATE');
+    } else if (parts[0] === 'DISCONNECTED') {
+      updateActiveDevices(parts[1], 'DEACTIVATE');
     }
   });
 
-  function displayDevice(deviceId) {
-    const container = document.getElementById('device-container');
-    if (!container) {
-      return;
+  function updateActiveDevices(deviceId, action) {
+    const active_container = document.getElementById('active-devices');
+    const reserve_container = document.getElementById('reserve-devices');
+    if (!active_container || !reserve_container) {
+      return;  // a container is missing, TODO: throw exception
+    }
+    if (deviceId && action === 'ACTIVATE') {
+      const device = document.getElementById(`device-${deviceId}`);
+      if (device) {
+        reserve_container.removeChild(device);
+      }
+
+      // add new device div to active devices
+      const newDevice = document.createElement('div');
+      newDevice.id = `device-${deviceId}`;
+      newDevice.style.position = 'absolute';
+      newDevice.style.width = '30px';
+      newDevice.style.height = '30px';
+      newDevice.style.borderRadius = '50%';
+      newDevice.style.backgroundColor = 'skyblue';
+
+      const label = document.createElement('div');
+      label.textContent = deviceId;  // should already be a string
+      label.style.position = 'absolute';
+      label.style.textAlign = 'center';
+      label.style.width = '100%';
+      label.style.top = '-20px';
+
+      active_container.appendChild(newDevice);
+      newDevice.appendChild(label);
+    } else if (deviceId && action === 'DEACTIVATE') {
+      const device = document.getElementById(`device-${deviceId}`);
+      if (device) {
+        active_container.removeChild(device);
+        reserve_container.appendChild(device);
+      }
+    }
+    
+    // update relative position of all active devices for both addition and deletion
+    const active_devices = active_container.children;
+    const numberOfActiveDevices = active_devices.length;
+    const radius = 280;
+    for (let i = 0; i < numberOfActiveDevices; i++) {
+      const angle = (i / numberOfActiveDevices) * Math.PI * 2;  // angle in radians
+      const x = radius * Math.cos(angle) + active_container.offsetWidth / 2;
+      const y = radius * Math.sin(angle) + active_container.offsetHeight / 2;
+
+      active_devices[i].style.left = `${x}px`;
+      active_devices[i].style.top = `${y}px`;
     }
 
-    const newDevice = document.createElement('div');
-    newDevice.id = `device-${deviceId}`;
-    newDevice.style.position = 'absolute';
-    newDevice.style.width = '30px';
-    newDevice.style.height = '30px';
-    newDevice.style.borderRadius = '50%';
-    newDevice.style.backgroundColor = 'skyblue';
-
-    const label = document.createElement('div');
-    label.textContent = deviceId;  // should already be a string
-    label.style.position = 'absolute';
-    label.style.textAlign = 'center';
-    label.style.width = '100%';
-    label.style.top = '-20px';
-
-    container.appendChild(newDevice);
-    newDevice.appendChild(label);
-
-    const devices = container.children;
-    const numberOfDevices = devices.length;
-    const radius = 280;
-
-    for (let i = 0; i < numberOfDevices; i++) {
-      const angle = (i / numberOfDevices) * Math.PI * 2;  // angle in radians
-      const x = radius * Math.cos(angle) + container.offsetWidth / 2;
-      const y = radius * Math.sin(angle) + container.offsetHeight / 2;
-
-      devices[i].style.left = `${x}px`;
-      devices[i].style.top = `${y}px`;
+    const reserve_devices = reserve_container.children;
+    const numberOfReserveDevices = reserve_devices.length;
+    for (let i = 0; i < numberOfReserveDevices; i++) {
+      // stack device divs vertically
+      reserve_devices[i].style.left = '0px';
+      reserve_devices[i].style.top = `${i * 30}px`;
     }
   }
 
@@ -109,7 +133,7 @@ function App() {
       <div id="device-container">
         <div id="active-devices">
         </div>
-        
+
         <div id="reserve-devices">
 
         </div>

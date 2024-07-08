@@ -11,7 +11,7 @@ async def main():
     :return:
     """
     # startup
-    num_devices = 5
+    num_devices = 2
     network = Network()
     nodes = []
     init_tasks = []
@@ -37,6 +37,7 @@ async def main():
         time.sleep(5)
 
     await asyncio.gather(*init_tasks)
+    # maybe start this on a different thread like notify_server so we can start this earlier
 
 
 if __name__ == "__main__":
