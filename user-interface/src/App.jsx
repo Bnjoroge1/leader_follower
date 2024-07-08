@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { act, useEffect, useRef } from 'react';
 
 
 // Define the App component
@@ -94,6 +94,8 @@ function App() {
 
       active_devices[i].style.left = `${x}px`;
       active_devices[i].style.top = `${y}px`;
+      active_devices[i].style.right = 'auto';
+      active_devices[i].style.bottom = 'auto';
     }
   }
 
@@ -102,8 +104,11 @@ function App() {
     const numberOfReserveDevices = reserve_devices.length;
     for (let i = 0; i < numberOfReserveDevices; i++) {
       // stack device divs vertically
-      reserve_devices[i].style.left = '0px';
-      reserve_devices[i].style.top = `${i * 30}px`;
+      reserve_devices[i].style.right = '40px';  // styles are relative to the parent (device-container)
+      reserve_devices[i].style.top = `${i * 80}px`;
+      reserve_devices[i].style.left = 'auto';
+      reserve_devices[i].style.bottom = 'auto';
+
     }
   }
 
