@@ -190,6 +190,8 @@ class SimulationTransceiver(AbstractTransceiver):
                 except q.Empty:
                     pass
     
+    # TODO: error handling to make server connection optional
+
     async def websocket_client(self):
         uri = "ws://localhost:3000"  # server.js websocket server
         async with websockets.connect(uri) as websocket:
