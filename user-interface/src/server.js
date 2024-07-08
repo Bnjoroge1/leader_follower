@@ -6,9 +6,14 @@ const wss = new WebSocket.Server({ server: server });
 var frontend = null;
 var devices = {};
 
+// TODO: should we save a ws : node id mapping or have transceivers send their id?
 wss.on('connection', function connection(ws) {
     console.log('New client connected!');
     ws.send('Welcome to the server!');
+
+    ws.on('close', function close() {
+        console.log('Client disconnected');
+    });
 
     ws.on('message', function incoming(message) {
         console.log('received: %s', message);
