@@ -38,11 +38,20 @@ function App() {
     newDevice.style.height = '30px';
     newDevice.style.borderRadius = '50%';
     newDevice.style.backgroundColor = 'skyblue';
+
+    const label = document.createElement('div');
+    label.textContent = deviceId;  // should already be a string
+    label.style.position = 'absolute';
+    label.style.textAlign = 'center';
+    label.style.width = '100%';
+    label.style.top = '-20px';
+
     container.appendChild(newDevice);
+    newDevice.appendChild(label);
 
     const devices = container.children;
     const numberOfDevices = devices.length;
-    const radius = 100;
+    const radius = 280;
 
     for (let i = 0; i < numberOfDevices; i++) {
       const angle = (i / numberOfDevices) * Math.PI * 2;  // angle in radians
@@ -86,17 +95,19 @@ function App() {
 
   return (
     <>
-    <div id="control-div">
-      <h1 id="control-title">Control Panel</h1>
-      <div id="control-buttons">
-        <button>Create Device</button>
-        <button>Delete Device</button>
-        <button>Toggle Device</button>
-        <button>Toggle Simulation</button>
+    <div id="parent">
+      <div id="control-div">
+        <h1 id="control-title">Control Panel</h1>
+        <div id="control-buttons">
+          <button>Create Device</button>
+          <button>Delete Device</button>
+          <button>Toggle Device</button>
+          <button>Toggle Simulation</button>
+        </div>
       </div>
-    </div>
 
-    <div id="device-container">
+      <div id="device-container">
+      </div>
     </div>
     </>
   );
