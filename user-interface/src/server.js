@@ -18,37 +18,24 @@ wss.on('connection', function connection(ws) {
         console.log('received: %s', message);
         message = message.toString();  // convert to string, is this ok?
         const parts = message.split(',');
-        
-        // relay message to all clients (protocol generalized to one channel)
-        // the protocol is responsible for virtual directed messages and filtering
-        // TODO: message encryption
+        const tag = parts[0];
+        const id = parts[1];
 
-        // TODO: format inject into INJECT:ACTION,ID
-        // right now is just INJECT,ACTION and hits all devices
-        if (parts[0] === 'INJECT') {
-            wss.clients.forEach(function each(client) {
-                // filter out the sender
-                if (client !== ws && client.readyState === WebSocket.OPEN) {
-                    // client.send('Relayed: ' + message);
-                    client.send(parts[1]);  // TODO: may want to send ACTION,ID instead
-                }
-            });
-        // messages take the form of ACTION,ID
-        // TODO: can probably clean this logic up
-        } else if (parts[0] === 'CONNECTED' || parts[0] === 'DISCONNECTED') {  
-            // transceiver websockets will connect and disconnect (to stay async?), ignore those
-            // only CONNECTED and DISCONNECTED messages are relevant
-            if (parts[1] === 'FRONTEND') {
+        if (['CONNECTED', 'SENT', 'RCVD', 'REACTIVATED', 'DEACTIVATED'].includes(tag)) {  // consider switching to hashset
+            if (id === 'FRONTEND') {  // only applies to CONNECTED
                 frontend = ws;  // store frontend reference
             } else {
                 if (frontend) {
                     frontend.send(message);  // relay to frontend
                 }
             }
-        } else if (parts[0] === 'SENT' || parts[0] === 'RCVD') {
-            if (frontend) {
-                frontend.send(message);  // relay to frontend
-            }
+        } else if (tag === 'INJECT') {  // right now is relaying to all clients (devices)
+            wss.clients.forEach(function each(client) {
+                // filter out the sender
+                if (client !== ws && client.readyState === WebSocket.OPEN) {
+                    client.send(id);
+                }
+            });
         }
     });
 });

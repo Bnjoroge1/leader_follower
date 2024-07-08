@@ -14,57 +14,75 @@ function App() {
     socket.current.send('CONNECTED,FRONTEND')  // placement should wait for connection
   });
 
+  const active_container = document.getElementById('active-devices');
+  const reserve_container = document.getElementById('reserve-devices');
+  if (!active_container || !reserve_container) {
+    console.error('Containers not found');
+  }
+
   // receive messages from the server
   socket.current.addEventListener('message', (event) => {
     console.log('Message from server:', event.data);
     let message = event.data.toString();
     const parts = message.split(',');
-    
-    if (parts[0] === 'CONNECTED') {
-      updateActiveDevices(parts[1], 'ACTIVATE');
-    } else if (parts[0] === 'DISCONNECTED') {
-      updateActiveDevices(parts[1], 'DEACTIVATE');
+    const tag = parts[0];
+    const id = parts[1];
+
+    if (tag === 'CONNECTED') {
+      addNewDevice(id);
+    } else if (tag === 'REACTIVATED') {
+      reactivateDevice(id);
+    } else if (tag === 'DEACTIVATED') {
+      deactivateDevice(id);
     }
   });
 
-  function updateActiveDevices(deviceId, action) {
-    const active_container = document.getElementById('active-devices');
-    const reserve_container = document.getElementById('reserve-devices');
-    if (!active_container || !reserve_container) {
-      return;  // a container is missing, TODO: throw exception
-    }
-    if (deviceId && action === 'ACTIVATE') {
-      const device = document.getElementById(`device-${deviceId}`);
-      if (device) {
-        reserve_container.removeChild(device);
-      }
+  function addNewDevice(id) {
+    createDeviceDiv(id);
+    reshapeActiveDevices();
+  }
 
-      // add new device div to active devices
-      const newDevice = document.createElement('div');
-      newDevice.id = `device-${deviceId}`;
-      newDevice.style.position = 'absolute';
-      newDevice.style.width = '30px';
-      newDevice.style.height = '30px';
-      newDevice.style.borderRadius = '50%';
-      newDevice.style.backgroundColor = 'skyblue';
-
-      const label = document.createElement('div');
-      label.textContent = deviceId;  // should already be a string
-      label.style.position = 'absolute';
-      label.style.textAlign = 'center';
-      label.style.width = '100%';
-      label.style.top = '-20px';
-
-      active_container.appendChild(newDevice);
-      newDevice.appendChild(label);
-    } else if (deviceId && action === 'DEACTIVATE') {
-      const device = document.getElementById(`device-${deviceId}`);
+  function deactivateDevice(id) {
+    const device = document.getElementById(`device-${id}`);
       if (device) {
         active_container.removeChild(device);
         reserve_container.appendChild(device);
+        reshapeActiveDevices();
+        reshapeReserveDevices();
       }
+  }
+
+  function reactivateDevice(id) {
+    const device = document.getElementById(`device-${id}`);
+    if (device) {
+      reserve_container.removeChild(device);
+      active_container.appendChild(device);
+      reshapeActiveDevices();
+      reshapeReserveDevices();
     }
-    
+  }
+
+  function createDeviceDiv(id) {
+    const newDevice = document.createElement('div');
+    newDevice.id = `device-${id}`;
+    newDevice.style.position = 'absolute';
+    newDevice.style.width = '30px';
+    newDevice.style.height = '30px';
+    newDevice.style.borderRadius = '50%';
+    newDevice.style.backgroundColor = 'skyblue';
+
+    const label = document.createElement('div');
+    label.textContent = id;  // should already be a string
+    label.style.position = 'absolute';
+    label.style.textAlign = 'center';
+    label.style.width = '100%';
+    label.style.top = '-20px';
+
+    active_container.appendChild(newDevice);
+    newDevice.appendChild(label);
+  }
+  
+  function reshapeActiveDevices() {
     // update relative position of all active devices for both addition and deletion
     const active_devices = active_container.children;
     const numberOfActiveDevices = active_devices.length;
@@ -77,7 +95,9 @@ function App() {
       active_devices[i].style.left = `${x}px`;
       active_devices[i].style.top = `${y}px`;
     }
+  }
 
+  function reshapeReserveDevices() {
     const reserve_devices = reserve_container.children;
     const numberOfReserveDevices = reserve_devices.length;
     for (let i = 0; i < numberOfReserveDevices; i++) {
