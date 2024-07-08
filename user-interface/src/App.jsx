@@ -17,7 +17,42 @@ function App() {
   // receive messages from the server
   socket.current.addEventListener('message', (event) => {
     console.log('Message from server:', event.data);
+    let message = event.data.toString();
+    const parts = message.split(',');
+    
+    if (parts[0] === 'CONNECTED') {
+      displayDevice(parts[1]);
+    }
   });
+
+  function displayDevice(deviceId) {
+    const container = document.getElementById('device-container');
+    if (!container) {
+      return;
+    }
+
+    const newDevice = document.createElement('div');
+    newDevice.id = `device-${deviceId}`;
+    newDevice.style.position = 'absolute';
+    newDevice.style.width = '30px';
+    newDevice.style.height = '30px';
+    newDevice.style.borderRadius = '50%';
+    newDevice.style.backgroundColor = 'skyblue';
+    container.appendChild(newDevice);
+
+    const devices = container.children;
+    const numberOfDevices = devices.length;
+    const radius = 100;
+
+    for (let i = 0; i < numberOfDevices; i++) {
+      const angle = (i / numberOfDevices) * Math.PI * 2;  // angle in radians
+      const x = radius * Math.cos(angle) + container.offsetWidth / 2;
+      const y = radius * Math.sin(angle) + container.offsetHeight / 2;
+
+      devices[i].style.left = `${x}px`;
+      devices[i].style.top = `${y}px`;
+    }
+  }
 
   const buttons = document.querySelectorAll('#control-buttons button');
   const handleClicks = [];
@@ -50,6 +85,7 @@ function App() {
 }, []);
 
   return (
+    <>
     <div id="control-div">
       <h1 id="control-title">Control Panel</h1>
       <div id="control-buttons">
@@ -59,6 +95,10 @@ function App() {
         <button>Toggle Simulation</button>
       </div>
     </div>
+
+    <div id="device-container">
+    </div>
+    </>
   );
 
 }
