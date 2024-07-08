@@ -113,15 +113,23 @@ button:focus-visible {
 }
 
 #device-container {
+  display: flex;
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 50px;
+  right: 50px;
   bottom: 1em;
   margin: auto;
-  width: 80%;
   top: calc(150px + 1em);
   padding: 1em;
   border-radius: 8px;
   background-color: #1a1a1a;
   box-shadow: 0 0 16px rgba(0, 0, 0, 0.25);
+}
+
+#active-devices {
+  flex: 0 0 80%;
+}
+
+#reserve-devices {
+  flex: 0 0 20%;
 }

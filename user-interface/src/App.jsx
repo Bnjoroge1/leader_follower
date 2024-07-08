@@ -107,6 +107,12 @@ function App() {
       </div>
 
       <div id="device-container">
+        <div id="active-devices">
+        </div>
+        
+        <div id="reserve-devices">
+
+        </div>
       </div>
     </div>
     </>
