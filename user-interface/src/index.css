@@ -128,9 +128,11 @@ button:focus-visible {
 
 #active-devices {
   flex: 0 0 80%;
-  border-right: 10px solid #747bff
+  border-right: 10px solid #747bff;
+  position: relative;
 }
 
 #reserve-devices {
   flex: 0 0 20%;
+  position: relative;
 }
