@@ -192,6 +192,7 @@ class SimulationTransceiver(AbstractTransceiver):
     
     # TODO: error handling to make server connection optional
 
+    # websocket client to connect to server.js and interact with injections
     async def websocket_client(self):
         uri = "ws://localhost:3000"  # server.js websocket server
         async with websockets.connect(uri) as websocket:
@@ -205,9 +206,12 @@ class SimulationTransceiver(AbstractTransceiver):
                     print("Toggling device")
                     if self.active_status() == 0:  # been off
                         self.reactivate()  # goes through process to full activation
+                        await websocket.send(f"CONNECTED,{self.parent.node_id}")
                     else:
                         self.deactivate()  # recently just turned on
+                        await websocket.send(f"DISCONNECTED,{self.parent.node_id}")
 
+    # called via asyncio from a synchronous environment - send, receive
     async def notify_server(self, message: str):
         uri = "ws://localhost:3000"  # server.js websocket server
         async with websockets.connect(uri) as websocket:
