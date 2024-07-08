@@ -161,7 +161,7 @@ class SimulationTransceiver(AbstractTransceiver):
     def receive(self, timeout: float) -> int | None:  # get from all queues\
         if self.active_status() == 0:
             print("returning DEACTIVATE")
-            return Message.DEACTIVATE
+            return Message.DEACTIVATE  # indicator for protocol
         if self.active_status() == 1:  # can change to Enum
             self.stay_active()
             return Message.ACTIVATE
@@ -196,7 +196,7 @@ class SimulationTransceiver(AbstractTransceiver):
     async def websocket_client(self):
         uri = "ws://localhost:3000"  # server.js websocket server
         async with websockets.connect(uri) as websocket:
-            await websocket.send(f"CONNECTED,{self.parent.node_id}")
+            await websocket.send(f"CONNECTED,{self.parent.node_id}")  # initial connection message
 
             async for message in websocket:
                 if isinstance(message, bytes):
@@ -206,10 +206,10 @@ class SimulationTransceiver(AbstractTransceiver):
                     print("Toggling device")
                     if self.active_status() == 0:  # been off
                         self.reactivate()  # goes through process to full activation
-                        await websocket.send(f"CONNECTED,{self.parent.node_id}")
+                        await websocket.send(f"REACTIVATED,{self.parent.node_id}")  # reactivation
                     else:
                         self.deactivate()  # recently just turned on
-                        await websocket.send(f"DISCONNECTED,{self.parent.node_id}")
+                        await websocket.send(f"DEACTIVATED,{self.parent.node_id}")  # deactivation
 
     # called via asyncio from a synchronous environment - send, receive
     async def notify_server(self, message: str):
