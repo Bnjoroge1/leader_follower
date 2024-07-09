@@ -404,16 +404,17 @@ class ThisDevice(Device):
 
             if self.get_leader():
                 print("--------Leader---------")
-                self.transceiver.log("LEADER")
                 self.log_status("BECAME LEADER")
             else:
                 print("--------Follower, listening--------")
-                self.transceiver.log("FOLLOWER")
                 self.log_status("BECAME FOLLOWER")
             while True:
                 # global looping
                 while self.active:
                     if self.get_leader():
+                        # update websocket on each loop in case connection is too slow
+                        self.transceiver.log("LEADER")
+
                         print("Device:", self.id, self.leader, "\n", self.device_list)
                         self.leader_send_attendance()
 
@@ -442,6 +443,7 @@ class ThisDevice(Device):
                         self.transceiver.clear()
 
                     if not self.get_leader():
+                        self.transceiver.log("FOLLOWER")
                         # print("Device:", self.id, self.leader, "\n", self.device_list)
                         if not self.receive(duration=15):
                             print("Is there anybody out there?")
