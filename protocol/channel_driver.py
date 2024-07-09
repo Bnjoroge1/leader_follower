@@ -32,11 +32,13 @@ async def main():
     visualizer = NetworkVisualizer()
     visualizer.ui_main()
 
-    for node in nodes:
-        node.start()
-        time.sleep(5)
+    started_tasks = [asyncio.create_task(task) for task in init_tasks]
 
-    await asyncio.gather(*init_tasks)
+    for node in nodes:
+        time.sleep(5)
+        node.start()
+
+    await asyncio.gather(*started_tasks)
     # maybe start this on a different thread like notify_server so we can start this earlier
 
 

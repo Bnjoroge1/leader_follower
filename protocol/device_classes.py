@@ -404,9 +404,11 @@ class ThisDevice(Device):
 
             if self.get_leader():
                 print("--------Leader---------")
+                self.transceiver.log("LEADER")
                 self.log_status("BECAME LEADER")
             else:
                 print("--------Follower, listening--------")
+                self.transceiver.log("FOLLOWER")
                 self.log_status("BECAME FOLLOWER")
             while True:
                 # global looping

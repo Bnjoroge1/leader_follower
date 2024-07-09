@@ -44,3 +44,7 @@ class AbstractTransceiver(metaclass=ABCMeta):
     @abstractmethod
     def clear(self):
         pass
+
+    @abstractmethod
+    def log(self, data: str):
+        pass

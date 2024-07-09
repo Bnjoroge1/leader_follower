@@ -7,6 +7,7 @@ import asyncio
 import websockets
 import threading
 from message_classes import Message
+from collections import deque
 
 class SimulationNode(AbstractNode):
 
@@ -128,6 +129,11 @@ class SimulationTransceiver(AbstractTransceiver):
         self.incoming_channels = {}
         self.parent = parent
         self.active: multiprocessing.Value = active  # can activate or deactivate device with special message
+        self.logQ = deque()
+
+    def log(self, data: str):
+        """ Method for protocol to load aux data into transceiver """
+        self.logQ.appendleft(data)
 
     def deactivate(self):
         self.active.value = 0
@@ -151,6 +157,13 @@ class SimulationTransceiver(AbstractTransceiver):
         # if msg // int(1e10) == 2:
         #     print(msg)
         #     print(self.outgoing_channels.keys())
+        try:
+            data = self.logQ.pop()
+            if data:
+                asyncio.run(self.notify_server(f"{data},{self.parent.node_id}"))
+        except IndexError:  # empty logQ
+            pass
+
         for id, queue in self.outgoing_channels.items():
             if queue is not None:
                 queue.put(msg)
