@@ -1,3 +1,4 @@
+from leader_follower.protocol.abstract_network import AbstractNode
 import zigpy
 from zigpy.zdo.types import LogicalType
 from zigpy.zcl.clusters.general import OnOff

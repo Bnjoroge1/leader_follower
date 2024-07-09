@@ -382,6 +382,10 @@ class ThisDevice(Device):
         """
         Leader sends task start which updates its own device list then send this out.
         After device list sent, leader sends updated tasks
+        
+        Parameters Documentation:
+        task (str): Robot task to be started.
+        devices (list): List of device IDs to be assigned to the task.
         """     
         self.log_status("LEADER SENDING TASK START")
 
@@ -390,11 +394,17 @@ class ThisDevice(Device):
 
         self.leader_send_device_list()
 
+        time.sleep(2)
+
         for device_id in devices:
             self.send(action=Action.TASK_START.value, payload=task, leader_id=self.id, follower_id=device_id, duration=2)
 
+        # this is to check if the leader is part of the devices assigned to task
+        if self.id in devices:
+            self.task = task
+            self.running = True
 
-    def handle_task_start(self):
+    def follower_handle_task_start(self):
         """
         Handle the start of a task.
         """
@@ -409,7 +419,7 @@ class ThisDevice(Device):
         """
         Handle the stop of a task.
         """
-        self.set_task(None)
+        self.set_task(0)
         print(f"Task stopped for device {self.id}")
         self.log_status("TASK STOPPED")
         # TODO: Call on mecanum class & line follower class (the one that traces perimeter) to return robot back to the standy area
@@ -488,7 +498,7 @@ class ThisDevice(Device):
                         case Action.TASK_STOP.value:
                             self.handle_task_stop()
                         case Action.TASK_START.value:
-                            self.handle_task_start()
+                            self.follower_handle_task_start()
                         case _:
                             pass
 
