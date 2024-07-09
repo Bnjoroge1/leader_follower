@@ -21,7 +21,7 @@ wss.on('connection', function connection(ws) {
         const tag = parts[0];
         const id = parts[1];
 
-        if (['CONNECTED', 'SENT', 'RCVD', 'REACTIVATED', 'DEACTIVATED'].includes(tag)) {  // consider switching to hashset
+        if (['CONNECTED', 'SENT', 'RCVD', 'REACTIVATED', 'DEACTIVATED', 'LEADER', 'FOLLOWER'].includes(tag)) {  // consider switching to hashset
             if (id === 'FRONTEND') {  // only applies to CONNECTED
                 frontend = ws;  // store frontend reference
             } else {
