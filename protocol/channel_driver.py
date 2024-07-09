@@ -11,7 +11,7 @@ async def main():
     :return:
     """
     # startup
-    num_devices = 2
+    num_devices = 3
     network = Network()
     nodes = []
     init_tasks = []
@@ -19,7 +19,7 @@ async def main():
         shared_active = Value('i', 2)  # 0 == off, 1 == just reactivated, 2 == active
         new_node = SimulationNode(i+1, active=shared_active)  # can we move active to lower level like size?
         nodes.append(new_node)
-        init_tasks.append(new_node.async_init())
+        init_tasks.append(new_node.async_init())  # prepare async initialization tasks
         network.add_node(new_node.node_id, new_node)
 
     for i in range(len(nodes)):
@@ -32,15 +32,16 @@ async def main():
     visualizer = NetworkVisualizer()
     visualizer.ui_main()
 
+    # starts each task - connects websockets to server..js before protocol starts
     started_tasks = [asyncio.create_task(task) for task in init_tasks]
 
     for node in nodes:
-        time.sleep(5)
+        time.sleep(5)  # intentional synchronous delay
         node.start()
 
+    # indefinitely awaiting websocket tasks
     await asyncio.gather(*started_tasks)
-    # maybe start this on a different thread like notify_server so we can start this earlier
-
+    assert False  # making sure websockets have not stopped
 
 if __name__ == "__main__":
     asyncio.run(main())

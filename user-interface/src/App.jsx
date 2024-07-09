@@ -34,8 +34,35 @@ function App() {
       reactivateDevice(id);
     } else if (tag === 'DEACTIVATED') {
       deactivateDevice(id);
+    } else if (tag === 'LEADER') {
+      markLeader(id);
+    } else if (tag === 'FOLLOWER') {
+      markFollower(id);
     }
   });
+
+  function markLeader(id) {
+    const device = document.getElementById(`device-${id}`);
+    console.log("marking leader")
+    if (device) {
+      device.style.backgroundColor = 'red';
+      console.log("leader marked")
+    }
+  }
+
+  function markFollower(id) {
+    const device = document.getElementById(`device-${id}`);
+    if (device) {
+      device.style.backgroundColor = 'skyblue';
+    }
+  }
+
+  function markDeactivated(id) {
+    const device = document.getElementById(`device-${id}`);
+    if (device) {
+      device.style.backgroundColor = 'gray';
+    }
+  }
 
   function addNewDevice(id) {
     createDeviceDiv(id);
@@ -44,6 +71,7 @@ function App() {
 
   function deactivateDevice(id) {
     const device = document.getElementById(`device-${id}`);
+    device.style.backgroundColor = 'gray';
       if (device) {
         active_container.removeChild(device);
         reserve_container.appendChild(device);
@@ -54,6 +82,8 @@ function App() {
 
   function reactivateDevice(id) {
     const device = document.getElementById(`device-${id}`);
+     // automatically becomes a wiped follower, will takeover if alone else respond to attendance
+    device.style.backgroundColor = 'skyblue';
     if (device) {
       reserve_container.removeChild(device);
       active_container.appendChild(device);
@@ -69,7 +99,7 @@ function App() {
     newDevice.style.width = '30px';
     newDevice.style.height = '30px';
     newDevice.style.borderRadius = '50%';
-    newDevice.style.backgroundColor = 'skyblue';
+    newDevice.style.backgroundColor = 'gray';
 
     const label = document.createElement('div');
     label.textContent = id;  // should already be a string
