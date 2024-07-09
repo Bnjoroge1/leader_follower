@@ -82,7 +82,7 @@ function App() {
 
   function reactivateDevice(id) {
     const device = document.getElementById(`device-${id}`);
-     // automatically becomes a wiped follower, will takeover if alone else respond to attendance
+     // becomes a follower (NOT WIPED), will takeover if alone else respond to attendance or tiebreaker
     device.style.backgroundColor = 'skyblue';
     if (device) {
       reserve_container.removeChild(device);

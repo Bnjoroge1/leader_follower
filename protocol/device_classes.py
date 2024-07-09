@@ -146,7 +146,6 @@ class ThisDevice(Device):
                 print("Device got deactivated by user")
                 self.active = False
                 self.make_follower()  # essentially wipe data
-                self.device_list = DeviceList()  # TODO: make this helper
                 return False
             if self.received == Message.ACTIVATE:
                 print("Device got reactivated by user")
@@ -332,6 +331,9 @@ class ThisDevice(Device):
         """
         print("Follower handling D_LIST")
         self.log_status("HANDLING DLIST")
+
+        # wipe current device list
+        self.device_list.clear()
 
         # handle already received device from original message
         # only add devices which are not already in device list
@@ -621,4 +623,7 @@ class DeviceList:
         :return: Device object with the largest id
         """
         return self.devices[max(self.devices.keys())] if len(self.devices) > 0 else None
+    
+    def clear(self):
+        self.devices = {}
 
