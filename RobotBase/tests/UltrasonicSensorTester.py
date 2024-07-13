@@ -110,18 +110,30 @@ class Sonar:
     
     def setColorBasedOnDistance(self, distance):
         if distance < 100:
-            color = Board.PixelColor(255, 0, 0)  # Red for very close objects
+            self.setPixelColor(0, Board.PixelColor(255, 0, 0))
+            self.setPixelColor(1, Board.PixelColor(255, 0, 0))
+            self.show()
+            time.sleep(1)
         elif distance < 500:
-            color = Board.PixelColor(255, 165, 0)  # Orange for close objects
+            self.setPixelColor(0, Board.PixelColor(255, 165, 0))
+            self.setPixelColor(1, Board.PixelColor(255, 165, 0))
+            self.show()
+            time.sleep(1)
         elif distance < 1000:
-            color = Board.PixelColor(255, 255, 0)  # Yellow for medium distance objects
+            self.setPixelColor(0, Board.PixelColor(255, 255, 0))
+            self.setPixelColor(1, Board.PixelColor(255, 255, 0))
+            self.show()
+            time.sleep(1)
         elif distance < 2000:
-            color = Board.PixelColor(0, 255, 0)  # Green for far objects
+            self.setPixelColor(0, Board.PixelColor(0, 255, 0))
+            self.setPixelColor(1, Board.PixelColor(0, 255, 0))
+            self.show()
+            time.sleep(1)
         else:
-            color = Board.PixelColor(0, 0, 255)  # Blue for very far objects
-        self.setPixelColor(0, color)
-        self.setPixelColor(1, color)
-        self.show()
+            self.setPixelColor(0, Board.PixelColor(0, 0, 255))
+            self.setPixelColor(1, Board.PixelColor(0, 0, 255))
+            self.show()
+            time.sleep(1)
 
     def startSequence(self):
         self.setRGBMode(0)
@@ -150,4 +162,4 @@ if __name__ == '__main__':
         time.sleep(1)
         distance = s.getDistance()
         print(distance)
-        s.setColorBasedOnDistance(distance)
+        # s.setColorBasedOnDistance(distance)

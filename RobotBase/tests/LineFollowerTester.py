@@ -13,6 +13,7 @@ import yaml_handle
 import HiwonderSDK.Board as Board
 import HiwonderSDK.mecanum as mecanum
 import HiwonderSDK.FourInfrared as infrared
+import matplotlib.pyplot as plt
 
 # Traffic light Recognition
 
@@ -307,7 +308,12 @@ if __name__ == '__main__':
             frame = img.copy()
             Frame = run(frame)  
             frame_resize = cv2.resize(Frame, (320, 240))
-            cv2.imshow('frame', frame_resize)
+            # cv2.imshow('frame', frame_resize)
+            
+            # modified from original on 7/13
+            plt.imshow(cv2.cvtColor(frame_resize, cv2.COLOR_BGR2RGB))
+            plt.show()
+            
             key = cv2.waitKey(1)
             if key == 27:
                 break
