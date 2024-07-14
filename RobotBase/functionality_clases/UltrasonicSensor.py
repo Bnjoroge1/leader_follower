@@ -1,5 +1,3 @@
-# tested and functional as of 7/13
-
 import os
 import sys
 sys.path.append('/home/pi/TurboPi/')
