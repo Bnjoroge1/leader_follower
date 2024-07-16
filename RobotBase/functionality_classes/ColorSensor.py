@@ -1,5 +1,3 @@
-# tested on 7/15; logic can be improved by detecting blue rather than assuming blue if red and green not detected
-
 #!/usr/bin/python3
 # coding=utf8
 import sys
