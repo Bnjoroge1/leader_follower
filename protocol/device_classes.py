@@ -155,7 +155,7 @@ class ThisDevice(Device):
             if self.received and self.leader_id and self.received_leader_id() != self.leader_id:  # another follower out there
                 print(self.received_leader_id(), self.leader_id)
                 self.handle_tiebreaker(self.received_leader_id())
-                break
+                return False
             if self.received and (action_value == -1 or self.received_action() == action_value):
                 self.log_message(self.received, 'RCVD')
                 return True
@@ -205,10 +205,11 @@ class ThisDevice(Device):
         """
         print("Listening for leader's attendance")
         if self.receive(duration=3):
-            print("Heard someone, listening for attendance")
-            while not self.receive(duration=3, action_value=Action.ATTENDANCE.value):
-                # print("Device", self.id, "is STUCK")
-                pass
+            if not self.received_action() == Action.ATTENDANCE.value:
+                print("Heard someone, listening for attendance")
+                while not self.receive(duration=3, action_value=Action.ATTENDANCE.value):
+                    # print("Device", self.id, "is STUCK")
+                    pass
             self.make_follower()
             self.follower_handle_attendance()
             print("Leader was heard, becoming follower")
