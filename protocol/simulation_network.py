@@ -3,24 +3,31 @@ import multiprocessing
 import queue as q
 from typing import Dict
 from abstract_network import AbstractNode, AbstractTransceiver
-
+import asyncio
+import websockets
+import threading
+from message_classes import Message
+from collections import deque
 
 class SimulationNode(AbstractNode):
 
-    def __init__(self, node_id, target_func = None, target_args = None):
+    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):
         self.node_id = node_id
-        self.transceiver = SimulationTransceiver()
+        self.transceiver = SimulationTransceiver(parent=self, active=active)
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
-        if target_func is None:
+        if not target_func:
             target_func = self.thisDevice.device_main
-        if target_args is not None:
+        if target_args:
             target_args = (self.transceiver, self.node_id)
             self.process = multiprocessing.Process(target=target_func, args=target_args)
         else:
             self.process = multiprocessing.Process(target=target_func)
+
+    async def async_init(self):  # SimulationTransceiver
+        await self.transceiver.websocket_client()
 
     def start(self):
         self.process.start()
@@ -117,9 +124,28 @@ class ChannelQueue:
 # similar implementation to send/receive calling transceiver functions
 class SimulationTransceiver(AbstractTransceiver):
 
-    def __init__(self):
+    def __init__(self, parent: SimulationNode, active: multiprocessing.Value):
         self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
         self.incoming_channels = {}
+        self.parent = parent
+        self.active: multiprocessing.Value = active  # can activate or deactivate device with special message
+        self.logQ = deque()
+
+    def log(self, data: str):
+        """ Method for protocol to load aux data into transceiver """
+        self.logQ.appendleft(data)
+
+    def deactivate(self):
+        self.active.value = 0
+
+    def reactivate(self):
+        self.active.value = 1
+
+    def stay_active(self):
+        self.active.value = 2
+
+    def active_status(self):
+        return self.active.value
 
     def set_outgoing_channel(self, node_id, queue: ChannelQueue):
         self.outgoing_channels[node_id] = queue
@@ -131,17 +157,42 @@ class SimulationTransceiver(AbstractTransceiver):
         # if msg // int(1e10) == 2:
         #     print(msg)
         #     print(self.outgoing_channels.keys())
+        try:
+            data = self.logQ.pop()
+            if data:
+                try:
+                    asyncio.run(self.notify_server(f"{data},{self.parent.node_id}"))
+                except OSError:
+                    pass
+        except IndexError:  # empty logQ
+            pass
+
         for id, queue in self.outgoing_channels.items():
             if queue is not None:
                 queue.put(msg)
                 # print("msg", msg, "put in device", id)
+        # no need to wait for this task to finish before returning to protocol
+        try:
+            asyncio.run(self.notify_server(f"SENT,{self.parent.node_id}"))
+        except OSError:
+            pass
 
-    def receive(self, timeout: float) -> int | None:  # get from all queues
+    def receive(self, timeout: float) -> int | None:  # get from all queues\
+        if self.active_status() == 0:
+            print("returning DEACTIVATE")
+            return Message.DEACTIVATE  # indicator for protocol
+        if self.active_status() == 1:  # can change to Enum
+            self.stay_active()
+            return Message.ACTIVATE
         # print(self.incoming_channels.keys())
         for id, queue in self.incoming_channels.items():
             try:
                 msg = queue.get(timeout=timeout)
                 # print("Message", msg, "gotton from", id)
+                try:
+                    asyncio.run(self.notify_server(f"RCVD,{self.parent.node_id}"))
+                except OSError:
+                    pass
                 return msg
             except q.Empty:
                 pass
@@ -160,4 +211,30 @@ class SimulationTransceiver(AbstractTransceiver):
                     queue.get_nowait()
                 except q.Empty:
                     pass
+    
+    # TODO: error handling to make server connection optional
 
+    # websocket client to connect to server.js and interact with injections
+    async def websocket_client(self):
+        uri = "ws://localhost:3000"  # server.js websocket server
+        async with websockets.connect(uri) as websocket:
+            await websocket.send(f"CONNECTED,{self.parent.node_id}")  # initial connection message
+
+            async for message in websocket:
+                if isinstance(message, bytes):
+                    message = message.decode("utf-8")
+                print(f"Received message: {message}")
+                if message == "Toggle Device":
+                    print("Toggling device")
+                    if self.active_status() == 0:  # been off
+                        self.reactivate()  # goes through process to full activation
+                        await websocket.send(f"REACTIVATED,{self.parent.node_id}")  # reactivation
+                    else:
+                        self.deactivate()  # recently just turned on
+                        await websocket.send(f"DEACTIVATED,{self.parent.node_id}")  # deactivation
+
+    # called via asyncio from a synchronous environment - send, receive
+    async def notify_server(self, message: str):
+        uri = "ws://localhost:3000"  # server.js websocket server
+        async with websockets.connect(uri) as websocket:
+            await websocket.send(message)
