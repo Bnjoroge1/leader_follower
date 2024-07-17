@@ -40,8 +40,12 @@ async def main():
         node.start()
 
     # indefinitely awaiting websocket tasks
-    await asyncio.gather(*started_tasks)
-    assert False  # making sure websockets have not stopped
+    try:
+        await asyncio.gather(*started_tasks)
+        assert False  # making sure websockets have not stopped
+    except OSError:
+        await asyncio.Event().wait()
 
+        
 if __name__ == "__main__":
     asyncio.run(main())

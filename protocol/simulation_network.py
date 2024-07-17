@@ -160,7 +160,10 @@ class SimulationTransceiver(AbstractTransceiver):
         try:
             data = self.logQ.pop()
             if data:
-                asyncio.run(self.notify_server(f"{data},{self.parent.node_id}"))
+                try:
+                    asyncio.run(self.notify_server(f"{data},{self.parent.node_id}"))
+                except OSError:
+                    pass
         except IndexError:  # empty logQ
             pass
 
@@ -169,7 +172,10 @@ class SimulationTransceiver(AbstractTransceiver):
                 queue.put(msg)
                 # print("msg", msg, "put in device", id)
         # no need to wait for this task to finish before returning to protocol
-        asyncio.run(self.notify_server(f"SENT,{self.parent.node_id}"))
+        try:
+            asyncio.run(self.notify_server(f"SENT,{self.parent.node_id}"))
+        except OSError:
+            pass
 
     def receive(self, timeout: float) -> int | None:  # get from all queues\
         if self.active_status() == 0:
@@ -183,7 +189,10 @@ class SimulationTransceiver(AbstractTransceiver):
             try:
                 msg = queue.get(timeout=timeout)
                 # print("Message", msg, "gotton from", id)
-                asyncio.run(self.notify_server(f"RCVD,{self.parent.node_id}"))
+                try:
+                    asyncio.run(self.notify_server(f"RCVD,{self.parent.node_id}"))
+                except OSError:
+                    pass
                 return msg
             except q.Empty:
                 pass
