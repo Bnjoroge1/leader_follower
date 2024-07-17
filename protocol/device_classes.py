@@ -17,6 +17,7 @@ RECEIVE_TIMEOUT: float = 0.2
 ATTENDANCE_DURATION: float = 2
 D_LIST_DURATION: float = 2
 DELETE_DURATION: float = 2
+TAKEOVER_DURATION: float = 15
 
 
 class Device:
@@ -207,14 +208,12 @@ class ThisDevice(Device):
         if self.receive(duration=3):
             if not self.received_action() == Action.ATTENDANCE.value:
                 print("Heard someone, listening for attendance")
-                while not self.receive(duration=3, action_value=Action.ATTENDANCE.value):
-                    # print("Device", self.id, "is STUCK")
-                    pass
-            self.make_follower()
-            self.follower_handle_attendance()
-            print("Leader was heard, becoming follower")
-            return  # early exit if follower
-
+                self.receive(duration=15, action_value=Action.ATTENDANCE.value)
+            if self.received_action() == Action.ATTENDANCE.value:
+                print("Heard attedance, becoming follower")             
+                self.make_follower()
+                self.follower_handle_attendance()
+                return  # early exit if follower
         print("Assuming position of leader")
         self.make_leader()
         self.leader_id = self.id
@@ -448,7 +447,7 @@ class ThisDevice(Device):
                     if not self.get_leader():
                         self.transceiver.log("FOLLOWER")
                         # print("Device:", self.id, self.leader, "\n", self.device_list)
-                        if not self.receive(duration=15):
+                        if not self.receive(duration=TAKEOVER_DURATION):
                             print("Is there anybody out there?")
                             self.make_leader()
                             continue
