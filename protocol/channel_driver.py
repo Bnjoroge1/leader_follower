@@ -11,7 +11,7 @@ async def main():
     :return:
     """
     # startup
-    num_devices = 3
+    num_devices = 2
     network = Network()
     nodes = []
     init_tasks = []

@@ -38,8 +38,21 @@ function App() {
       markLeader(id);
     } else if (tag === 'FOLLOWER') {
       markFollower(id);
+    } else if (tag === 'SEND') {
+      // markSend(id);
     }
   });
+
+  async function markSend(id) {
+    const device = document.getElementById(`device-${id}`);
+    device.style.backgroundColor = 'green';
+    await Promise((resolve, reject) => {
+      setTimeout(() => {
+        device.style.backgroundColor = 'gray';
+        resolve();
+      }, 5000);
+    });
+  }
 
   function markLeader(id) {
     const device = document.getElementById(`device-${id}`);
@@ -106,10 +119,19 @@ function App() {
     label.style.position = 'absolute';
     label.style.textAlign = 'center';
     label.style.width = '100%';
-    label.style.top = '-20px';
+    label.style.top = '30px';
+
+    // const transceiver = document.createElement('div');
+    // transceiver.style.position = 'absolute';
+    // transceiver.style.width = '10px';
+    // transceiver.style.height = '10px';
+    // transceiver.style.borderRadius = '50%';
+    // transceiver.style.backgroundColor = 'gray';
+    // transceiver.style.top = '-20px';
 
     active_container.appendChild(newDevice);
     newDevice.appendChild(label);
+    // newDevice.appendChild(transceiver);
   }
   
   function reshapeActiveDevices() {
