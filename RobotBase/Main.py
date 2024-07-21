@@ -17,6 +17,9 @@ from LineFollowing import LineFollowing
 from UltrasonicSensor import Sonar
 
 def ultrasonic_sensor():
+    # This method will begin running the ultrasonic sensor
+    # and output the distance the ultrasonic sensor is measuring
+    # every second (TODO: logic for stopping and detecting other robots)
     s = Sonar()
     s.startSymphony()
     while True:
@@ -32,6 +35,8 @@ def line_following():
         time.sleep(0.01)
 
 def color_sensor():
+    # This method starts running the color sensor which searches for
+    # and detects red, green, or blue. Outputs color to CMD
     cs = ColorSensor()
     cs.init()
     cs.start()

@@ -1,17 +1,21 @@
-#!/usr/bin/python3
-# coding=utf8
+import os
 import sys
-sys.path.append('/home/pi/TurboPi/')
-import cv2
 import time
 import signal
 import threading
-import numpy as np
-import yaml_handle
+
+current_dir = os.path.dirname(os.path.realpath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
+sys.path.append(parent_dir)
+
+sys.path.append('/home/pi/TurboPi/')
+
 import HiwonderSDK.Board as Board
 import HiwonderSDK.mecanum as mecanum
 import HiwonderSDK.FourInfrared as infrared
-import matplotlib.pyplot as plt
+
+sys.path.append(os.path.join(current_dir, 'functionality_classes'))
+
 from functionality_classes.ColorSensor import ColorSensor
 
 if sys.version_info.major == 2:
@@ -21,52 +25,41 @@ if sys.version_info.major == 2:
 car = mecanum.MecanumChassis()
 line = infrared.FourInfrared()
 color_sensor = ColorSensor()  # Instantiate your color sensor class
-detect_color = 'None'
 __isRunning = False
 
 def initMove():
-    car.set_velocity(0, 90, 0)
-    # Initialize any necessary components or configurations here
+    car.set_velocity(0, 0, 0)
+    print("Initialization complete. Car set to stop.")
 
 def move():
-    global __isRunning, detect_color
+    global __isRunning
 
-    while True:
-        if __isRunning:
-            try:
-                # Capture an image from the camera (you need to implement this part)
-                img = capture_image_from_camera()  # Placeholder function
+    while __isRunning:
+        try:
+            # Run color sensor processing
+            color_sensor.run()
+            detect_color = color_sensor.get_detected_color()
 
-                # Perform color detection with your ColorSensor class
-                detect_color = color_sensor.detect_color(img)
+            print(f"Detected color: {detect_color}")
+            if detect_color == 'green':
+                print("Detected green color, turning left")
+                car.set_velocity(35, 45, 0)  # Turn left
+            else:
+                car.set_velocity(35, 90, 0)  # Move forward
 
-                if detect_color == 'green':  # Adjusted to detect green color
-                    print("Detected green color")
-                    car.set_velocity(35, 90, 0)  # Adjust velocity for forward movement
-                else:
-                    car.set_velocity(35, 90, 0)  # Continue moving forward
+        except Exception as e:
+            print(f"Error: {e}")
 
-            except Exception as e:
-                print(f"Error: {e}")
-
-        else:
-            car.set_velocity(0, 90, 0)  # Stop the car if __isRunning is False
-            time.sleep(0.01)
-
-def capture_image_from_camera():
-    # Replace this with your actual camera capture code using OpenCV or another library
-    # Example placeholder code
-    img = cv2.imread('path_to_your_image.jpg')  # Replace with actual image capture
-    return img
+        time.sleep(0.1)
 
 def manual_stop(signum, frame):
     global __isRunning
-    
-    print('Closing...')
     __isRunning = False
-    car.set_velocity(0, 90, 0)
+    car.set_velocity(0, 0, 0)
+    color_sensor.close()
 
 if __name__ == '__main__':
+    color_sensor.start()  # Initialize and start the color sensor
     initMove()
     __isRunning = True
     signal.signal(signal.SIGINT, manual_stop)
@@ -77,8 +70,6 @@ if __name__ == '__main__':
 
     while __isRunning:
         try:
-            time.sleep(0.1)
+            time.sleep(1)
         except KeyboardInterrupt:
-            break
-
-    car.set_velocity(0, 90, 0)  # Ensure the car stops moving on program exit
+            manual_stop(None, None)

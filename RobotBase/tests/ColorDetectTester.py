@@ -31,7 +31,8 @@ range_rgb = {
     'red': (0, 0, 255),
     'blue': (255, 0, 0),
     # 'green': (0, 255, 0), # commenting this out since we will be using green as a turn signal
-    'yellow':(255, 255, 0) # need to test performance
+    'yellow':(255, 255, 0), # need to test performance
+    'black':(0, 0, 0)
 }
 
 color_list = []
