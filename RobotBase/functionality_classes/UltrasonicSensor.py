@@ -1,12 +1,22 @@
 import os
 import sys
-
-from leader_follower.RobotBase.Main import color_sensor
-from leader_follower.RobotBase.TurboPi.Camera import Camera
-sys.path.append('/home/pi/TurboPi/')
 import time
+
+sys.path.append('/home/pi/TurboPi/')
+
+import Camera
 import HiwonderSDK.Board as Board
 from smbus2 import SMBus, i2c_msg
+
+current_dir = os.path.dirname(os.path.realpath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
+sys.path.append(parent_dir)
+sys.path.append(os.path.join(current_dir, 'functionality_classes'))
+
+from functionality_classes.ColorSensing_Move import ColorSensing_Move
+from functionality_classes.PureColorSensor import PureColorSensor
+# from leader_follower.RobotBase.TurboPi.Camera import Camera
+
 
 class Sonar:
     __units = {"mm":0, "cm":1}
@@ -165,10 +175,10 @@ class Sonar:
         self.show()
         time.sleep(0.1)
         
-        cs = color_sensor()
+        cs = PureColorSensor()
         cs.init()
         cs.start()
-        camera = Camera()
+        camera = Camera.Camera()
         camera.camera_open(correction=True)
         
         while True:

@@ -7,16 +7,16 @@ import time
 import math
 import signal
 import Camera
-import threading
 import numpy as np
 import yaml_handle
 import HiwonderSDK.Board as Board
+import HiwonderSDK.mecanum as mecanum
 
 if sys.version_info.major == 2:
     print('Please run this program with python3!')
     sys.exit(0)
 
-class ColorSensor:
+class ColorSensingMove:
     target_color = ('red', 'green', 'blue')
     
     def __init__(self):
@@ -25,7 +25,6 @@ class ColorSensor:
             'red': (0, 0, 255),
             'blue': (255, 0, 0),
             'green': (0, 255, 0),
-            # 'yellow': (255, 255, 0),
             'black': (0, 0, 0),
         }
         self.color_list = []
@@ -34,7 +33,8 @@ class ColorSensor:
         self.detect_color = 'None'
         self.draw_color = self.range_rgb["black"]
         self.camera = Camera.Camera()
-    
+        self.chassis = mecanum.MecanumChassis()
+
     def load_config(self):
         self.lab_data = yaml_handle.get_yaml_data(yaml_handle.lab_file_path)
 
@@ -123,18 +123,44 @@ class ColorSensor:
             self.detect_color = 'None'
         
         print("Detected color:", self.detect_color)
+        self.move_based_on_color()
         return img
 
     def get_detected_color(self):
         return self.detect_color
 
+    def move_based_on_color(self):
+        if self.detect_color == 'green':
+            print("Detected green color, performing 90-degree rotation and moving forward.")
+            self.perform_turn()
+            time.sleep(1)  # Wait for the turn to complete
+            self.move_forward(6)  # Move forward 6 inches
+        
+    def perform_turn(self):
+        print("Performing 90-degree turn.")
+        self.chassis.set_velocity(0, 0, 50)  # Rotate left
+        time.sleep(0.40) 
+        self.chassis.set_velocity(0, 0, 0)  # Stop turning
+
+    def move_forward(self, inches):
+        print(f"Moving forward {inches} inches.")
+        velocity = 30
+        duration_per_inch = 0.3
+
+        # Increase the duration based on the speed to ensure 6 inches are covered
+        self.chassis.set_velocity(velocity, 90, 0)
+        time.sleep(inches * duration_per_inch)  # Increase time if needed to cover 6 inches
+        self.chassis.set_velocity(0, 0, 0)  # Stop moving
+        print("Completed moving forward.")
+
     def manual_stop(self, signum, frame):
-        print('Closing...')
+        self.chassis.set_velocity(0, 0, 0)  # Stop the car when exiting
         self.is_running = False
+        print('Closing...')
         self.camera.camera_close()
 
 if __name__ == '__main__':
-    color_sensor = ColorSensor()
+    color_sensor = ColorSensingMove()
     color_sensor.init()
     color_sensor.start()
     signal.signal(signal.SIGINT, color_sensor.manual_stop)

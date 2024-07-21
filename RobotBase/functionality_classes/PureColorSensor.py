@@ -16,7 +16,7 @@ if sys.version_info.major == 2:
     print('Please run this program with python3!')
     sys.exit(0)
 
-class ColorSensor:
+class PureColorSensor:
     target_color = ('red', 'green', 'blue')
     
     def __init__(self):
@@ -125,13 +125,18 @@ class ColorSensor:
         print("Detected color:", self.detect_color)
         return img
 
+    def get_detected_color(self):
+        # print("test")
+        return self.detect_color
+
     def manual_stop(self, signum, frame):
         print('Closing...')
         self.is_running = False
         self.camera.camera_close()
+        # print(f"FINAL: " + self.detect_color)
 
 if __name__ == '__main__':
-    color_sensor = ColorSensor()
+    color_sensor = PureColorSensor()
     color_sensor.init()
     color_sensor.start()
     signal.signal(signal.SIGINT, color_sensor.manual_stop)

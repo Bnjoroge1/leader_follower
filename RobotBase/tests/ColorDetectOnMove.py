@@ -11,6 +11,7 @@ import threading
 import numpy as np
 import yaml_handle
 import HiwonderSDK.Board as Board
+import HiwonderSDK.mecanum as mecanum
 
 if sys.version_info.major == 2:
     print('Please run this program with python3!')
@@ -34,7 +35,8 @@ class ColorSensor:
         self.detect_color = 'None'
         self.draw_color = self.range_rgb["black"]
         self.camera = Camera.Camera()
-    
+        self.car = mecanum.MecanumChassis()
+
     def load_config(self):
         self.lab_data = yaml_handle.get_yaml_data(yaml_handle.lab_file_path)
 
@@ -123,14 +125,23 @@ class ColorSensor:
             self.detect_color = 'None'
         
         print("Detected color:", self.detect_color)
+        self.move_based_on_color()
         return img
 
     def get_detected_color(self):
         return self.detect_color
 
+    def move_based_on_color(self):
+        if self.detect_color == 'green':
+            print("Detected green color, turning left")
+            self.car.set_velocity(35, 45, 0)  # Turn left
+        else:
+            self.car.set_velocity(35, 90, 0)  # Move forward
+
     def manual_stop(self, signum, frame):
-        print('Closing...')
+        self.car.set_velocity(0, 0, 0)  # Stop the car when exiting
         self.is_running = False
+        print('Closing...')
         self.camera.camera_close()
 
 if __name__ == '__main__':
