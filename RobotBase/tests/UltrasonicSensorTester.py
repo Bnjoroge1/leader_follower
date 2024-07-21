@@ -137,6 +137,7 @@ class Sonar:
             self.show()
             time.sleep(1)
 
+    # TODO: display one of the three colors associating with the color identified by cmaera
     def startSequence(self):
         self.setRGBMode(0)
         self.setPixelColor(0, Board.PixelColor(0, 0, 0))

@@ -1,5 +1,8 @@
 import os
 import sys
+
+from leader_follower.RobotBase.Main import color_sensor
+from leader_follower.RobotBase.TurboPi.Camera import Camera
 sys.path.append('/home/pi/TurboPi/')
 import time
 import HiwonderSDK.Board as Board
@@ -135,24 +138,47 @@ class Sonar:
             self.show()
             time.sleep(1)
 
+    # old start sequence for randomly displaying colors
+    # def startSequence(self):
+    #     self.setRGBMode(0)
+    #     self.setPixelColor(0, Board.PixelColor(0, 0, 0))
+    #     self.setPixelColor(1, Board.PixelColor(0, 0, 0))
+    #     self.show()
+    #     time.sleep(0.1)
+    #     self.setPixelColor(0, Board.PixelColor(255, 0, 0))
+    #     self.setPixelColor(1, Board.PixelColor(255, 0, 0))
+    #     self.show()
+    #     time.sleep(1)
+    #     self.setPixelColor(0, Board.PixelColor(0, 255, 0))
+    #     self.setPixelColor(1, Board.PixelColor(0, 255, 0))
+    #     self.show()
+    #     time.sleep(1)
+    #     self.setPixelColor(0, Board.PixelColor(0, 0, 255))
+    #     self.setPixelColor(1, Board.PixelColor(0, 0, 255))
+    #     self.show()
+    #     time.sleep(1)
+    
     def startSequence(self):
         self.setRGBMode(0)
         self.setPixelColor(0, Board.PixelColor(0, 0, 0))
         self.setPixelColor(1, Board.PixelColor(0, 0, 0))
         self.show()
         time.sleep(0.1)
-        self.setPixelColor(0, Board.PixelColor(255, 0, 0))
-        self.setPixelColor(1, Board.PixelColor(255, 0, 0))
-        self.show()
-        time.sleep(1)
-        self.setPixelColor(0, Board.PixelColor(0, 255, 0))
-        self.setPixelColor(1, Board.PixelColor(0, 255, 0))
-        self.show()
-        time.sleep(1)
-        self.setPixelColor(0, Board.PixelColor(0, 0, 255))
-        self.setPixelColor(1, Board.PixelColor(0, 0, 255))
-        self.show()
-        time.sleep(1)
+        
+        cs = color_sensor()
+        cs.init()
+        cs.start()
+        camera = Camera()
+        camera.camera_open(correction=True)
+        
+        while True:
+            img = camera.frame
+            if img is not None:
+                frame = img.copy()
+                cs.run(frame)
+                time.sleep(1)
+            else:
+                time.sleep(0.01)
 
 if __name__ == '__main__':
     s = Sonar()

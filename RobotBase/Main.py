@@ -5,15 +5,19 @@ import signal
 import os
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.join(current_dir, '../functionality_clases'))
+parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
+sys.path.append(parent_dir)
 
-from functionality_clases.LineFollowing import LineFollowing
+from RobotBase.TurboPi.Camera import Camera
+from RobotBase.TurboPi.ColorSensor import ColorSensor
+
+sys.path.append(os.path.join(current_dir, 'functionality_classes'))
+
+from LineFollowing import LineFollowing
 from UltrasonicSensor import Sonar
-from ColorSensor import ColorSensor
 
 def ultrasonic_sensor():
     s = Sonar()
-    s.startSequence()
     s.startSymphony()
     while True:
         time.sleep(1)
@@ -31,7 +35,7 @@ def color_sensor():
     cs = ColorSensor()
     cs.init()
     cs.start()
-    camera = Camera.Camera()
+    camera = Camera()
     camera.camera_open(correction=True)
     while True:
         img = camera.frame

@@ -18,7 +18,8 @@ if sys.version_info.major == 2:
     print('Please run this program with python3!')
     sys.exit(0)
 
-target_color = ('red', 'green', 'blue')
+# target_color = ('red', 'green', 'blue')
+target_color = ('red', 'yellow', 'blue')
 
 lab_data = None
 
@@ -29,7 +30,8 @@ def load_config():
 range_rgb = {
     'red': (0, 0, 255),
     'blue': (255, 0, 0),
-    'green': (0, 255, 0),
+    # 'green': (0, 255, 0), # commenting this out since we will be using green as a turn signal
+    'yellow':(255, 255, 0) # need to test performance
 }
 
 color_list = []
@@ -120,8 +122,8 @@ def run(img):
     if max_area > 2500:
         if color_area_max == 'red':
             detect_color = 'red'
-        elif color_area_max == 'green':
-            detect_color = 'green'
+        elif color_area_max == 'yellow':
+            detect_color = 'yellow'
         else:
             detect_color = 'blue'
     else:
