@@ -13,7 +13,7 @@ parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 sys.path.append(parent_dir)
 sys.path.append(os.path.join(current_dir, 'functionality_classes'))
 
-from functionality_classes.ColorSensing_Move import ColorSensing_Move
+from functionality_classes.ColorSensingMove import ColorSensingMove
 from functionality_classes.PureColorSensor import PureColorSensor
 # from leader_follower.RobotBase.TurboPi.Camera import Camera
 

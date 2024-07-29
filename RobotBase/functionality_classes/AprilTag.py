@@ -1,5 +1,3 @@
-# tester written night of 7/27; test and implement into main thread on 7/28
-
 #!/usr/bin/python3
 import sys
 sys.path.append('/home/pi/TurboPi/')
@@ -21,8 +19,9 @@ class AprilTagSensor:
         self.camera = Camera.Camera()
         self.detector = apriltag.Detector()
 
-        # april tag ids associate with these: https://chev.me/arucogen/
+        # first 3 tags are used for quadrant movement; 4th tag used for turnining
         self.tag_ids = [1, 2, 3]
+        self.turn_tag_id = 4
 
     def init(self):
         print("AprilTag Detection Init")
@@ -50,6 +49,8 @@ class AprilTagSensor:
     def process_tag(self, tag):
         if tag.tag_id in self.tag_ids:
             print(f"Detected tag ID: {tag.tag_id}")
+        elif tag.tag_id == self.turn_tag_id:
+            print(f"Detected turn tag ID: {tag.tag_id}")
 
     def run(self, img):
         if not self.is_running:
@@ -58,7 +59,7 @@ class AprilTagSensor:
         tags = self.detect_april_tags(img)
         for tag in tags:
             self.process_tag(tag)
-        return img
+        return tags  # Return tags instead of img
 
     def manual_stop(self, signum, frame):
         print('Closing...')
