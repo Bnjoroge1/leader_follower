@@ -4,6 +4,7 @@ import sys
 import time
 import threading
 import numpy as np
+import cv2
 sys.path.append('/home/pi/TurboPi/')
 import yaml_handle
 import HiwonderSDK.Board as Board
@@ -35,6 +36,9 @@ class LineFollowing:
         self.draw_color = self.range_rgb["black"]
         self.load_config()
         self.initMove()
+        self.turn_event = threading.Event()  # Event to signal turning
+        self.velocity = 50
+        self.duration_per_inch = 0.5
 
     def load_config(self):
         self.servo_data = yaml_handle.get_yaml_data(yaml_handle.servo_file_path)
@@ -98,6 +102,11 @@ class LineFollowing:
         while True:
             if self.__isRunning:
                 try:
+                    if self.turn_event.is_set():  # Check if turning is needed
+                        self.perform_turn()
+                        self.turn_event.clear()  # Reset the turn event
+                        continue
+
                     sensor_data = self.line.readData()
                     print(f"Sensor data: {sensor_data}")
 
@@ -118,16 +127,20 @@ class LineFollowing:
 
                     self.car.set_velocity(35, 90, angular_velocity)
 
-                    if self.detect_color == 'green':
-                        print("Detected green color")
-                        self.car.set_velocity(35, 90, 0)
-
                 except OSError as e:
                     print(f"I/O Error: {e}")
             else:
                 print("Stopping movement")
                 self.car.set_velocity(0, 90, 0)
                 time.sleep(0.01)
+
+    # this 90 degree left turn includes moving forward 6" afterwards
+    def perform_turn(self):
+        print("Performing turn...")
+        self.car.set_velocity(35, 45, 0)
+
+        self.car.set_velocity(self.velocity, 90, 0)
+        time.sleep(6 * self.duration_per_inch)
 
     def run(self, img):
         if not self.__isRunning:

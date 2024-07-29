@@ -1,77 +1,57 @@
+#!/usr/bin/python3
+# coding=utf8
 import sys
-import threading
 import time
-import signal
-import os
-
+import threading
+import numpy as np
+import cv2
+import apriltag
 sys.path.append('/home/pi/TurboPi/')
-import Camera
+import yaml_handle
+import HiwonderSDK.Board as Board
+import HiwonderSDK.mecanum as mecanum
+import HiwonderSDK.FourInfrared as infrared
+import LineFollowing
+import signal
 
-current_dir = os.path.dirname(os.path.realpath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
-sys.path.append(parent_dir)
-sys.path.append(os.path.join(current_dir, 'functionality_classes'))
+if sys.version_info.major == 2:
+    print('Please run this program with python3!')
+    sys.exit(0)
 
-from functionality_classes.LineFollowing import LineFollowing
-from functionality_classes.UltrasonicSensor import Sonar
-from functionality_classes.AprilTag import AprilTagSensor
+class MainTester:
+    def __init__(self):
+        self.camera = Camera.Camera()
+        self.camera.camera_open(correction=True)
+        self.detector = apriltag.Detector()
+        self.line_follower = LineFollowing.LineFollowing()
+        self.lf_event = threading.Event()  
+        self.line_follower.init()
+        self.line_follower.start()
 
-def ultrasonic_sensor():
-    s = Sonar()
-    s.startSymphony()
-    while True:
-        time.sleep(1)
-        distance = s.getDistance()
-        print(distance)
+    def run(self):
+        try:
+            while True:
+                img = self.camera.camera.frame
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                tags = self.detector.detect(gray)
 
-def line_following(lf_event):
-    lf = LineFollowing()
-    lf.start()
-    signal.signal(signal.SIGINT, lf.manual_stop)
-    
-    while not lf_event.is_set():
-        time.sleep(0.01)
+                for tag in tags:
+                    tag_id = tag.tag_id
+                    if tag_id in [1, 2, 3]:
+                        cv2.putText(img, f"Tag ID: {tag_id}", (10, 30 + tag_id * 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    elif tag_id == 4:
+                        self.lf_event.set()  # trigger turn
+                        time.sleep(1)  # allow some time for the turn to complete
+                        self.lf_event.clear()  # resume line following
 
-    lf.stop()
-
-def apriltag_sensor(lf_event):
-    at = AprilTagSensor()
-    at.init()
-    at.start()
-
-    while True:
-        img = at.camera.frame
-        if img is not None:
-            frame = img.copy()
-            tags = at.run(frame)
-            
-            for tag in tags:
-                if tag.tag_id in at.tag_ids:
-                    # testing output from apriltag; also being output in functionality_classes/AprilTag.py
-                    # print(f"Detected AprilTag ID: {tag.tag_id}")
-                    continue
-                elif tag.tag_id == at.turn_tag_id:
-                    # print(f"Detected AprilTag ID: {tag.tag_id}, stopping line following and turning.")
-                    lf_event.set()  # Stop line following
-                    time.sleep(1)  # Allow some time for the turn to complete
-                    lf_event.clear()  # Resume line following
-
-        else:
-            time.sleep(0.01)
-
-    at.camera.camera_close()
+                img = self.line_follower.run(img)
+                cv2.imshow("Camera", img)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+        finally:
+            self.camera.camera_close()
+            cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    lf_event = threading.Event()
-    
-    ultrasonic_thread = threading.Thread(target=ultrasonic_sensor)
-    line_following_thread = threading.Thread(target=line_following, args=(lf_event,))
-    apriltag_sensor_thread = threading.Thread(target=apriltag_sensor, args=(lf_event,))
-
-    ultrasonic_thread.start()
-    line_following_thread.start()
-    apriltag_sensor_thread.start()
-
-    ultrasonic_thread.join()
-    line_following_thread.join()
-    apriltag_sensor_thread.join()
+    tester = MainTester()
+    tester.run()

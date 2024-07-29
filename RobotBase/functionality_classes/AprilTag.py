@@ -8,6 +8,8 @@ import threading
 import numpy as np
 import apriltag
 import Camera
+import HiwonderSDK.Board as Board
+import HiwonderSDK.mecanum as mecanum
 
 if sys.version_info.major == 2:
     print('Please run this program with python3!')
@@ -19,9 +21,8 @@ class AprilTagSensor:
         self.camera = Camera.Camera()
         self.detector = apriltag.Detector()
 
-        # first 3 tags are used for quadrant movement; 4th tag used for turnining
-        self.tag_ids = [1, 2, 3]
-        self.turn_tag_id = 4
+        self.tag_ids = [1, 2, 3] # IDs 1-3 used for quadrant movement
+        self.turn_tag_id = 4  # ID for turning
 
     def init(self):
         print("AprilTag Detection Init")
@@ -47,10 +48,8 @@ class AprilTagSensor:
         return tags
 
     def process_tag(self, tag):
-        if tag.tag_id in self.tag_ids:
+        if tag.tag_id in self.tag_ids or tag.tag_id == self.turn_tag_id:
             print(f"Detected tag ID: {tag.tag_id}")
-        elif tag.tag_id == self.turn_tag_id:
-            print(f"Detected turn tag ID: {tag.tag_id}")
 
     def run(self, img):
         if not self.is_running:
@@ -59,7 +58,7 @@ class AprilTagSensor:
         tags = self.detect_april_tags(img)
         for tag in tags:
             self.process_tag(tag)
-        return tags  # Return tags instead of img
+        return img
 
     def manual_stop(self, signum, frame):
         print('Closing...')
