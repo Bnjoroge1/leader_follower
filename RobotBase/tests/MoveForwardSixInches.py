@@ -27,7 +27,7 @@ def move_forward_inches(inches):
     velocity = 50
     duration_per_inch = 0.5
     print(f"Moving forward {inches} inches.")
-    chassis.set_velocity(velocity, 90, 0)
+    chassis.set_velocity(-velocity, 90, 0)
     time.sleep(inches * duration_per_inch)
     chassis.set_velocity(0, 0, 0)
     print("Completed moving forward.")

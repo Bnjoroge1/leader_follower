@@ -23,7 +23,7 @@ class AprilTagSensor:
         self.detector = apriltag.Detector()
 
         # april tag ids associate with these: https://chev.me/arucogen/
-        self.tag_ids = [1, 2, 3]
+        self.tag_ids = [1, 2, 3, 4]
 
     def init(self):
         print("AprilTag Detection Init")

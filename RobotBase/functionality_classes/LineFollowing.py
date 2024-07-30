@@ -36,9 +36,7 @@ class LineFollowing:
         self.draw_color = self.range_rgb["black"]
         self.load_config()
         self.initMove()
-        self.turn_event = threading.Event()  # Event to signal turning
-        self.velocity = 50
-        self.duration_per_inch = 0.5
+        self.turn_event = threading.Event()  # Initialize the event for turning
 
     def load_config(self):
         self.servo_data = yaml_handle.get_yaml_data(yaml_handle.servo_file_path)
@@ -72,16 +70,22 @@ class LineFollowing:
         print("LineFollower Start")
 
     def stop(self):
+        self.car.set_velocity(0, 90, 0)  # Ensure motors stop
         self.car_stop = True
         self.__isRunning = False
         self.set_rgb('None')
         print("LineFollower Stop")
 
     def exit(self):
-        self.car_stop = True
-        self.__isRunning = False
+        self.stop()  # Ensure motors stop
         self.set_rgb('None')
         print("LineFollower Exit")
+
+    def set_turn_flag(self, flag):
+        if flag:
+            self.turn_event.set()  # Trigger turn
+        else:
+            self.turn_event.clear()  # Stop turning
 
     def setTargetColor(self, color):
         self.target_color = color
@@ -99,48 +103,37 @@ class LineFollowing:
             Board.RGB.show()
 
     def move(self):
-        while True:
-            if self.__isRunning:
-                try:
-                    if self.turn_event.is_set():  # Check if turning is needed
-                        self.perform_turn()
-                        self.turn_event.clear()  # Reset the turn event
-                        continue
+        while self.__isRunning:
+            if self.turn_event.is_set():  # Check if turning is needed
+                self.perform_turn()
+                self.turn_event.clear()  # Reset the turn event
+                continue
 
-                    sensor_data = self.line.readData()
-                    print(f"Sensor data: {sensor_data}")
+            sensor_data = self.line.readData()
+            print(f"Sensor data: {sensor_data}")
 
-                    if sensor_data == [1, 1, 1, 1]:
-                        angular_velocity = 0
-                    elif sensor_data == [0, 1, 1, 0]:
-                        angular_velocity = 0
-                    elif sensor_data == [0, 0, 1, 0]:
-                        angular_velocity = 0.03
-                    elif sensor_data == [0, 1, 0, 0]:
-                        angular_velocity = -0.03
-                    elif sensor_data == [0, 0, 0, 1]:
-                        angular_velocity = 0.3
-                    elif sensor_data == [1, 0, 0, 0]:
-                        angular_velocity = -0.3
-                    else:
-                        angular_velocity = 0
-
-                    self.car.set_velocity(35, 90, angular_velocity)
-
-                except OSError as e:
-                    print(f"I/O Error: {e}")
+            if sensor_data == [1, 1, 1, 1]:
+                angular_velocity = 0
+            elif sensor_data == [0, 1, 1, 0]:
+                angular_velocity = 0
+            elif sensor_data == [0, 0, 1, 0]:
+                angular_velocity = 0.03
+            elif sensor_data == [0, 1, 0, 0]:
+                angular_velocity = -0.03
+            elif sensor_data == [0, 0, 0, 1]:
+                angular_velocity = 0.3
+            elif sensor_data == [1, 0, 0, 0]:
+                angular_velocity = -0.3
             else:
-                print("Stopping movement")
-                self.car.set_velocity(0, 90, 0)
-                time.sleep(0.01)
+                angular_velocity = 0
 
-    # this 90 degree left turn includes moving forward 6" afterwards
+            self.car.set_velocity(35, 90, angular_velocity)
+
     def perform_turn(self):
         print("Performing turn...")
-        self.car.set_velocity(35, 45, 0)
-
-        self.car.set_velocity(self.velocity, 90, 0)
-        time.sleep(6 * self.duration_per_inch)
+        self.car.set_velocity(0, 90, -0.5)  # Adjust the turning speed and direction as needed
+        time.sleep(1)  # Duration for the turn (adjust as needed)
+        self.car.set_velocity(35, 90, 0)  # Resume forward movement
 
     def run(self, img):
         if not self.__isRunning:
@@ -153,8 +146,7 @@ class LineFollowing:
 
     def manualcar_stop(self, signum, frame):
         print('Manual Stop')
-        self.__isRunning = False
-        self.car.set_velocity(0, 90, 0)
+        self.exit()  # Ensure motors stop
 
 if __name__ == '__main__':
     line_follower = LineFollowing()
