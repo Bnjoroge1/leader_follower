@@ -44,7 +44,6 @@ class MainQuadrantMovementFixedSelection:
         self.car.set_velocity(35, 90, 0)
         time.sleep(duration)
         self.car.set_velocity(0, 90, 0) 
-        print("Stopped moving straight.")
 
     def move_straight_reverse(self, distance_inches):
         duration = distance_inches * 0.13 
@@ -52,27 +51,24 @@ class MainQuadrantMovementFixedSelection:
         self.car.set_velocity(-35, 90, 0)
         time.sleep(duration)
         self.car.set_velocity(0, 90, 0) 
-        print("Stopped moving straight in reverse.")
 
     def turn_right(self):
-        print("Turning right.")
         self.car.set_velocity(0, 90, 0.5) 
         time.sleep(0.55) 
         self.car.set_velocity(0, 90, 0)
-        print("Completed turning right.")
 
     def turn_left(self):
-        print("Turning left.")
         self.car.set_velocity(0, 90, -0.5)  
         time.sleep(0.55)  
         self.car.set_velocity(0, 90, 0)  
-        print("Completed turning left.")
 
     def run(self):
         try:
             for i in range(self.fullIterations):
-                for map in range(len(self.map_selection)):
-                    current_tag = self.map_selection[map]
+                for map in range(len(self.mapSelection)):
+                    print("Beginning Task!")
+                    current_tag = self.mapSelection[map]
+                    print("Current Tag Selection: " + str(current_tag))
 
                     self.turn_right()
 
@@ -84,9 +80,6 @@ class MainQuadrantMovementFixedSelection:
                         self.current_distance = self.map2dist
                     elif current_tag == 3:
                         self.current_distance = self.map3dist
-                    else:
-                        print("Random number not generated!")
-                        self.current_distance = 0
 
                     self.move_straight(self.current_distance)
 
@@ -112,8 +105,6 @@ class MainQuadrantMovementFixedSelection:
                                 self.detected_tag_after_turn = tag_id
                                 print(f"Detected tag: {self.detected_tag_after_turn}")
                                 break
-                        else:
-                            print("No relevant tag detected. Continuing to check...")
 
                         if self.detected_tag_after_turn is not None:
                             self.turn_right()
@@ -132,7 +123,7 @@ class MainQuadrantMovementFixedSelection:
                                 self.turn_right()
 
                             break
-
+                    print("Task Completed!")
                     time.sleep(5)
 
         except KeyboardInterrupt:

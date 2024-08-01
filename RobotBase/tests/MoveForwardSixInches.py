@@ -23,18 +23,36 @@ def Stop(signum, frame):
 
 signal.signal(signal.SIGINT, Stop)
 
-def move_forward_inches(inches):
+def strafe_inches(inches):
     velocity = 50
-    duration_per_inch = 0.5
+    duration_per_inch = 0.25                                    
     print(f"Moving forward {inches} inches.")
-    chassis.set_velocity(-velocity, 90, 0)
+    chassis.set_velocity(-velocity, 0, 0)
     time.sleep(inches * duration_per_inch)
     chassis.set_velocity(0, 0, 0)
     print("Completed moving forward.")
 
+def strafe(side='left', distance=6):
+    velocity = 50
+    duration_per_inch = 0.25
+    strafe_velocity = 0.5
+
+    if side == 'left':
+        strafe_direction = -strafe_velocity
+    elif side == 'right':
+        strafe_direction = strafe_velocity
+    else:
+        raise ValueError("Invalid side for strafing. Use 'left' or 'right'.")
+
+    print(f"Strafing {side} for {distance} inches.")
+    chassis.set_velocity(0, 0, strafe_direction)
+    time.sleep(distance * duration_per_inch)
+    chassis.set_velocity(0, 0, 0)
+    print(f"Completed strafing {side}.")
+
 if __name__ == '__main__':
     while start:
-        move_forward_inches(6)
+        strafe_inches(5)
         break
 
     print('Closed')
