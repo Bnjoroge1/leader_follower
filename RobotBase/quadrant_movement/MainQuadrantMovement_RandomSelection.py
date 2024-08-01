@@ -20,7 +20,7 @@ if sys.version_info.major == 2:
     print('Please run this program with python3!')
     sys.exit(0)
 
-class MainQuadrantMovement:
+class MainQuadrantMovementRandomSelection:
     def __init__(self):
         self.car = mecanum.MecanumChassis()
         self.camera = Camera.Camera()
@@ -138,5 +138,5 @@ class MainQuadrantMovement:
             cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    tester = MainQuadrantMovement()
+    tester = MainQuadrantMovementRandomSelection()
     tester.run()
