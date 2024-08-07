@@ -1,4 +1,4 @@
-# Leader-Follower
+# Leader-Follower Protocol (Patent-Pending)
 This is a continuation of the [Singing Boxes Project](https://github.com/dhilanpatel26/singing_boxes) aiming to generalize the protocol and add the following features.
 - Test harness to traverse the protocol's state space and guide refactoring.
 - Digital simulation of distributed devices and communication channels.
