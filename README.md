@@ -12,10 +12,12 @@ In this short demo, five devices communicate wirelessly to each play a different
 
 The protocol uses a probabilistic framework and an object-oriented design to coordinate a mesh network of devices. One leader is selected and will add any other devices as followers, distribute tasks amongst them, and monitor their status. It is designed for resiliency, so that if any device disconnects, even the leader, the collective remains intact.
 
-![alt text](https://github.com/dhilanpatel26/singing_boxes/blob/main/simulations/sb_protocol_diagram.png "Protocol Block Diagram")
+![Protocol Block Diagram](https://github.com/dhilanpatel26/singing_boxes/blob/main/simulations/sb_protocol_diagram.png "Protocol Block Diagram")
 
 The communication occurs over radio frequency at 433MHz using a CC1101 transceiver. The protocol is designed to be functional with other communication methods such as Wi-Fi or infrared, and generalizable to any number of devices or tasks.
 
 The robustness of the control system's communication protocol also allows for follower-leader feedback, dynamic message payloads, and the prioritization of available roles. Alongside an increased number of devices, these features enable for the parallelization and execution of more complex tasks. The speed of this algorithm is only limited by the transmission and receiving capabilities of devices at 433MHz. In addition, time complexity of the check-in process scales linearly with the number of devices in the network. This protocol has applications for collaborative tasks in various industries, such as agriculture, construction, and defense -- really any sector that requires coordinated tasks to be completed simultaneously.
 
-![alt text](https://github.com/dhilanpatel26/singing_boxes/blob/main/simulations/sb_simulations.jpg "Simulation Plots")
+![Simulation Plots](https://github.com/dhilanpatel26/singing_boxes/blob/main/simulations/sb_simulations.jpg "Simulation Plots")
+
+![UI Demo](https://github.com/dhilanpatel26/leader_follower/blob/main/user-interface/src/assets/ui_demo.png "UI Demo")
