@@ -24,19 +24,23 @@ class MainQuadrantMovementFixedSelection:
     def __init__(self):
         self.car = mecanum.MecanumChassis()
         self.camera = Camera.Camera()
-        self.camera.camera_open(correction=True)
+        try:
+            self.camera.camera_open(correction=True)
+        except Exception as e:
+            print(f"Error opening camera: {e}")
+            sys.exit(1)
+        
         self.detector = apriltag.Detector()
         self.running = True
         self.detected_tag_after_turn = None
+        self.last_detected_tag = 0
         self.mapSelection = [1, 2, 3]
         self.map1dist = 1
         self.map2dist = 13
         self.map3dist = 20
         self.current_distance = 0
 
-        # this variable is being used to define the number of iterations to loop through all tags
-        # TODO: replace with stopping by recieving message from protocol 
-        self.fullIterations = 3
+        self.fullIterations = 1
 
     def move_straight(self, distance_inches):
         duration = distance_inches * 0.13 
@@ -53,14 +57,30 @@ class MainQuadrantMovementFixedSelection:
         self.car.set_velocity(0, 90, 0) 
 
     def turn_right(self):
-        self.car.set_velocity(0, 90, 0.5) 
+        self.car.set_velocity(0, 90, 0.55) 
         time.sleep(0.55) 
         self.car.set_velocity(0, 90, 0)
 
     def turn_left(self):
-        self.car.set_velocity(0, 90, -0.5)  
+        self.car.set_velocity(0, 90, -0.52)  
         time.sleep(0.55)  
         self.car.set_velocity(0, 90, 0)  
+
+    def handle_last_tag(self):
+        if self.last_detected_tag == 0:
+            print("Just starting. Turning right once.")
+            self.turn_right()
+        elif self.last_detected_tag == 1:
+            print("Last detected tag was 1. Turning right once.")
+            self.turn_right()
+        elif self.last_detected_tag == 2:
+            print("Last detected tag was 2. Turning right twice.")
+            self.turn_right()
+            time.sleep(0.5)
+            self.turn_right()
+        elif self.last_detected_tag == 3:
+            print("Last detected tag was 3. Turning left once.")
+            self.turn_left()
 
     def run(self):
         try:
@@ -70,8 +90,11 @@ class MainQuadrantMovementFixedSelection:
                     current_tag = self.mapSelection[map]
                     print("Current Tag Selection: " + str(current_tag))
 
-                    self.turn_right()
+                    self.handle_last_tag()
+                    time.sleep(5)
 
+                    # this is now incorporated into handle_last_tag
+                    # self.turn_right()
                     time.sleep(1)
 
                     if current_tag == 1:
@@ -82,11 +105,9 @@ class MainQuadrantMovementFixedSelection:
                         self.current_distance = self.map3dist
 
                     self.move_straight(self.current_distance)
-
                     time.sleep(0.5)
 
                     self.turn_left()
-
                     time.sleep(1)
 
                     while self.running:
@@ -98,11 +119,11 @@ class MainQuadrantMovementFixedSelection:
                         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                         tags = self.detector.detect(gray)
 
-                        # Check for any tag detection
                         for tag in tags:
                             tag_id = tag.tag_id
                             if tag_id in [1, 2, 3]:
                                 self.detected_tag_after_turn = tag_id
+                                self.last_detected_tag = tag_id  # Store the last detected tag
                                 print(f"Detected tag: {self.detected_tag_after_turn}")
                                 break
 
@@ -112,7 +133,6 @@ class MainQuadrantMovementFixedSelection:
                             self.move_straight_reverse(self.current_distance)
                             time.sleep(0.5)
                             
-                            # TODO: change this
                             if current_tag == 1:
                                 self.turn_left()
                             elif current_tag == 2:
