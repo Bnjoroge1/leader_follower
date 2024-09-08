@@ -5,6 +5,10 @@ from typing import Dict, List, Set
 from pathlib import Path
 import csv
 
+# zigpy imports
+import asyncio
+from zigpy.zcl.clusters.general import OnOff
+from zigpy.types import EUI64
 
 CURRENT_FILE = Path(__file__).absolute()
 PROTOCOL_DIR = CURRENT_FILE.parent
@@ -93,6 +97,45 @@ class Device:
         :param task: task's int identifier
         """
         self.task = task
+
+class ThisDevice:
+    def __init__(self, zigpy_app):
+        self.zigpy_app = zigpy_app
+        self.device = None
+        self.loop = asyncio.get_event_loop()
+
+    async def send_message(self, ieee, message):
+        if self.device is None:
+            raise Exception("No device connected")
+
+        target_device = None
+        for device in self.zigpy_app.devices():
+            if device.ieee == ieee:
+                target_device = device
+                break
+
+        if target_device is None:
+            raise Exception("Target device not found")
+
+        cluster = target_device.endpoints[1].out_clusters[OnOff.cluster_id]
+        await cluster.command(OnOff.Commands.Toggle)
+        print(f"Message sent: {message}")
+
+    async def receive_message(self):
+        while True:
+            message = await self.device.receive()
+            print(f"Received message: {message}")
+
+    async def run(self):
+        await self.discover_devices()
+        if self.device:
+            self.loop.create_task(self.receive_message())
+            while True:
+                target_ieee = '00:11:22:33:44:55:66:77'  # would using the IEEE number work with how our protocol is currently set up?
+                await self.send_message(target_ieee, "Toggle command")
+                await asyncio.sleep(5)
+        else:
+            print("No devices discovered")
 
 
 class ThisDevice(Device):
