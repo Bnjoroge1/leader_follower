@@ -98,6 +98,17 @@ class Device:
         """
         self.task = task
 
+# Notes from Meeting on 9/13
+# check-ins will lose their meaning if they are async (heartbeats need to be sync, in order to detect when a device drops out)
+# asyncio can be used to send synchronous messages
+# robot_network.py --> implement send and recieve functions that are being passed into the protocol (only transciever is being passed in, no protocol changes should take place)
+# follow SimualationTransciever (in simulation_network.py) in order to create robot_network.py
+# abstract_network.py --> would need to make send and recieve method
+# robot_network.py is run using the channel_driver (need to create my own using this as a template)
+# simulation_network.py (lines 180-199) --> depending on the status, it will perform some robot movement and return messages to the protocol (robot movement would be run on a sepate thread)
+# don't use ieee, send messages over a frequency instead
+# ensure transciever is correctly sending ACTIVATE and DEACTIVATE messages from robot_network.py
+
 class ThisDevice:
     def __init__(self, zigpy_app):
         self.zigpy_app = zigpy_app
@@ -118,7 +129,7 @@ class ThisDevice:
             raise Exception("Target device not found")
 
         cluster = target_device.endpoints[1].out_clusters[OnOff.cluster_id]
-        await cluster.command(OnOff.Commands.Toggle)
+        asyncio.run(cluster.command(OnOff.Commands.Toggle))
         print(f"Message sent: {message}")
 
     async def receive_message(self):
@@ -133,7 +144,7 @@ class ThisDevice:
             while True:
                 target_ieee = '00:11:22:33:44:55:66:77'  # would using the IEEE number work with how our protocol is currently set up?
                 await self.send_message(target_ieee, "Toggle command")
-                await asyncio.sleep(5)
+                time.sleep(5)
         else:
             print("No devices discovered")
 
