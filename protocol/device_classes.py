@@ -1,3 +1,4 @@
+import os
 import time
 from message_classes import Message, Action
 from abstract_network import AbstractTransceiver
@@ -112,6 +113,7 @@ class ThisDevice(Device):
         self.received: int | None = None  # will be an int representation of message
         self.transceiver: AbstractTransceiver = transceiver  # plugin object for sending and receiving messages
         self.numHeardDLIST: int = 0
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         self.outPath = OUTPUT_DIR / ("device_log_" + str(self.id) + ".csv")
         self.active = True
 
