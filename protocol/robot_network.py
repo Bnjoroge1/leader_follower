@@ -20,6 +20,13 @@ class RobotNode(AbstractNode):
     def receive_message(self):
         return self.transceiver.receive()
 
+# notes from 9/16 meeting
+# queue is not necessary
+# subclass zigpy's send function with transciever --> review simulation_network to see how the simulated transciever sends messages
+# use asyncio for sync messages that block main thread --> something along the lines of self.recieve wrapped in asyncio call
+# outgoing and incoming channels not needed
+# replace logging with print statements
+
 class RobotTransceiver(AbstractTransceiver):
     def __init__(self, zigbee_channel: int, active: multiprocessing.Value):
         super().__init__()
@@ -74,14 +81,11 @@ def main():
     zigbee_channel = 15 # zigbee supposedly has channels 11-26, each corresponding to a specific 2.4GHz frequency for sending messages
 
     transceiver = RobotTransceiver(zigbee_channel=zigbee_channel, active=active)
-    node = RobotNode(name="Robot", transceiver=transceiver) # ask dhilan and kayleigh if I need a separate node for each of the 5 robots?
 
     transceiver.initialize_zigbee()
 
-    node.send_message("Test message")
-    message = node.receive_message()
-
-    print(f"Message Recieved: {message}")
+    # implement zigpy send function here
+    transceiver.send_message("Test message")
 
     # ask dhilan and kayleigh if this method adheres to the synchronous heartbeats discussed?
 
