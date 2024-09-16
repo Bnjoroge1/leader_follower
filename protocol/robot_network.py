@@ -5,8 +5,9 @@ from typing import Dict
 from abstract_network import AbstractNode, AbstractTransceiver
 
 import zigpy
-from zigpy.zdo.types import LogicalType
-from zigpy.zcl.clusters.general import OnOff
+import asyncio
+from collections import deque
+import queue as q
 
 class RobotNode(AbstractNode):
     def __init__(self, name: str, transceiver: "RobotTransceiver"):
@@ -20,51 +21,69 @@ class RobotNode(AbstractNode):
         return self.transceiver.receive()
 
 class RobotTransceiver(AbstractTransceiver):
-    def __init__(self, zigbee_channel: int):
+    def __init__(self, zigbee_channel: int, active: multiprocessing.Value):
         super().__init__()
         self.zigbee_channel = zigbee_channel
-        self.zigbee_network = None  
+        self.active = active # used for device deactivation 
+        self.logQ = deque()
+        self.outgoing_channels = {}
+        self.incoming_channels = {}
+
 
     def initialize_zigbee(self):
-        # this should initialize zigbee network
+        # TODO: initialize zigbee network
         self.zigbee_network = zigpy.zigbee.api.zigbee_device(zigbee_channel=self.zigbee_channel)
         self.zigbee_network.startup()
 
-        # set the node type based on whether it's the leader or follower --> testing purposes only
-        if self.zigbee_network.is_coordinator:
-            self.node_type = "Leader"
-        else:
-            self.node_type = "Follower"
-
     def send(self, message: str):
-        self.zigbee_network.send_message(message)
+        # each message gets logged and then sent to network
+        self.logQ.appendleft(message)
+        print(f"Sending message: {message}")
+        for queue in self.outgoing_channels.values():
+            queue.put(message)
 
     def receive(self):
-        return self.zigbee_network.receive_message()
+        # recieving messages from queue
+        for queue in self.incoming_channels.values():
+            try:
+                msg = queue.get(timeout=0.1)
+                print(f"Received message: {msg}")
+                return msg
+            except q.Empty:
+                pass
+        return ""
+    
+    def set_outgoing_channel(self, node_id, queue: q.Queue):
+        self.outgoing_channels[node_id] = queue
+
+    def set_incoming_channel(self, node_id, queue: q.Queue):
+        self.incoming_channels[node_id] = queue
+
+    def activate(self):
+        self.active.value = 1
+
+    def deactivate(self):
+        self.active.value = 0
+
+    def check_status(self):
+        return self.active.value
+    
+
+def main():
+    active = multiprocessing.Value('i', 1) # activate the transciever
+    zigbee_channel = 15 # zigbee supposedly has channels 11-26, each corresponding to a specific 2.4GHz frequency for sending messages
+
+    transceiver = RobotTransceiver(zigbee_channel=zigbee_channel, active=active)
+    node = RobotNode(name="Robot", transceiver=transceiver) # ask dhilan and kayleigh if I need a separate node for each of the 5 robots?
+
+    transceiver.initialize_zigbee()
+
+    node.send_message("Test message")
+    message = node.receive_message()
+
+    print(f"Message Recieved: {message}")
+
+    # ask dhilan and kayleigh if this method adheres to the synchronous heartbeats discussed?
 
 if __name__ == "__main__":
-    # setup Zigbee transceivers and nodes
-    leader_transceiver = RobotTransceiver(zigbee_channel=15)
-    leader_node = RobotNode("Leader", leader_transceiver)
-
-    follower1_transceiver = RobotTransceiver(zigbee_channel=15)
-    follower1_node = RobotNode("Follower1", follower1_transceiver)
-
-    follower2_transceiver = RobotTransceiver(zigbee_channel=15)
-    follower2_node = RobotNode("Follower2", follower2_transceiver)
-
-    follower3_transceiver = RobotTransceiver(zigbee_channel=15)
-    follower3_node = RobotNode("Follower3", follower3_transceiver)
-
-    # initialize Zigbee networks --> only testing with 4 modules for now
-    leader_transceiver.initialize_zigbee()
-    follower1_transceiver.initialize_zigbee()
-    follower2_transceiver.initialize_zigbee()
-    follower3_transceiver.initialize_zigbee()
-
-    leader_node.send_message("Sending from leader: hi followers!")
-
-    # message reception
-    print(f"Follower1 received: {follower1_node.receive_message()}")
-    print(f"Follower2 received: {follower2_node.receive_message()}")
-    print(f"Follower3 received: {follower3_node.receive_message()}")
+    main()
