@@ -1,3 +1,4 @@
+import os
 import time
 import network_harness as hn
 import csv
@@ -28,7 +29,7 @@ def test_tiebreaker_protocol():
 
     normal_node.stop()
     rogue_node.stop()
-
+    os.makedirs('output', exist_ok=True)  #creates output folder if it doesn't exist
     normal_log = f'output/device_log_{normal_node_id}.csv'
     rogue_log = f'output/device_log_{rogue_node_id}.csv'
 
