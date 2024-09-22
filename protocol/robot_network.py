@@ -22,13 +22,6 @@ class RobotNode(AbstractNode):
     def receive_message(self):
         return self.transceiver.receive()
 
-# notes from 9/16 meeting
-# queue is not necessary
-# subclass zigpy's send function with transciever --> review simulation_network to see how the simulated transciever sends messages
-# use asyncio for sync messages that block main thread --> something along the lines of self.recieve wrapped in asyncio call
-# outgoing and incoming channels not needed
-# replace logging with print statements
-
 class RobotTransceiver(AbstractTransceiver):
     def __init__(self, zigbee_channel: int, active: multiprocessing.Value):
         super().__init__()
