@@ -206,6 +206,7 @@ class ThisDevice(Device):
         print("Assuming position of leader")
         self.make_leader()
         self.leader_id = self.id
+        print(f"Device {self.id} set as leader with leader_id {self.leader_id}")
         self.device_list.add_device(id=self.id, task=1)  # put itself in devicelist with first task
         self.leader_send_attendance()
 

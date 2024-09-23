@@ -74,13 +74,40 @@ def test_tiebreaker_protocol():
                 print('failed basic tiebreak', normal_tiebreak_hit, rogue_tiebreak_hit, correct_follower_chosen, correct_leader_chosen)
 
 
+def test_tiebreaker_protocol_multiple_nodes():
+    net = hn.Network()
+    nodes = [hn.Node(i) for i in range(1, 6)]  # Create 5 nodes
+    for node in nodes:
+        net.add_node(node.node_id, node)
+
+    for i in range(len(nodes) - 1):
+        net.create_channel(nodes[i].node_id, nodes[i + 1].node_id) 
+
+    for node in nodes:
+        node.start()
+
+    time.sleep(10)
+
+    for node in nodes:
+        node.stop()
+
+    leader_id = max(node.thisDevice.get_id() for node in nodes)  # Find the highest ID to be the leader
+    for node in nodes:
+        log_file = f'output/device_log_{node.thisDevice.get_id()}.csv'
+        with open(log_file, newline='') as log:
+            reader = csv.reader(log, dialect='excel')
+            for row in reader:
+                if row[2] == 'BECAME LEADER':
+                    assert node.thisDevice.get_id() == leader_id
+                elif row[2] == 'BECAME FOLLOWER':
+                    assert node.thisDevice.get_id() != leader_id
+
 
 
 
 
 def main():
     test_tiebreaker_protocol()
-
-
+    test_tiebreaker_protocol_multiple_nodes()
 if __name__ == "__main__":
     main()
