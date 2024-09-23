@@ -1,3 +1,4 @@
+import time
 import device_classes as dc
 import multiprocessing
 import queue as q
@@ -174,10 +175,11 @@ class SimulationTransceiver(AbstractTransceiver):
             self.stay_active()
             return Message.ACTIVATE
         # print(self.incoming_channels.keys())
+        end_time = time.time() + timeout #changing from per-queue timeout to overall wall timeout.
         for id, queue in self.incoming_channels.items():
             try:
-                msg = queue.get(timeout=timeout)
-                # print("Message", msg, "gotton from", id)
+                msg = queue.get_nowait()  #Non-blocking get - basically same as get(False)
+                print("Message", msg, "gotton from device", id, "waited", timeout, "seconds")
                 try:
                     asyncio.run(self.notify_server(f"RCVD,{self.parent.node_id}"))
                 except OSError:
@@ -185,6 +187,7 @@ class SimulationTransceiver(AbstractTransceiver):
                 return msg
             except q.Empty:
                 pass
+            time.sleep(0.01) #sleep for 10ms to avoid busy-waiting
         return None
 
     def clear(self):
