@@ -131,6 +131,8 @@ class SimulationTransceiver(AbstractTransceiver):
         self.parent = parent
         self.active: multiprocessing.Value = active  # can activate or deactivate device with special message
         self.logQ = deque()
+        self.websocket = None
+        self.websocket_task = None
 
     def log(self, data: str):
         """ Method for protocol to load aux data into transceiver """
