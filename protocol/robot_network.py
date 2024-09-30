@@ -34,16 +34,25 @@ class RobotTransceiver(AbstractTransceiver):
         # self.zigbee_network = zigpy.zigbee.api.zigbee_device(zigbee_channel=self.zigbee_channel)
         # self.zigbee_network.startup()
 
-        self.app = zigpy.application.ControllerApplication()
-        self.app.startup(auto_form=True, channel=self.zigbee_channel)
+        # self.app = zigpy.application.ControllerApplication()
+        # self.app.startup(auto_form=True, channel=self.zigbee_channel)
 
-    def send(self, ieee: str, message: str):
+        loop = asyncio.get_event_loop()
+        self.app = loop.run_until_complete(zigpy.application.ControllerApplication.new())
+        loop.run_until_complete(self.app.startup(auto_form=True, channel=self.zigbee_channel))
+        print(f"Zigbee network started on channel {self.zigbee_channel}.")
+        print(f"PAN ID: {self.app.pan_id}, Extended PAN ID: {self.app.extended_pan_id}")
+
+    def send(self, message: str):
+        # sends broadcast messages to all devices on network, not based on IEEE
         if self.app:
-            device = self.app.get_device(ieee)
-            if device:
-                self.logQ.appendleft(message)
-                print(f"Sending message: {message}")
-                device.request(
+            # update nwk key after network is created on one of the transcievers
+            broadcast_address = zigpy.types.Address(ieee=None, nwk=0xFFFF)
+            print(f"Sending message: {message}")
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(
+                self.app.request(
+                    broadcast_address,
                     profile=0x0104,
                     cluster=0x0006,
                     src_ep=1,
@@ -52,14 +61,16 @@ class RobotTransceiver(AbstractTransceiver):
                     data=message.encode(),
                     expect_reply=False
                 )
+            )
 
 
     def receive(self):
         if self.app:
             try:
-                message = self.app._radio.receive()
-                ieee = message.src.ieee
-                print(f"Received message from {ieee}: {message.data.decode()}")
+                listener = self.app.add_listener("device_message")
+                loop = asyncio.get_event_loop()
+                message = loop.run_until_complete(listener.wait_for_message())
+                print(f"Received message: {message.data}")
                 return message.data.decode()
             except Exception as e:
                 print(f"Error receiving message: {e}")
@@ -82,7 +93,6 @@ def main():
     transceiver = RobotTransceiver(zigbee_channel=zigbee_channel, active=active)
     transceiver.initialize_zigbee()
 
-    # implement zigpy send function here
     transceiver.send_message("Test message")
 
     asyncio.run(transceiver.receive())
