@@ -1,3 +1,49 @@
+## Testing on RPI3
+# ERROR 1
+# successfully reset the baudrates on RPI1 and RPI3, setup the network on RPI1, and permit joins on RPI1
+
+(venv) pi@raspberrypi1:~/Desktop/dev/zigpy $ zigpy radio ezsp /dev/ttyACM0 permit -t 60
+(venv) pi@raspberrypi3:~/Desktop/zigpy $ zigpy radio ezsp /dev/ttyACM0 info
+Traceback (most recent call last):
+  File "/home/pi/.local/bin/zigpy", line 8, in <module>
+    sys.exit(cli())
+  File "/usr/lib/python3/dist-packages/click/core.py", line 829, in __call__
+    return self.main(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/click/core.py", line 782, in main
+    rv = self.invoke(ctx)
+  File "/usr/lib/python3/dist-packages/click/core.py", line 1259, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+  File "/usr/lib/python3/dist-packages/click/core.py", line 1259, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+  File "/usr/lib/python3/dist-packages/click/core.py", line 1066, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/usr/lib/python3/dist-packages/click/core.py", line 610, in invoke
+    return callback(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/click/decorators.py", line 33, in new_func
+    return f(get_current_context().obj, *args, **kwargs)
+  File "/home/pi/.local/lib/python3.9/site-packages/zigpy_cli/cli.py", line 20, in inner
+    return loop.run_until_complete(cmd(*args, **kwargs))
+  File "/usr/lib/python3.9/asyncio/base_events.py", line 642, in run_until_complete
+    return future.result()
+  File "/home/pi/.local/lib/python3.9/site-packages/zigpy_cli/radio.py", line 83, in info
+    await app.load_network_info(load_devices=False)
+  File "/home/pi/.local/lib/python3.9/site-packages/bellows/zigbee/application.py", line 240, in load_network_info
+    await self._ensure_network_running()
+  File "/home/pi/.local/lib/python3.9/site-packages/bellows/zigbee/application.py", line 174, in _ensure_network_running
+    raise NetworkNotFormed("Node is not part of a network")
+zigpy.exceptions.NetworkNotFormed: Node is not part of a network
+
+# ERROR 2
+# this occurs on any RPI device when using bellows commands:
+
+(venv) pi@raspberrypi1:~/Desktop/dev/zigpy $ bellows info --device /dev/ttyACM0
+Usage: bellows [OPTIONS] COMMAND [ARGS]...
+Try 'bellows --help' for help.
+
+Error: Missing option '-d' / '--device'.
+
+
+## Testing on RPI2: Concluded that there is a hardware issue on this device
 # ERROR 1
 # this only occurs on RPI2; no issues on RPI1
 
