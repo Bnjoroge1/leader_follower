@@ -76,45 +76,6 @@ class MainQuadrantMovementFixedSelection:
         elif self.last_detected_tag == 3:
             self.turn_left()
 
-    # def align_with_tag(self, tag):
-    #     aligned = False
-    #     while self.running and not aligned:
-    #         img = self.camera.frame
-    #         if img is None or img.size == 0:
-    #             continue
-
-    #         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    #         tags = self.detector.detect(gray)
-
-    #         for detected_tag in tags:
-    #             if detected_tag.tag_id == tag:
-    #                 # calculates misalignment (offset) from center
-    #                 tag_center_x = detected_tag.center[0]
-    #                 print("Tag Center X: " + str(tag_center_x))
-    #                 frame_center_x = img.shape[1] / 2
-    #                 print("Frame Center X: " + str(frame_center_x))
-    #                 offset = tag_center_x - frame_center_x
-                    
-    #                 print("Waiting for re-calibration")
-    #                 time.sleep(0.5)
-    #                 if abs(offset) > 20:  # toleranace threshold
-    #                     if offset > 0:
-    #                         self.car.set_velocity(0, 90, 0.25)
-    #                         print("Offset: " + str(offset))
-    #                         time.sleep(0.1)
-    #                     else:
-    #                         self.car.set_velocity(0, 90, -0.25)
-    #                         time.sleep(0.1)
-    #                     time.sleep(0.1)
-    #                 else:
-    #                     aligned = True
-    #                     self.car.set_velocity(0, 90, 0)
-    #                     time.sleep(0.2)  
-    #                     print("Completed Tag Alignment!")
-    #                     break
-
-    #     return aligned
-
     # working version
     def align_with_tag(self, tag):
         aligned = False

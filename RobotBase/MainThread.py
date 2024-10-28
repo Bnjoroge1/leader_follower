@@ -118,7 +118,8 @@ class MainThread:
 
         return aligned
 
-    def run(self):
+    def run(self, quadrant_num):
+        print("Quadrant Number: " + quadrant_num)
         try:
             stop_signal = False
             while not stop_signal:
