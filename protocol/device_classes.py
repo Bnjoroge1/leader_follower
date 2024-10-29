@@ -145,7 +145,7 @@ class ThisDevice(Device):
         end_time = time.time() + duration
         while time.time() < end_time:
             self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
-            if self.received == Message.DEACTIVATE:
+            if self.leader and self.received == Message.DEACTIVATE:
                 print("Device got deactivated by user")
                 self.active = False
                 self.make_follower()  # essentially wipe data
