@@ -124,11 +124,11 @@ class ChannelQueue:
 # similar implementation to send/receive calling transceiver functions
 class SimulationTransceiver(AbstractTransceiver):
 
-    def __init__(self, parent: SimulationNode, active: multiprocessing.Value):
+    def __init__(self, parent: SimulationNode, active: multiprocessing.Value):  # type: ignore
         self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
         self.incoming_channels = {}
         self.parent = parent
-        self.active: multiprocessing.Value = active  # can activate or deactivate device with special message
+        self.active: multiprocessing.Value = active  # type: ignore (can activate or deactivate device with special message)
         self.logQ = deque()
 
     def log(self, data: str):
