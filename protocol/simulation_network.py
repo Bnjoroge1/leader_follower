@@ -11,7 +11,7 @@ from collections import deque
 
 class SimulationNode(AbstractNode):
 
-    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):
+    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
         self.node_id = node_id
         self.transceiver = SimulationTransceiver(parent=self, active=active)
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
