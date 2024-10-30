@@ -9,6 +9,7 @@ import threading
 from message_classes import Message
 from collections import deque
 
+
 class SimulationNode(AbstractNode):
 
     def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
@@ -26,26 +27,14 @@ class SimulationNode(AbstractNode):
         else:
             self.process = multiprocessing.Process(target=target_func)
 
-    async def async_init(self):  # SimulationTransceiver
-        await self.transceiver.websocket_client()
-
-    def start(self):
-        self.process.start()
-
-    def stop(self):
-        # terminate will kill process so I don't think we need to join after - this can corrupt shared data
-        self.process.terminate()
-        # self.process.join()
-
-    def join(self):
-        # not sure if needed for protocol, but was used during testing
-        self.process.join()
-
     def set_outgoing_channel(self, target_node_id, queue):
         self.transceiver.set_outgoing_channel(target_node_id, queue)
 
     def set_incoming_channel(self, target_node_id, queue):
         self.transceiver.set_incoming_channel(target_node_id, queue)
+
+    async def async_init(self):  # SimulationTransceiver
+        await self.transceiver.websocket_client()
 
 
 class Network:
@@ -211,8 +200,6 @@ class SimulationTransceiver(AbstractTransceiver):
                     queue.get_nowait()
                 except q.Empty:
                     pass
-    
-    # TODO: error handling to make server connection optional
 
     # websocket client to connect to server.js and interact with injections
     async def websocket_client(self):
@@ -238,3 +225,4 @@ class SimulationTransceiver(AbstractTransceiver):
         uri = "ws://localhost:3000"  # server.js websocket server
         async with websockets.connect(uri) as websocket:
             await websocket.send(message)
+            

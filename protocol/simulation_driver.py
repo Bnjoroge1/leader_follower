@@ -5,6 +5,7 @@ import itertools
 import asyncio
 from copy import copy
 from abstract_driver import AbstractDriver
+from abstract_network import AbstractNode
 
 
 class SimulationDriver(AbstractDriver):
@@ -36,9 +37,10 @@ class SimulationDriver(AbstractDriver):
         visualizer = NetworkVisualizer()
         visualizer.ui_main()
 
-        # starts each task - connects websockets to server..js before protocol starts
+        # starts each task - connects websockets to server.js before protocol starts
         started_tasks = [asyncio.create_task(task) for task in init_tasks]
 
+        node: AbstractNode
         for node in nodes:
             time.sleep(5)  # intentional synchronous delay
             node.start()
