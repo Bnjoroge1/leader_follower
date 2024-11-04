@@ -9,14 +9,16 @@ import websockets
 import threading
 from message_classes import Message
 from collections import deque
-
+import hashlib
 
 class SimulationNode(AbstractNode):
 
     def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
         self.node_id = node_id
         self.transceiver = SimulationTransceiver(parent=self, active=active)
+        self.SECRET_KEY = "secret_key"
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
+        #self.thisDevice = dc.ThisDevice(self.generate_device_id(node_id), self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
@@ -27,6 +29,32 @@ class SimulationNode(AbstractNode):
             self.process = multiprocessing.Process(target=target_func, args=target_args)
         else:
             self.process = multiprocessing.Process(target=target_func)
+    def generate_device_id(self, node_id):
+        # Combine node_id and secret key
+        input_string = f"{self.SECRET_KEY}{node_id}"
+        
+        # Generate SHA-256 hash
+        hash_object = hashlib.sha256(input_string.encode())
+        hash_hex = hash_object.hexdigest()
+        
+        # Truncate to 64 bits (16 hexadecimal characters)
+        device_id = int(hash_hex[:16], 16)
+        
+        return device_id
+    async def async_init(self):  # SimulationTransceiver
+        await self.transceiver.websocket_client()
+
+    def start(self):
+        self.process.start()
+
+    def stop(self):
+        # terminate will kill process so I don't think we need to join after - this can corrupt shared data
+        self.process.terminate()
+        # self.process.join()
+
+    def join(self):
+        # not sure if needed for protocol, but was used during testing
+        self.process.join()
 
     def set_outgoing_channel(self, target_node_id, queue):
         self.transceiver.set_outgoing_channel(target_node_id, queue)
