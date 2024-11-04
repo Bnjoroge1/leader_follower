@@ -31,7 +31,6 @@ async def main():
 
     visualizer = NetworkVisualizer()
     visualizer.ui_main()
-    print("Nodes:", nodes)
     # starts each task - connects websockets to server..js before protocol starts
     started_tasks = [asyncio.create_task(task) for task in init_tasks]
     print("started tasks", started_tasks)
