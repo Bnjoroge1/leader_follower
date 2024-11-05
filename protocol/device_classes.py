@@ -1,3 +1,7 @@
+'''
+Modified device_classes for test_harness
+'''
+import os
 import time
 from message_classes import Message, Action
 from abstract_network import AbstractTransceiver
@@ -115,6 +119,7 @@ class ThisDevice(Device):
         self.received: int | None = None  # will be an int representation of message
         self.transceiver: AbstractTransceiver = transceiver  # plugin object for sending and receiving messages
         self.numHeardDLIST: int = 0
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         self.outPath = OUTPUT_DIR / ("device_log_" + str(self.id) + ".csv")
         self.active = True
 
@@ -146,7 +151,7 @@ class ThisDevice(Device):
         end_time = time.time() + duration
         while time.time() < end_time:
             self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
-            if self.received == Message.DEACTIVATE:
+            if self.leader and self.received == Message.DEACTIVATE:
                 print("Device got deactivated by user")
                 self.active = False
                 self.make_follower()  # essentially wipe data
@@ -394,51 +399,235 @@ class ThisDevice(Device):
         self.csvWriter.writerow([str(time.time()), 'STATUS', status])
         self.file.flush()
 
-    def leader_send_task_start(self, task, devices):
-        """
-        Leader sends task start which updates its own device list then send this out.
-        After device list sent, leader sends updated tasks
+    # START TEST HARNESS FUNCTIONS
+
+    def make_follower(self):
+        super().make_follower()
+        self.log_status("BECOMING FOLLOWER")
+    
+    def make_leader(self):
+        super().make_leader()
+        self.log_status("BECOMING LEADER")
         
-        Parameters Documentation:
-        task (str): Robot task to be started.
-        devices (list): List of device IDs to be assigned to the task.
-        """     
-        self.log_status("LEADER SENDING TASK START")
+    def test_setup_leader_only_sends_attendance(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
 
-        for device_id in devices:
-            self.device_list.update_task(device_id, task)
+            self.make_leader()
+            # only send once
+            self.leader_send_attendance()
 
-        self.leader_send_device_list()
+    def test_setup_follower_send_att_response(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            time.sleep(0.5)
+            self.make_follower()
+            self.send(2, 0, 0, self.id)
 
-        time.sleep(2)
+    def test_setup_leader_send_attendance_after_att_response(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
 
-        for device_id in devices:
-            self.send(action=Action.TASK_START.value, payload=task, leader_id=self.id, follower_id=device_id, duration=2)
+            self.make_leader()
 
-        # this is to check if the leader is part of the devices assigned to task
-        if self.id in devices:
-            self.task = task
-            self.running = True
+            time.sleep(1.5)
+            self.send(1, 0, self.id, 0)
 
-    def follower_handle_task_start(self):
-        """
-        Handle the start of a task.
-        """
+    def test_setup_leader_send_two_d_list(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.make_leader()
+            self.send(3, 1, self.id, 0)
+            time.sleep(0.5)
+            self.send(3, 2, self.id+1, 0)
+            time.sleep(0.5)
+            self.send(1, 0, self.id, 0)
 
-        task_id = self.received_payload()
-        self.set_task(task_id)
-        print(f"Task {task_id} started for device {self.id}")
-        self.log_status(f"TASK {task_id} STARTED")
-        # TODO: Run driver class which will use the robot mecanum class & line following class to navigate to assigned quadrant
+    def test_setup_leader_send_check_in(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.make_leader()
+            self.send(4, 0, self.id, self.id+1)
+            time.sleep(0.4)
+            self.send(1, 0, self.id, 0)
 
-    def handle_task_stop(self):
-        """
-        Handle the stop of a task.
-        """
-        self.set_task(0)
-        print(f"Task stopped for device {self.id}")
-        self.log_status("TASK STOPPED")
-        # TODO: Call on mecanum class & line follower class (the one that traces perimeter) to return robot back to the standy area
+    def test_setup_leader_send_delete(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.make_leader()
+            self.send(5, 0, self.id, self.id+1)
+            time.sleep(0.4)
+            self.send(1, 0, self.id, 0)
+    
+    def test_setup_leader_wait_max_time(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.make_leader()
+            time.sleep(PROVEN_MAX_WAIT_TIME)
+            self.send(3, 0, self.id, self.id+1)
+    
+    def test_setup_leader_drop_after_sending_d_list(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.make_leader()
+            self.send(3, 0, self.id, self.id+1)
+
+    def test_attendance_add_device_follower(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.make_follower()
+            while not self.receive(5, 1):
+                continue
+            self.send(2, 0, self.received_leader_id(), self.id)
+            while True:
+                self.receive(3)
+
+    def test_attendance_invalid_msg_att(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.setup()
+            if self.receive(15, 1):
+                self.send(1, 0, self.leader_id, self.id)
+
+    def test_attendance_invalid_msg_d_list(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.setup()
+            if self.receive(15, 1):
+                self.send(3, 0, self.leader_id, self.id)
+
+    def test_attendance_invalid_msg_check_in(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.setup()
+            if self.receive(15, 1):
+                self.send(4, 0, self.leader_id, self.id)
+
+    def test_attendance_invalid_msg_delete(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.setup()
+            if self.receive(15, 1):
+                self.send(5, 0, self.leader_id, self.id)
+                
+    def test_check_in_rogue_device(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            
+            while self.receive(10):
+                if self.received_action() == 4:
+                    self.send(4, 0, self.received_leader_id(), self.id)
+                    
+    def test_check_in_delayed_correct_follower(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            # format is TIME, TYPE (STATUS, SENT, RECEIVED), CONTENT (<MSG>, <STATUS UPDATE>)
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            
+            print("Starting main on device " + str(self.id))
+            # create device object
+            self.setup()
+            
+            while True:
+                #self.transceiver.log("FOLLOWER")
+                # print("Device:", self.id, self.leader, "\n", self.device_list)
+                if not self.receive(duration=TAKEOVER_DURATION):
+                    print("Is there anybody out there?")
+                    self.make_leader()
+                    continue
+                elif abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:  # account for loss of precision
+                    # print(self.received_leader_id())
+                    # print(self.leader_id)
+                    # print("CONTINUE")
+                    continue  # message was not from this device's leader - ignore
+
+                action = self.received_action()
+                # print(action)
+
+                # messages for all followers
+                match action:
+                    case Action.ATTENDANCE.value:
+                        # prevents deadlock between leader-follower first attendance state
+                        if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
+                            self.follower_handle_attendance()
+                            self.numHeardDLIST = 0
+                    case Action.CHECK_IN.value:
+                        time.sleep(0.3)
+                        if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
+                            print("Follower", self.id, "heard directed check-in")
+                            self.follower_respond_check_in()
+                        else:
+                            self.log_status(f"IGNORED: {self.received_follower_id()}")
+                            continue  # not necessary?
+                    case Action.DELETE.value:
+                        self.follower_drop_disconnected()  # even if self is wrongly deleted
+                        # that will be handled later in Action.ATTENDANCE.value
+                    case Action.D_LIST.value:
+                        self.follower_handle_dlist()
+                        self.numHeardDLIST += 1
+                        
+    def test_check_in_att_from_wrong_follower(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            
+            while self.receive(10):
+                if self.received_action() == 4:
+                    self.send(1, 0, self.received_leader_id(), self.id)
+    
+    def test_check_in_att_response_from_wrong_follower(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            
+            while self.receive(10):
+                if self.received_action() == 4:
+                    self.send(2, 0, self.received_leader_id(), self.id)
+    
+    def test_check_in_delete_from_wrong_follower(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            
+            while self.receive(10):
+                if self.received_action() == 4:
+                    self.send(3, 0, self.received_leader_id(), self.id)
+    
+    def test_check_in_d_list_from_wrong_follower(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            
+            while self.receive(10):
+                if self.received_action() == 4:
+                    self.send(4, 0, self.received_leader_id(), self.id)
+    
+    def test_takeover_leader_sends_one_message(self):
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.make_leader()
+            self.send(3, 0, self.id, self.id+1)
+            
+    def test_tiebreak_conflicting_leader_sends_after_attendance(self):
+        self.leader = True
+        if self.receive(10, 1):
+            self.leader_send_attendance()
+
+        if self.get_leader():
+            self.log_status("BECAME LEADER")
+
+        if not self.get_leader():
+            self.log_status("BECAME FOLLOWER")
+    
+    def test_tiebreak_conflicting_leader_sends_after_check_in(self):
+        self.leader = True
+        if self.receive(10, 4):
+            self.leader_send_attendance()
+
+        if self.get_leader():
+            self.log_status("BECAME LEADER")
+
+        if not self.get_leader():
+            self.log_status("BECAME FOLLOWER")
+    
+    
+
+    # END TEST HARNESS FUNCTIONS
 
 
     # TODO: print log to individual files

@@ -11,7 +11,7 @@ async def main():
     :return:
     """
     # startup
-    num_devices = 2
+    num_devices = 4
     network = Network()
     nodes = []
     init_tasks = []
@@ -31,9 +31,9 @@ async def main():
 
     visualizer = NetworkVisualizer()
     visualizer.ui_main()
-
     # starts each task - connects websockets to server..js before protocol starts
     started_tasks = [asyncio.create_task(task) for task in init_tasks]
+    print("started tasks", started_tasks)
 
     for node in nodes:
         time.sleep(5)  # intentional synchronous delay

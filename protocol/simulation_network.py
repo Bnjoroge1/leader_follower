@@ -1,3 +1,4 @@
+import time
 import device_classes as dc
 import multiprocessing
 import queue as q
@@ -8,13 +9,16 @@ import websockets
 import threading
 from message_classes import Message
 from collections import deque
+import hashlib
 
 class SimulationNode(AbstractNode):
 
-    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):
+    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
         self.node_id = node_id
         self.transceiver = SimulationTransceiver(parent=self, active=active)
+        self.SECRET_KEY = "secret_key"
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
+        #self.thisDevice = dc.ThisDevice(self.generate_device_id(node_id), self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
@@ -25,7 +29,18 @@ class SimulationNode(AbstractNode):
             self.process = multiprocessing.Process(target=target_func, args=target_args)
         else:
             self.process = multiprocessing.Process(target=target_func)
-
+    def generate_device_id(self, node_id):
+        # Combine node_id and secret key
+        input_string = f"{self.SECRET_KEY}{node_id}"
+        
+        # Generate SHA-256 hash
+        hash_object = hashlib.sha256(input_string.encode())
+        hash_hex = hash_object.hexdigest()
+        
+        # Truncate to 64 bits (16 hexadecimal characters)
+        device_id = int(hash_hex[:16], 16)
+        
+        return device_id
     async def async_init(self):  # SimulationTransceiver
         await self.transceiver.websocket_client()
 
@@ -46,6 +61,9 @@ class SimulationNode(AbstractNode):
 
     def set_incoming_channel(self, target_node_id, queue):
         self.transceiver.set_incoming_channel(target_node_id, queue)
+
+    async def async_init(self):  # SimulationTransceiver
+        await self.transceiver.websocket_client()
 
 
 class Network:
@@ -124,11 +142,11 @@ class ChannelQueue:
 # similar implementation to send/receive calling transceiver functions
 class SimulationTransceiver(AbstractTransceiver):
 
-    def __init__(self, parent: SimulationNode, active: multiprocessing.Value):
+    def __init__(self, parent: SimulationNode, active: multiprocessing.Value):  # type: ignore
         self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
         self.incoming_channels = {}
         self.parent = parent
-        self.active: multiprocessing.Value = active  # can activate or deactivate device with special message
+        self.active: multiprocessing.Value = active  # type: ignore (can activate or deactivate device with special message)
         self.logQ = deque()
 
     def log(self, data: str):
@@ -185,10 +203,11 @@ class SimulationTransceiver(AbstractTransceiver):
             self.stay_active()
             return Message.ACTIVATE
         # print(self.incoming_channels.keys())
+        end_time = time.time() + timeout #changing from per-queue timeout to overall wall timeout.
         for id, queue in self.incoming_channels.items():
             try:
-                msg = queue.get(timeout=timeout)
-                # print("Message", msg, "gotton from", id)
+                msg = queue.get_nowait()  #Non-blocking get - basically same as get(False)
+                print("Message", msg, "gotton from device", id, "waited", timeout, "seconds")
                 try:
                     asyncio.run(self.notify_server(f"RCVD,{self.parent.node_id}"))
                 except OSError:
@@ -196,6 +215,7 @@ class SimulationTransceiver(AbstractTransceiver):
                 return msg
             except q.Empty:
                 pass
+            time.sleep(0.01) #sleep for 10ms to avoid busy-waiting
         return None
 
     def clear(self):
@@ -211,8 +231,6 @@ class SimulationTransceiver(AbstractTransceiver):
                     queue.get_nowait()
                 except q.Empty:
                     pass
-    
-    # TODO: error handling to make server connection optional
 
     # websocket client to connect to server.js and interact with injections
     async def websocket_client(self):
@@ -238,3 +256,4 @@ class SimulationTransceiver(AbstractTransceiver):
         uri = "ws://localhost:3000"  # server.js websocket server
         async with websockets.connect(uri) as websocket:
             await websocket.send(message)
+            
