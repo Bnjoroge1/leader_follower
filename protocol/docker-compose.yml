@@ -1,4 +1,5 @@
-version: '1.25.0'
+# version: '1.25.0'
+version: '3.3'
 services:
     mqtt:
         image: eclipse-mosquitto:2.0
@@ -18,7 +19,8 @@ services:
             - ./zigbee2mqtt-data:/app/data
             - /run/udev:/run/udev:ro
         ports:
-            - 8080:8080
+            - 8081:8080
+            # - 8080:8080
         environment:
             - TZ=America/Los_Angeles
         devices:

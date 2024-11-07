@@ -1,0 +1,22 @@
+[2024-11-07 02:22:23] info: 	z2m: Logging to console, file (filename: log.log)
+[2024-11-07 02:22:23] info: 	z2m: Starting Zigbee2MQTT version 1.41.0 (commit #cc31cea)
+[2024-11-07 02:22:23] info: 	z2m: Starting zigbee-herdsman (2.1.7)
+[2024-11-07 02:22:24] warning: 	zh:ezsp: 'ezsp' driver is deprecated and will only remain to provide support for older firmware (pre 7.4.x). Migration to 'ember' is recommended. If using Zigbee2MQTT see https://github.com/Koenkk/zigbee2mqtt/discussions/21462
+[2024-11-07 02:22:31] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":1} after 4000ms
+[2024-11-07 02:22:31] error: 	zh:ezsp:uart: -!- break waiting (1)
+[2024-11-07 02:22:31] error: 	zh:ezsp:uart: Can't send DATA frame (0,1,0): 1800012800
+[2024-11-07 02:22:32] info: 	zh:ezsp:driv: Leaving current network and forming new network
+[2024-11-07 02:22:33] info: 	zh:ezsp:driv: Form network
+[2024-11-07 02:22:34] info: 	zh:controller: Wrote coordinator backup to '/app/data/coordinator_backup.json'
+[2024-11-07 02:22:34] info: 	z2m: zigbee-herdsman started (reset)
+[2024-11-07 02:22:34] info: 	z2m: Coordinator firmware version: '{"meta":{"maintrel":"3 ","majorrel":"6","minorrel":"10","product":8,"revision":"6.10.3.0 build 297"},"type":"EZSP v8"}'
+[2024-11-07 02:22:34] info: 	z2m: Currently 0 devices are joined.
+[2024-11-07 02:22:34] warning: 	z2m: `permit_join` set to  `true` in configuration.yaml.
+[2024-11-07 02:22:34] warning: 	z2m: Allowing new devices to join.
+[2024-11-07 02:22:34] warning: 	z2m: Set `permit_join` to `false` once you joined all devices.
+[2024-11-07 02:22:34] info: 	z2m: Zigbee: allowing new devices to join.
+[2024-11-07 02:22:34] info: 	z2m: Connecting to MQTT server at mqtt://mqtt
+[2024-11-07 02:22:35] info: 	z2m: Connected to MQTT server
+[2024-11-07 02:22:35] info: 	z2m:mqtt: MQTT publish: topic 'zigbee2mqtt/bridge/state', payload '{"state":"online"}'
+[2024-11-07 02:22:35] info: 	z2m: Started frontend on port 8080
+[2024-11-07 02:22:35] info: 	z2m: Zigbee2MQTT started!
