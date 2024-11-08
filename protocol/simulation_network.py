@@ -18,7 +18,7 @@ class SimulationNode(AbstractNode):
         self.transceiver = SimulationTransceiver(parent=self, active=active)
         self.SECRET_KEY = "secret_key"
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
-        #self.thisDevice = dc.ThisDevice(self.generate_device_id(node_id), self.transceiver)
+        # self.thisDevice = dc.ThisDevice(self.generate_device_id(node_id), self.transceiver)
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
