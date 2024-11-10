@@ -5,7 +5,7 @@ import os
 import time
 from message_classes import Message, Action
 from abstract_network import AbstractTransceiver
-from typing import Dict, List, Set
+from typing import Any, Dict, List, Set
 from pathlib import Path
 import csv
 
@@ -211,11 +211,13 @@ class ThisDevice(Device):
         """
         print("Listening for leader's attendance")
         if self.receive(duration=3):
+            
             if not self.received_action() == Action.ATTENDANCE.value:
                 print("Heard someone, listening for attendance")
                 self.receive(duration=15, action_value=Action.ATTENDANCE.value)
             if self.received_action() == Action.ATTENDANCE.value:
-                print("Heard attedance, becoming follower")             
+                print("Heard attedance, becoming follower")          
+                self.transceiver.parent.trace_point("BECOMING_FOLLOWER")
                 self.make_follower()
                 self.follower_handle_attendance()
                 return  # early exit if follower
@@ -246,7 +248,16 @@ class ThisDevice(Device):
                 print("Leader picked up device", self.received_follower_id())
                 self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
                 self.device_list.add_device(id=self.received_follower_id(), task=task)  # has not assigned task yet
-
+    def get_state(self) -> Dict[str, Any]:
+        """Return serializable state of the device"""
+        return {
+            'device_id': self.id,
+            
+            'leader': self.leader,
+            'received': self.received,
+            'missed': self.missed,
+            'task': self.task
+        }
     def leader_send_device_list(self):
         """
         Helper to leader_send_attendance. Broadcasts message for each new device in network.
@@ -329,7 +340,23 @@ class ThisDevice(Device):
         self.log_status("RESPONDING TO CHECKIN")
         self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=2)
         # sending and receiving is along different channels for Transceiver, so this should not be a problem
-
+    def restore_state(self, state: Dict[str, Any]):
+        """Restores device state from checkpoint"""
+        self.id = state.get('device_id', self.id)
+        self.leader = state.get('leader', self.leader)
+        self.received = state.get('received', self.received)
+        self.missed = state.get('missed', self.missed)
+        self.task = state.get('task', self.task)
+        self.leader_id = state.get('leader_id', self.leader_id)
+        self.leader_started_operating = state.get('leader_started_operating', self.leader_started_operating)
+        self.task_folder_idx = state.get('task_folder_idx', self.task_folder_idx)
+        self.active = state.get('active', self.active)
+        
+        # Restore device list if present
+        if 'device_list' in state:
+            self.device_list.clear()
+            for device_id, device_data in state['device_list'].items():
+                self.device_list.add_device(device_id, device_data['task'])
     def follower_handle_dlist(self):
         """
         Called after follower receives D_LIST action from leader. Updates device list.
