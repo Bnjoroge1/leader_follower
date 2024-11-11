@@ -735,6 +735,8 @@ class ThisDevice(Device):
 
 class DeviceList:
     """ Container for lightweight Device objects, held by ThisDevice. """
+    # confirm leader configurationi during 11/11 meeting
+    task_assignments = [0, 1, 2, 3, 4] #0: leader (connected via UI?); 1-4: quadrants of followers
 
     def __init__(self, num_tasks=8):
         """
@@ -795,12 +797,16 @@ class DeviceList:
         """
         self.task_options = list(range(num_tasks))
 
-    def add_device(self, id: int, task: int):
+    def add_device(self, id: int, task_index: int):
         """
         Creates Device object with id and task, stores in DeviceList.
         :param id: identifier for device, assigned to new Device object.
-        :param task: task for device, assigned to new Device object.
+        :param task_index: index of task for device, assigned to new Device object.
         """
+        if 0 < task_index < len(self.task_assignments):
+            task = self.task_assignments[task_index]
+        else:
+            task = 0
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device
@@ -847,13 +853,18 @@ class DeviceList:
                 reserves.append(d)
         return reserves
 
-    def update_task(self, id: int, task: int):
+    def update_task(self, id: int, task_index: int):
         """
         Reassigns task to target device.
         :param id: identifier for target device.
-        :param task: new task to be assigned to target.
+        :param task_index: index of new task to be assigned to target.
         """
-        self.devices[id].set_task(task)
+        if id in self.devices:
+            if 0 < task_index < len(self.task_assignments):
+                task = self.task_assignments[task_index]
+            else:
+                task = 0
+            self.devices[id].set_task(task)
 
     def get_highest_id(self) -> Device | None:
         """
