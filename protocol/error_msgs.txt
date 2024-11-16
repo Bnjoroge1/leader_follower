@@ -1,1 +1,7 @@
 # reset error file
+
+# tasks from 11/11
+- update tasks_assignments to go from 1-4
+- add call to MainThread.py from device_classes.py
+- send followers tasks and see if there are any issues
+- send timeline / milestones to Dr. Dahbura

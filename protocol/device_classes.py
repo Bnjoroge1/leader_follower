@@ -8,6 +8,7 @@ from abstract_network import AbstractTransceiver
 from typing import Dict, List, Set
 from pathlib import Path
 import csv
+import subprocess
 
 # zigpy imports
 import asyncio
@@ -735,8 +736,7 @@ class ThisDevice(Device):
 
 class DeviceList:
     """ Container for lightweight Device objects, held by ThisDevice. """
-    # confirm leader configurationi during 11/11 meeting
-    task_assignments = [0, 1, 2, 3, 4] #0: leader (connected via UI?); 1-4: quadrants of followers
+    task_assignments = [1, 2, 3, 4] #1: leader defaulted to quadrant 1; 2-4: followers and their respective quadrant #s
 
     def __init__(self, num_tasks=8):
         """
@@ -803,10 +803,11 @@ class DeviceList:
         :param id: identifier for device, assigned to new Device object.
         :param task_index: index of task for device, assigned to new Device object.
         """
-        if 0 < task_index < len(self.task_assignments):
+        if 0 <= task_index < len(self.task_assignments):
             task = self.task_assignments[task_index]
-        else:
-            task = 0
+
+            # call to MainThread.py
+            subprocess.run(["python3", "RobotBase/MainThread.py", str(task)])
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device
@@ -860,7 +861,7 @@ class DeviceList:
         :param task_index: index of new task to be assigned to target.
         """
         if id in self.devices:
-            if 0 < task_index < len(self.task_assignments):
+            if 0 <= task_index < len(self.task_assignments):
                 task = self.task_assignments[task_index]
             else:
                 task = 0

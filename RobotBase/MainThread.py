@@ -210,7 +210,8 @@ class MainThread:
             cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    main = MainThread()
+    quadrant_num = int(sys.argv[1])
+    main = MainThread(quadrant_num)
     main.run()
 
 
