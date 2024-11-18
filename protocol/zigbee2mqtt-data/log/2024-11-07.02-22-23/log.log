@@ -20,3 +20,9 @@
 [2024-11-07 02:22:35] info: 	z2m:mqtt: MQTT publish: topic 'zigbee2mqtt/bridge/state', payload '{"state":"online"}'
 [2024-11-07 02:22:35] info: 	z2m: Started frontend on port 8080
 [2024-11-07 02:22:35] info: 	z2m: Zigbee2MQTT started!
+[2024-11-07 02:32:15] info: 	z2m:mqtt: MQTT publish: topic 'zigbee2mqtt/bridge/state', payload '{"state":"offline"}'
+[2024-11-07 02:32:15] info: 	z2m: Disconnecting from MQTT server
+[2024-11-07 02:32:15] info: 	z2m: Stopping zigbee-herdsman...
+[2024-11-07 02:32:15] info: 	zh:controller: Wrote coordinator backup to '/app/data/coordinator_backup.json'
+[2024-11-07 02:32:15] info: 	z2m: Stopped zigbee-herdsman
+[2024-11-07 02:32:15] info: 	z2m: Stopped Zigbee2MQTT
