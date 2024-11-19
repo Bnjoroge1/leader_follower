@@ -807,7 +807,8 @@ class DeviceList:
             task = self.task_assignments[task_index]
 
             # call to MainThread.py
-            subprocess.run(["python3", "RobotBase/MainThread.py", str(task)])
+            if id == ThisDevice.id:
+                subprocess.run(["python3", "RobotBase/MainThread.py", str(task)])
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device

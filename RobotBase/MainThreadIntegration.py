@@ -1,6 +1,12 @@
 import sys
+
+# testing on RPI
 sys.path.append('/home/pi/Desktop/dev/leader_follower')
-from RobotBase import MainThread
+
+# testing on Mac
+# sys.path.append('/Users/alexbattikha/Desktop/dev/robotics/jhu-2024/leader_follower')
+
+from RobotBase.MainThread import MainThread
 
 class MessageNav:
     def __init__(self, quadrant_num):
