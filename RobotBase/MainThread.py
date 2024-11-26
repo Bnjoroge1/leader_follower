@@ -22,6 +22,8 @@ if sys.version_info.major == 2:
 
 class MainThread:
     def __init__(self, quadrant_num):
+        print(f"Initializing Main Thread for quadrant: {quadrant_num}")
+        print(f"Opening camera...")
         self.car = mecanum.MecanumChassis()
         self.camera = Camera.Camera()
         try:
@@ -46,6 +48,7 @@ class MainThread:
         self.quad = True
 
     def quadrant_init(self):
+        print(f"Quadrant number received: {self.quadrant_num}")
         if (self.quadrant_num == 2 or self.quadrant_num == 4):
             self.quad = True
         elif (self.quadrant_num == 1 or self.quadrant_num == 3):
@@ -147,7 +150,7 @@ class MainThread:
 
 
     def run(self):
-        print("Quadrant Number: " + self.quadrant_num)
+        print("Quadrant Number: " + str(self.quadrant_num))
         try:
             while self.running:
                 for map in range(len(self.mapSelection)):
@@ -211,12 +214,8 @@ class MainThread:
 
 if __name__ == '__main__':
     quadrant_num = int(sys.argv[1])
+    print(f"Quadrant Number: {quadrant_num}")
+    # testing only
+    # quadrant_num = int(0)
     main = MainThread(quadrant_num)
     main.run()
-
-
-# Debugging
-# 1a) X--initially turns right if quadrant 2 or 4
-# 1b) X--should turn left if quadrant 1 or 3
-# 2) X--integrate stopping when leader message recieve
-# 3) X.5--implement quadrant re-arrangement

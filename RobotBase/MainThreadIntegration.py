@@ -1,12 +1,13 @@
+import os
 import sys
 
-# testing on RPI
-sys.path.append('/home/pi/Desktop/dev/leader_follower')
-
-# testing on Mac
-# sys.path.append('/Users/alexbattikha/Desktop/dev/robotics/jhu-2024/leader_follower')
+if 'pi' in os.uname().nodename:
+    sys.path.append('/home/pi/Desktop/dev/leader_follower')
+else: 
+    sys.path.append('/Users/alexbattikha/Desktop/dev/robotics/jhu-2024/leader_follower')
 
 from RobotBase.MainThread import MainThread
+
 
 class MessageNav:
     def __init__(self, quadrant_num):
@@ -14,6 +15,7 @@ class MessageNav:
 
     def navigate_to_quadrant(self, quadrant_num):
         self.main_thread = MainThread(quadrant_num)
+        self.main_thread.run()
 
     def stop(self):
         print("Stopping after the current tag is completed")
@@ -29,8 +31,7 @@ if __name__ == '__main__':
     quadrant_number = int(input("Enter the quadrant number (1-4): ").strip())
     navigator = MessageNav(quadrant_number)
 
-    new_quadrant = int(input("Enter the new quadrant number to navigate to (1-4): ").strip())
-    navigator.navigate_to_quadrant(new_quadrant)
+    navigator.navigate_to_quadrant(quadrant_number)
 
     # replace with protocol message of leader telling a robot in a specific quadrant to stop
     stop_input = input("Enter 'stop' to stop robot movement after the current tag: ").strip().lower()
