@@ -1,0 +1,25 @@
+from zigbee_network import ZigbeeTransceiver
+
+def sending_test():
+    transceiver = ZigbeeTransceiver()
+    msg = dict({'test id': 1234, 'payload': 12345})
+    try:
+        transceiver.send(msg)
+        print("Send successful")
+    except Exception as exc:
+        print("ERROR: ", exc)
+
+def receiving_test():
+    transceiver = ZigbeeTransceiver()
+    try:
+        msg = transceiver.receive(5)
+        print("Received message:", msg)
+    except Exception as exc:
+        print("ERROR:", exc)
+
+if __name__ == '__main__':
+    # get send to work w no errors first 
+    sending_test()
+    # then get receive to run w no errors (but not receiving msg)
+    #receiving_test()
+    # once both run without errors, get two devices and have one run send and other run receive
