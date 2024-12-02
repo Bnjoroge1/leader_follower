@@ -47,6 +47,40 @@ class MainThread:
         # true quad indicates that it is 2/4; false quad is 1/3
         self.quad = True
 
+        self.move_to_quad(self.quadrant_num)
+
+    # called from MessageNav to move robot to correct quadrant and begin tasks (note: assuming all robots start in the same position)
+    def move_to_quad(self, quad_num):
+        # specific to quadrant 1 and 4
+        initialForwardDist = 16
+        crossForwardDist = 20
+
+        match quad_num:
+            case 1:
+                self.move_straight(initialForwardDist)
+                self.turn_right()
+                self.move_straight(crossForwardDist)
+                self.turn_left()
+                self.move_straight(48)
+                self.turn_right()
+                self.move_straight_reverse(12)
+            case 2:
+                self.move_straight(64)
+                self.turn_left()
+                self.move_straight_reverse(12)
+            case 3:
+                self.move_straight(52)
+                self.turn_left()
+                self.move_straight_reverse(12)
+            case 4:
+                self.move_straight(initialForwardDist)
+                self.turn_right()
+                self.move_straight(crossForwardDist)
+                self.turn_left()
+                self.move_straight(24)
+                self.turn_right()
+                self.move_straight_reverse(12)
+    
     def quadrant_init(self):
         print(f"Quadrant number received: {self.quadrant_num}")
         if (self.quadrant_num == 2 or self.quadrant_num == 4):
