@@ -1,7 +1,9 @@
-# reset error file
+# errors from test_zigbee.py
 
-# tasks from 11/11
-- update tasks_assignments to go from 1-4
-- add call to MainThread.py from device_classes.py
-- send followers tasks and see if there are any issues
-- send timeline / milestones to Dr. Dahbura
+pi@raspberrypi1:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
+Traceback (most recent call last):
+  File "/home/pi/Desktop/dev/leader_follower/protocol/test_zigbee.py", line 1, in <module>
+    from zigbee_network import ZigbeeTransceiver
+  File "/home/pi/Desktop/dev/leader_follower/protocol/zigbee_network.py", line 1, in <module>
+    import paho.mqtt.client as mqtt
+ModuleNotFoundError: No module named 'paho'
