@@ -57,12 +57,19 @@ class MainThread:
 
         if quad_num == 1:
             self.move_straight(initialForwardDist)
+            time.sleep(0.2)
             self.turn_right()
+            time.sleep(0.2)
             self.move_straight(crossForwardDist)
+            time.sleep(0.2)
             self.turn_left()
+            time.sleep(0.2)
             self.move_straight(48)
+            time.sleep(0.2)
             self.turn_right()
+            time.sleep(0.2)
             self.move_straight_reverse(12)
+            time.sleep(0.5)
         elif quad_num == 2:
             self.move_straight(64)
             self.turn_left()
