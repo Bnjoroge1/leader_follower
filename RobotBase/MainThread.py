@@ -55,31 +55,30 @@ class MainThread:
         initialForwardDist = 16
         crossForwardDist = 20
 
-        match quad_num:
-            case 1:
-                self.move_straight(initialForwardDist)
-                self.turn_right()
-                self.move_straight(crossForwardDist)
-                self.turn_left()
-                self.move_straight(48)
-                self.turn_right()
-                self.move_straight_reverse(12)
-            case 2:
-                self.move_straight(64)
-                self.turn_left()
-                self.move_straight_reverse(12)
-            case 3:
-                self.move_straight(52)
-                self.turn_left()
-                self.move_straight_reverse(12)
-            case 4:
-                self.move_straight(initialForwardDist)
-                self.turn_right()
-                self.move_straight(crossForwardDist)
-                self.turn_left()
-                self.move_straight(24)
-                self.turn_right()
-                self.move_straight_reverse(12)
+        if quad_num == 1:
+            self.move_straight(initialForwardDist)
+            self.turn_right()
+            self.move_straight(crossForwardDist)
+            self.turn_left()
+            self.move_straight(48)
+            self.turn_right()
+            self.move_straight_reverse(12)
+        elif quad_num == 2:
+            self.move_straight(64)
+            self.turn_left()
+            self.move_straight_reverse(12)
+        elif quad_num == 3:
+            self.move_straight(52)
+            self.turn_left()
+            self.move_straight_reverse(12)
+        elif quad_num == 4:
+            self.move_straight(initialForwardDist)
+            self.turn_right()
+            self.move_straight(crossForwardDist)
+            self.turn_left()
+            self.move_straight(24)
+            self.turn_right()
+            self.move_straight_reverse(12)
     
     def quadrant_init(self):
         print(f"Quadrant number received: {self.quadrant_num}")
