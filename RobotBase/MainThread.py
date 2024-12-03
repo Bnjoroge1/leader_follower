@@ -22,12 +22,13 @@ if sys.version_info.major == 2:
 
 class MainThread:
     def __init__(self, quadrant_num):
-        print(f"Initializing Main Thread for quadrant: {quadrant_num}")
         print(f"Opening camera...")
         self.car = mecanum.MecanumChassis()
-        self.camera = Camera.Camera()
+        self.camera = None
         try:
+            self.camera = Camera.Camera()
             self.camera.camera_open(correction=True)
+            print("Camera Initialization Successful")
         except Exception as e:
             print(f"Error opening camera: {e}")
             sys.exit(1)
@@ -43,17 +44,22 @@ class MainThread:
         self.map3dist = 20
         self.current_distance = 0
         self.quadrant_num = quadrant_num
+        self.quadrant_init
         
         # true quad indicates that it is 2/4; false quad is 1/3
         self.quad = True
 
         self.move_to_quad(self.quadrant_num)
 
+    def __del__(self):
+        if self.camera:
+            self.camera.camera_close()
+    
     # called from MessageNav to move robot to correct quadrant and begin tasks (note: assuming all robots start in the same position)
     def move_to_quad(self, quad_num):
         # specific to quadrant 1 and 4
-        initialForwardDist = 16
-        crossForwardDist = 20
+        initialForwardDist = 8
+        crossForwardDist = 34
 
         if quad_num == 1:
             self.move_straight(initialForwardDist)
@@ -86,6 +92,8 @@ class MainThread:
             self.move_straight(24)
             self.turn_right()
             self.move_straight_reverse(12)
+        
+        self.run()
     
     def quadrant_init(self):
         print(f"Quadrant number received: {self.quadrant_num}")
@@ -143,7 +151,6 @@ class MainThread:
             elif (not self.quad):
                 self.turn_right()
 
-    # working version
     def align_with_tag(self, tag):
         aligned = False
         while self.running and not aligned:
@@ -190,7 +197,7 @@ class MainThread:
 
 
     def run(self):
-        print("Quadrant Number: " + str(self.quadrant_num))
+        # print("Quadrant Number: " + str(self.quadrant_num))
         try:
             while self.running:
                 for map in range(len(self.mapSelection)):
@@ -213,7 +220,7 @@ class MainThread:
                     self.move_straight(self.current_distance)
                     time.sleep(0.5)
                     
-                    if (self.quadrant_num == 2 or self.quadrant_num == 4):
+                    if (self.quadrant_num == 2 or self.quadrant_num == 4 or self.quadrant_num == 0): # self.quadrant_num == 0 used for debugging
                         self.turn_left()
                     elif (self.quadrant_num == 1 or self.quadrant_num == 3):
                         self.turn_right()
@@ -243,7 +250,8 @@ class MainThread:
                                 self.turn_right()
                             elif (not self.quad):
                                 self.turn_left()
-
+                        
+                        self.last_detected_tag = current_tag
                         time.sleep(5)
 
         except KeyboardInterrupt:
@@ -254,8 +262,9 @@ class MainThread:
 
 if __name__ == '__main__':
     quadrant_num = int(sys.argv[1])
-    print(f"Quadrant Number: {quadrant_num}")
+    
     # testing only
     # quadrant_num = int(0)
+
     main = MainThread(quadrant_num)
     main.run()

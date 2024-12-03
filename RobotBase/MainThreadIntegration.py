@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 
 if 'pi' in os.uname().nodename:
     sys.path.append('/home/pi/Desktop/dev/leader_follower')
@@ -8,18 +9,37 @@ else:
 
 from RobotBase.MainThread import MainThread
 
+sys.path.append('/home/pi/TurboPi/')
+import Camera
 
 class MessageNav:
     def __init__(self, quadrant_num):
-        self.main_thread = MainThread(quadrant_num)
+        self.main_thread = None
+        self.camera = None
+        try:
+            print()
+
+            self.camera = Camera.Camera()
+            self.camera.camera_open(correction=True)
+
+            self.main_thread = MainThread(quadrant_num)
+        except Exception as e:
+            print(f"Error opening camera: {e}")
+            sys.exit(1)
+
+    def __del__(self):
+        if self.camera:
+            self.camera.camera_close()
 
     def navigate_to_quadrant(self, quadrant_num):
-        self.main_thread = MainThread(quadrant_num)
-        self.main_thread.run()
+        if self.main_thread:
+            self.main_thread.move_to_quad(quadrant_num)
+        # subprocess.run(['python3', 'MainThread.py', str(quadrant_num)])
 
     def stop(self):
-        print("Stopping after the current tag is completed")
-        self.main_thread.stop_after_tag()
+        if self.main_thread:
+            print("Stopping after the current tag is completed")
+            self.main_thread.stop_after_tag()
 
     def swap_quadrants(self, from_quadrant, to_quadrant):
         # placeholder

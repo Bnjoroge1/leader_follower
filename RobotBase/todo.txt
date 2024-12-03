@@ -1,0 +1,5 @@
+# last updated on 12/2
+
+# resolve camera issue in MainThread.py
+# test quadrant 1-4 navigation in MainThread.py
+# confirm setup on all 4 routers
