@@ -2,7 +2,7 @@ import paho.mqtt.client as mqtt
 import json
 from abstract_network import AbstractTransceiver, AbstractNode
 import multiprocessing
-import device_classes as dc
+#import device_classes as dc
 from queue import Queue
 import time
 
