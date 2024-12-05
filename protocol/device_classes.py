@@ -545,26 +545,47 @@ class ThisDevice(Device):
                 # print(action)
 
                 # messages for all followers
-                match action:
-                    case Action.ATTENDANCE.value:
-                        # prevents deadlock between leader-follower first attendance state
-                        if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
-                            self.follower_handle_attendance()
-                            self.numHeardDLIST = 0
-                    case Action.CHECK_IN.value:
-                        time.sleep(0.3)
-                        if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
-                            print("Follower", self.id, "heard directed check-in")
-                            self.follower_respond_check_in()
-                        else:
-                            self.log_status(f"IGNORED: {self.received_follower_id()}")
-                            continue  # not necessary?
-                    case Action.DELETE.value:
-                        self.follower_drop_disconnected()  # even if self is wrongly deleted
-                        # that will be handled later in Action.ATTENDANCE.value
-                    case Action.D_LIST.value:
-                        self.follower_handle_dlist()
-                        self.numHeardDLIST += 1
+                # match action:
+                #     case Action.ATTENDANCE.value:
+                #         # prevents deadlock between leader-follower first attendance state
+                #         if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
+                #             self.follower_handle_attendance()
+                #             self.numHeardDLIST = 0
+                #     case Action.CHECK_IN.value:
+                #         time.sleep(0.3)
+                #         if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
+                #             print("Follower", self.id, "heard directed check-in")
+                #             self.follower_respond_check_in()
+                #         else:
+                #             self.log_status(f"IGNORED: {self.received_follower_id()}")
+                #             continue   # not necessary?
+                #     case Action.DELETE.value:
+                #         self.follower_drop_disconnected()  # even if self is wrongly deleted
+                #         # that will be handled later in Action.ATTENDANCE.value
+                #     case Action.D_LIST.value:
+                #         self.follower_handle_dlist()
+                #         self.numHeardDLIST += 1
+
+                # running on robots w/ python < 3.10
+                if action == Action.ATTENDANCE.value:
+                    # prevents deadlock between leader-follower first attendance state
+                    if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
+                        self.follower_handle_attendance()
+                        self.numHeardDLIST = 0
+                elif action == Action.CHECK_IN.value:
+                    time.sleep(0.3)
+                    if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
+                        print("Follower", self.id, "heard directed check-in")
+                        self.follower_respond_check_in()
+                    else:
+                        self.log_status(f"IGNORED: {self.received_follower_id()}")
+                        continue   # not necessary?
+                elif action == Action.DELETE.value:
+                    self.follower_drop_disconnected()  # even if self is wrongly deleted
+                    # that will be handled later in Action.ATTENDANCE.value
+                elif action == Action.D_LIST.value:
+                    self.follower_handle_dlist()
+                    self.numHeardDLIST += 1
                         
     def test_check_in_att_from_wrong_follower(self):
         with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
@@ -700,30 +721,53 @@ class ThisDevice(Device):
                         # print(action)
 
                         # messages for all followers
-                        match action:
-                            case Action.ATTENDANCE.value:
-                                # prevents deadlock between leader-follower first attendance state
-                                if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
-                                    self.follower_handle_attendance()
-                                    self.numHeardDLIST = 0
-                            case Action.CHECK_IN.value:
-                                if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
-                                    print("Follower", self.id, "heard directed check-in")
-                                    self.follower_respond_check_in()
-                                else:
-                                    continue  # not necessary?
-                            case Action.DELETE.value:
-                                self.follower_drop_disconnected()  # even if self is wrongly deleted
-                                # that will be handled later in Action.ATTENDANCE.value
-                            case Action.D_LIST.value:
-                                self.follower_handle_dlist()
-                                self.numHeardDLIST += 1
-                            case Action.TASK_STOP.value:
-                                pass
-                            case Action.TASK_START.value:
-                                pass
-                            case _:
-                                pass
+                        # match action:
+                        #     case Action.ATTENDANCE.value:
+                        #         # prevents deadlock between leader-follower first attendance state
+                        #         if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
+                        #             self.follower_handle_attendance()
+                        #             self.numHeardDLIST = 0
+                        #     case Action.CHECK_IN.value:
+                        #         if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
+                        #             print("Follower", self.id, "heard directed check-in")
+                        #             self.follower_respond_check_in()
+                        #         else:
+                        #             continue  # not necessary?
+                        #     case Action.DELETE.value:
+                        #         self.follower_drop_disconnected()  # even if self is wrongly deleted
+                        #         # that will be handled later in Action.ATTENDANCE.value
+                        #     case Action.D_LIST.value:
+                        #         self.follower_handle_dlist()
+                        #         self.numHeardDLIST += 1
+                        #     case Action.TASK_STOP.value:
+                        #         pass
+                        #     case Action.TASK_START.value:
+                        #         pass
+                        #     case _:
+                        #         pass
+
+                        # running on robots w/ Python < 3.10
+                        if action == Action.ATTENDANCE.value:
+                            # prevents deadlock between leader-follower first attendance state
+                            if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
+                                self.follower_handle_attendance()
+                                self.numHeardDLIST = 0
+                        elif action == Action.CHECK_IN.value:
+                            if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
+                                print("Follower", self.id, "heard directed check-in")
+                                self.follower_respond_check_in()
+                            else:
+                                continue  # not necessary?
+                        elif action == Action.DELETE.value:
+                            self.follower_drop_disconnected()  # even if self is wrongly deleted
+                            # that will be handled later in Action.ATTENDANCE.value
+                        elif action == Action.D_LIST.value:
+                            self.follower_handle_dlist()
+                            self.numHeardDLIST += 1
+                        elif action == Action.TASK_STOP.value:
+                            pass
+                        elif action == Action.TASK_START.value:
+                            pass
 
                             # probably do not need to clear follower channel
                             # self.transceiver.clear()

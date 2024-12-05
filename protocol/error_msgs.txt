@@ -1,9 +1,13 @@
 # errors from test_zigbee.py
 
-pi@raspberrypi1:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
+pi@raspberrypi5:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
 Traceback (most recent call last):
   File "/home/pi/Desktop/dev/leader_follower/protocol/test_zigbee.py", line 1, in <module>
     from zigbee_network import ZigbeeTransceiver
-  File "/home/pi/Desktop/dev/leader_follower/protocol/zigbee_network.py", line 1, in <module>
-    import paho.mqtt.client as mqtt
-ModuleNotFoundError: No module named 'paho'
+  File "/home/pi/Desktop/dev/leader_follower/protocol/zigbee_network.py", line 3, in <module>
+    from abstract_network import AbstractTransceiver, AbstractNode
+  File "/home/pi/Desktop/dev/leader_follower/protocol/abstract_network.py", line 4, in <module>
+    import device_classes as dc
+  File "/home/pi/Desktop/dev/leader_follower/protocol/device_classes.py", line 7, in <module>
+    from abstract_network import AbstractTransceiver
+ImportError: cannot import name 'AbstractTransceiver' from partially initialized module 'abstract_network' (most likely due to a circular import) (/home/pi/Desktop/dev/leader_follower/protocol/abstract_network.py)
