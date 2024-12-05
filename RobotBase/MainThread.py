@@ -22,7 +22,6 @@ if sys.version_info.major == 2:
 
 class MainThread:
     def __init__(self, quadrant_num):
-        print(f"Opening camera...")
         self.car = mecanum.MecanumChassis()
         self.camera = None
         try:
@@ -257,8 +256,8 @@ class MainThread:
         except KeyboardInterrupt:
             self.running = False
         finally:
-            self.camera.camera_close()
-            cv2.destroyAllWindows()
+            if self.camera:
+                self.camera.camera_close()
 
 if __name__ == '__main__':
     quadrant_num = int(sys.argv[1])
