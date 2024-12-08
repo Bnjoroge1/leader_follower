@@ -24,6 +24,7 @@ class MainThread:
     def __init__(self, quadrant_num):
         self.car = mecanum.MecanumChassis()
         self.camera = None
+        self.running = False
         try:
             self.camera = Camera.Camera()
             self.camera.camera_open(correction=True)
@@ -227,6 +228,7 @@ class MainThread:
                     time.sleep(1)
 
                     if self.align_with_tag(current_tag):
+                        print("ALIGNING WITH TAG")
                         self.move_straight_reverse(self.current_distance)
                         time.sleep(0.5)
 
@@ -260,10 +262,10 @@ class MainThread:
                 self.camera.camera_close()
 
 if __name__ == '__main__':
-    quadrant_num = int(sys.argv[1])
+    # quadrant_num = int(sys.argv[1])
     
     # testing only
-    # quadrant_num = int(0)
+    quadrant_num = int(1)
 
     main = MainThread(quadrant_num)
     main.run()
