@@ -49,6 +49,7 @@ class MainThread:
         # true quad indicates that it is 2/4; false quad is 1/3
         self.quad = True
 
+        print(f"Initializing with quadrant number: {self.quadrant_num}")
         self.move_to_quad(self.quadrant_num)
 
     def __del__(self):
@@ -93,10 +94,12 @@ class MainThread:
             self.turn_right()
             self.move_straight_reverse(12)
         
+        print(f"Navigated to Quadrant {quad_num}")
+        
         self.run()
     
     def quadrant_init(self):
-        print(f"Quadrant number received: {self.quadrant_num}")
+        print(f"Quadrant number: {self.quadrant_num}")
         if (self.quadrant_num == 2 or self.quadrant_num == 4):
             self.quad = True
         elif (self.quadrant_num == 1 or self.quadrant_num == 3):
@@ -126,6 +129,7 @@ class MainThread:
 
     def handle_last_tag(self):
         # tag0 isn't an actual april tag; it's used to define the initial turn direction
+        print(f"Handling last detected tag: {self.last_detected_tag}")
         if (self.last_detected_tag == 0):
             if (self.quad):
                 self.turn_right()
@@ -153,6 +157,7 @@ class MainThread:
 
     def align_with_tag(self, tag):
         aligned = False
+        print(f"Aligning with tag: {tag}")
         while self.running and not aligned:
             img = self.camera.frame
             if img is None or img.size == 0:
@@ -228,7 +233,6 @@ class MainThread:
                     time.sleep(1)
 
                     if self.align_with_tag(current_tag):
-                        print("ALIGNING WITH TAG")
                         self.move_straight_reverse(self.current_distance)
                         time.sleep(0.5)
 
@@ -260,12 +264,13 @@ class MainThread:
         finally:
             if self.camera:
                 self.camera.camera_close()
+            cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    # quadrant_num = int(sys.argv[1])
+    quadrant_num = int(sys.argv[1])
     
     # testing only
-    quadrant_num = int(1)
+    # quadrant_num = int(1)
 
     main = MainThread(quadrant_num)
     main.run()
