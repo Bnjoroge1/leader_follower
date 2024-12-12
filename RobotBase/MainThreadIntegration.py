@@ -49,7 +49,7 @@ if __name__ == '__main__':
     quadrant_number = int(input("Enter the quadrant number (1-4): ").strip())
     navigator = MessageNav(quadrant_number)
 
-    navigator.navigate_to_quadrant(quadrant_number)
+    # navigator.navigate_to_quadrant(quadrant_number)
 
     # replace with protocol message of leader telling a robot in a specific quadrant to stop
     stop_input = input("Enter 'stop' to stop robot movement after the current tag: ").strip().lower()
