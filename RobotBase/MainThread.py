@@ -59,7 +59,7 @@ class MainThread:
     # called from MessageNav to move robot to correct quadrant and begin tasks (note: assuming all robots start in the same position)
     def move_to_quad(self, quad_num):
         # specific to quadrant 1 and 4
-        initialForwardDist = 8
+        initialForwardDist = 9.5
         crossForwardDist = 34
 
         if quad_num == 1:
@@ -87,12 +87,21 @@ class MainThread:
             self.move_straight_reverse(12)
         elif quad_num == 4:
             self.move_straight(initialForwardDist)
+            time.sleep(0.2)
             self.turn_right()
+            time.sleep(0.2)
             self.move_straight(crossForwardDist)
+            time.sleep(0.2)
             self.turn_left()
-            self.move_straight(24)
+            time.sleep(0.2)
+            self.move_straight(35)
+            time.sleep(0.2)
             self.turn_right()
+            time.sleep(0.2)
+            self.move_straight(10) # wall allignment
+            time.sleep(0.2)
             self.move_straight_reverse(12)
+            time.sleep(0.5)
         
         print(f"Navigated to Quadrant {quad_num}")
         
@@ -119,12 +128,12 @@ class MainThread:
 
     def turn_right(self):
         self.car.set_velocity(0, 90, 0.55) 
-        time.sleep(0.55) 
+        time.sleep(0.58) # rpi1: 0.55 
         self.car.set_velocity(0, 90, 0)
 
     def turn_left(self):
         self.car.set_velocity(0, 90, -0.52)  
-        time.sleep(0.55)  
+        time.sleep(0.61) # rpi1: 0.55
         self.car.set_velocity(0, 90, 0)  
 
     def handle_last_tag(self):
@@ -274,3 +283,6 @@ if __name__ == '__main__':
 
     main = MainThread(quadrant_num)
     main.run()
+
+
+# note from 12/12: if there's extra time, address the issue where if no tag is detected then the robot begins to navigate to quadrant again (can be solved offline)
