@@ -44,7 +44,6 @@ class MainThread:
         self.map3dist = 20
         self.current_distance = 0
         self.quadrant_num = quadrant_num
-        self.quadrant_init
         
         # true quad indicates that it is 2/4; false quad is 1/3
         self.quad = True
@@ -82,9 +81,14 @@ class MainThread:
             self.turn_left()
             self.move_straight_reverse(12)
         elif quad_num == 3:
-            self.move_straight(52)
+            self.move_straight(47)
+            time.sleep(0.2)
             self.turn_left()
-            self.move_straight_reverse(12)
+            time.sleep(0.2)
+            self.move_straight(5)
+            time.sleep(0.2)
+            self.move_straight_reverse(13)
+            time.sleep(0.5)
         elif quad_num == 4:
             self.move_straight(initialForwardDist)
             time.sleep(0.2)
@@ -107,11 +111,11 @@ class MainThread:
         
         self.run()
     
-    def quadrant_init(self):
+    def quadrant_init(self, qNum):
         print(f"Quadrant number: {self.quadrant_num}")
-        if (self.quadrant_num == 2 or self.quadrant_num == 4):
+        if (qNum == 2 or qNum == 4):
             self.quad = True
-        elif (self.quadrant_num == 1 or self.quadrant_num == 3):
+        elif (qNum == 1 or qNum == 3):
             self.quad = False
 
     def move_straight(self, distance_inches):
@@ -213,6 +217,7 @@ class MainThread:
     def run(self):
         # print("Quadrant Number: " + str(self.quadrant_num))
         try:
+            self.quadrant_init(self.quadrant_num)
             while self.running:
                 for map in range(len(self.mapSelection)):
                     if self.stop_signal:

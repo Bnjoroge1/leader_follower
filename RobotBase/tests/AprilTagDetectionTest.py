@@ -2,6 +2,7 @@
 # tester working as of 7/28
 
 #!/usr/bin/python3
+import os
 import sys
 sys.path.append('/home/pi/TurboPi/')
 import cv2
@@ -11,6 +12,9 @@ import threading
 import numpy as np
 import apriltag
 import Camera
+
+# os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+sys.stderr = open(os.devnull, 'w')
 
 if sys.version_info.major == 2:
     print('Please run this program with python3!')
