@@ -77,17 +77,22 @@ class MainThread:
             self.move_straight_reverse(12)
             time.sleep(0.5)
         elif quad_num == 2:
-            self.move_straight(64)
-            self.turn_left()
-            self.move_straight_reverse(12)
-        elif quad_num == 3:
-            self.move_straight(47)
+            self.move_straight(56)
             time.sleep(0.2)
             self.turn_left()
             time.sleep(0.2)
             self.move_straight(5)
             time.sleep(0.2)
-            self.move_straight_reverse(13)
+            self.move_straight_reverse(12)
+            time.sleep(0.5)
+        elif quad_num == 3:
+            self.move_straight(48)
+            time.sleep(0.2)
+            self.turn_left()
+            time.sleep(0.2)
+            self.move_straight(5)
+            time.sleep(0.2)
+            self.move_straight_reverse(15)
             time.sleep(0.5)
         elif quad_num == 4:
             self.move_straight(initialForwardDist)
@@ -207,12 +212,10 @@ class MainThread:
                         time.sleep(0.2)
                         print("Completed Tag Alignment!")
                         break
-
         return aligned
 
     def stop_after_tag(self):
         self.stop_signal = True
-
 
     def run(self):
         # print("Quadrant Number: " + str(self.quadrant_num))
@@ -226,6 +229,7 @@ class MainThread:
 
                     current_tag = self.mapSelection[map]
 
+                    time.sleep(0.5)
                     self.handle_last_tag()
                     time.sleep(5)
 
@@ -239,14 +243,20 @@ class MainThread:
                     self.move_straight(self.current_distance)
                     time.sleep(0.5)
                     
-                    if (self.quadrant_num == 2 or self.quadrant_num == 4 or self.quadrant_num == 0): # self.quadrant_num == 0 used for debugging
+                    if (self.quad or self.quadrant_num == 0): # self.quadrant_num == 0 used for debugging
                         self.turn_left()
-                    elif (self.quadrant_num == 1 or self.quadrant_num == 3):
+                    elif (not self.quad):
                         self.turn_right()
 
                     time.sleep(1)
 
                     if self.align_with_tag(current_tag):
+                        # added 12/13
+                        if self.quad:
+                            self.turn_right()
+                        else:
+                            self.turn_left()
+                            
                         self.move_straight_reverse(self.current_distance)
                         time.sleep(0.5)
 
