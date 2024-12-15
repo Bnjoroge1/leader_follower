@@ -1,5 +1,5 @@
 from zigbee_network import ZigbeeTransceiver
-
+from time import sleep
 def sending_test():
     transceiver = ZigbeeTransceiver()
     msg = dict({'test id': 1234, 'payload': 12345})
@@ -11,15 +11,18 @@ def sending_test():
 
 def receiving_test():
     transceiver = ZigbeeTransceiver()
+    print('waiting')
+    sleep(5)
+    print('starting')
     try:
-        msg = transceiver.receive(5)
+        msg = transceiver.receive(60)
         print("Received message:", msg)
     except Exception as exc:
         print("ERROR:", exc)
 
 if __name__ == '__main__':
     # get send to work w no errors first 
-    sending_test()
+    #sending_test()
     # then get receive to run w no errors (but not receiving msg)
-    # receiving_test()
+    receiving_test()
     # once both run without errors, get two devices and have one run send and other run receive

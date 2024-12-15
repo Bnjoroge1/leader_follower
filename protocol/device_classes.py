@@ -4,7 +4,7 @@ Modified device_classes for test_harness
 import os
 import time
 from message_classes import Message, Action
-from abstract_network import AbstractTransceiver
+from zigbee_network import ZigbeeTransceiver
 from typing import Dict, List, Set
 from pathlib import Path
 import csv
