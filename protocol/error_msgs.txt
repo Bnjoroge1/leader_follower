@@ -1,23 +1,36 @@
-pi@raspberrypi4:~/Desktop/dev/leader_follower $ docker compose -f protocol/docker-compose.yml up
-WARN[0000] /home/pi/Desktop/dev/leader_follower/protocol/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
-[+] Running 2/0
- ✔ Container protocol-mqtt-1  Created                                                                 0.0s 
- ✔ Container zigbee2mqtt      Created                                                                 0.0s 
-Attaching to mqtt-1, zigbee2mqtt
-zigbee2mqtt  | Using '/app/data' as data directory
-mqtt-1       | 1734309535: mosquitto version 2.0.20 starting
-mqtt-1       | 1734309535: Config loaded from /mosquitto-no-auth.conf.
-mqtt-1       | 1734309535: Opening ipv4 listen socket on port 1883.
-mqtt-1       | 1734309535: Opening ipv6 listen socket on port 1883.
-mqtt-1       | 1734309535: mosquitto version 2.0.20 running
-zigbee2mqtt  | Starting Zigbee2MQTT without watchdog.
-zigbee2mqtt  | [2024-12-15 16:39:05] info: 	z2m: Logging to console, file (filename: log.log)
-zigbee2mqtt  | [2024-12-15 16:39:05] info: 	z2m: Starting Zigbee2MQTT version 1.42.0 (commit #861cba6)
-zigbee2mqtt  | [2024-12-15 16:39:05] info: 	z2m: Starting zigbee-herdsman (2.1.9)
-zigbee2mqtt  | [2024-12-15 16:39:07] warning: 	zh:ezsp: 'ezsp' driver is deprecated and will only remain to provide support for older firmware (pre 7.4.x). Migration to 'ember' is recommended. If using Zigbee2MQTT see https://github.com/Koenkk/zigbee2mqtt/discussions/21462
-zigbee2mqtt  | [2024-12-15 16:39:17] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
-zigbee2mqtt  | [2024-12-15 16:39:17] error: 	zh:ezsp:ezsp: Connection attempt 1 error: Error: Failure to connect
-zigbee2mqtt  | [2024-12-15 16:39:32] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
-zigbee2mqtt  | [2024-12-15 16:39:32] error: 	zh:ezsp:ezsp: Connection attempt 2 error: Error: Failure to connect
-zigbee2mqtt  | [2024-12-15 16:39:52] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
-zigbee2mqtt  | [2024-12-15 16:39:52] error: 	zh:ezsp:ezsp: Connection attempt 3 error: Error: Failure to connect
+pi@raspberrypi1:~/Desktop/dev/leader_follower/protocol $ docker-compose up
+
+# for sending:
+
+step 4 output:
+pi@raspberrypi1:~ $ mosquitto_sub -d -t zigbee2mqtt/bridge/request/device/permit_join
+Client (null) sending CONNECT
+Client (null) received CONNACK (0)
+Client (null) sending SUBSCRIBE (Mid: 1, Topic: zigbee2mqtt/bridge/request/device/permit_join, QoS: 0, Options: 0x00)
+Client (null) received SUBACK
+Subscribed (mid: 1): 0
+
+step 6 output:
+Client (null) sending PINGREQ
+Client (null) received PINGRESP
+Client (null) received PUBLISH (d0, q0, r0, m0, 'zigbee2mqtt/bridge/request/device/permit_join', ... (35 bytes))
+{"test id": 1234, "payload": 12345}
+
+
+# for recieving:
+
+step 2 output:
+pi@raspberrypi1:~ $ mosquitto_pub -d -t zigbee2mqtt/bridge/request/device/permit_join -m “testmsg”
+Client (null) sending CONNECT
+Client (null) received CONNACK (0)
+Client (null) sending PUBLISH (d0, q0, r0, m1, 'zigbee2mqtt/bridge/request/device/permit_join', ... (13 bytes))
+Client (null) sending DISCONNECT
+
+step 4 output:
+pi@raspberrypi1:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
+here
+suback
+waiting
+starting
+msg
+Received message: <zigbee_network.ZigbeeTransceiver object at 0x7f801b5fd0>
