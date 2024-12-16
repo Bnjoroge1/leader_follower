@@ -1,13 +1,23 @@
-# errors from test_zigbee.py
-
-pi@raspberrypi5:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
-Traceback (most recent call last):
-  File "/home/pi/Desktop/dev/leader_follower/protocol/test_zigbee.py", line 1, in <module>
-    from zigbee_network import ZigbeeTransceiver
-  File "/home/pi/Desktop/dev/leader_follower/protocol/zigbee_network.py", line 3, in <module>
-    from abstract_network import AbstractTransceiver, AbstractNode
-  File "/home/pi/Desktop/dev/leader_follower/protocol/abstract_network.py", line 4, in <module>
-    import device_classes as dc
-  File "/home/pi/Desktop/dev/leader_follower/protocol/device_classes.py", line 7, in <module>
-    from abstract_network import AbstractTransceiver
-ImportError: cannot import name 'AbstractTransceiver' from partially initialized module 'abstract_network' (most likely due to a circular import) (/home/pi/Desktop/dev/leader_follower/protocol/abstract_network.py)
+pi@raspberrypi4:~/Desktop/dev/leader_follower $ docker compose -f protocol/docker-compose.yml up
+WARN[0000] /home/pi/Desktop/dev/leader_follower/protocol/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Running 2/0
+ ✔ Container protocol-mqtt-1  Created                                                                 0.0s 
+ ✔ Container zigbee2mqtt      Created                                                                 0.0s 
+Attaching to mqtt-1, zigbee2mqtt
+zigbee2mqtt  | Using '/app/data' as data directory
+mqtt-1       | 1734309535: mosquitto version 2.0.20 starting
+mqtt-1       | 1734309535: Config loaded from /mosquitto-no-auth.conf.
+mqtt-1       | 1734309535: Opening ipv4 listen socket on port 1883.
+mqtt-1       | 1734309535: Opening ipv6 listen socket on port 1883.
+mqtt-1       | 1734309535: mosquitto version 2.0.20 running
+zigbee2mqtt  | Starting Zigbee2MQTT without watchdog.
+zigbee2mqtt  | [2024-12-15 16:39:05] info: 	z2m: Logging to console, file (filename: log.log)
+zigbee2mqtt  | [2024-12-15 16:39:05] info: 	z2m: Starting Zigbee2MQTT version 1.42.0 (commit #861cba6)
+zigbee2mqtt  | [2024-12-15 16:39:05] info: 	z2m: Starting zigbee-herdsman (2.1.9)
+zigbee2mqtt  | [2024-12-15 16:39:07] warning: 	zh:ezsp: 'ezsp' driver is deprecated and will only remain to provide support for older firmware (pre 7.4.x). Migration to 'ember' is recommended. If using Zigbee2MQTT see https://github.com/Koenkk/zigbee2mqtt/discussions/21462
+zigbee2mqtt  | [2024-12-15 16:39:17] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+zigbee2mqtt  | [2024-12-15 16:39:17] error: 	zh:ezsp:ezsp: Connection attempt 1 error: Error: Failure to connect
+zigbee2mqtt  | [2024-12-15 16:39:32] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+zigbee2mqtt  | [2024-12-15 16:39:32] error: 	zh:ezsp:ezsp: Connection attempt 2 error: Error: Failure to connect
+zigbee2mqtt  | [2024-12-15 16:39:52] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+zigbee2mqtt  | [2024-12-15 16:39:52] error: 	zh:ezsp:ezsp: Connection attempt 3 error: Error: Failure to connect

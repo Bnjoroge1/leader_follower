@@ -1,0 +1,24 @@
+[2024-12-15 16:32:33] info: 	z2m: Logging to console, file (filename: log.log)
+[2024-12-15 16:32:33] info: 	z2m: Starting Zigbee2MQTT version 1.42.0 (commit #861cba6)
+[2024-12-15 16:32:33] info: 	z2m: Starting zigbee-herdsman (2.1.9)
+[2024-12-15 16:32:34] warning: 	zh:ezsp: 'ezsp' driver is deprecated and will only remain to provide support for older firmware (pre 7.4.x). Migration to 'ember' is recommended. If using Zigbee2MQTT see https://github.com/Koenkk/zigbee2mqtt/discussions/21462
+[2024-12-15 16:32:44] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+[2024-12-15 16:32:44] error: 	zh:ezsp:ezsp: Connection attempt 1 error: Error: Failure to connect
+[2024-12-15 16:32:59] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+[2024-12-15 16:32:59] error: 	zh:ezsp:ezsp: Connection attempt 2 error: Error: Failure to connect
+[2024-12-15 16:33:19] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+[2024-12-15 16:33:19] error: 	zh:ezsp:ezsp: Connection attempt 3 error: Error: Failure to connect
+[2024-12-15 16:33:32] error: 	z2m: Failed to call 'Frontend' 'stop' (TypeError: Cannot read properties of undefined (reading 'close')
+    at /app/lib/extension/frontend.ts:126:52
+    at new Promise (<anonymous>)
+    at Frontend.stop (/app/lib/extension/frontend.ts:126:15)
+    at Controller.callExtensions (/app/lib/controller.ts:399:17)
+    at Controller.stop (/app/lib/controller.ts:265:9)
+    at stop (/app/index.js:165:5)
+    at process.handleQuit (/app/index.js:173:13))
+[2024-12-15 16:33:32] error: 	z2m: Not connected to MQTT server!
+[2024-12-15 16:33:32] error: 	z2m: Cannot send message: topic: 'zigbee2mqtt/bridge/state', payload: '{"state":"offline"}
+[2024-12-15 16:33:32] info: 	z2m: Disconnecting from MQTT server
+[2024-12-15 16:33:32] info: 	z2m: Stopping zigbee-herdsman...
+[2024-12-15 16:33:32] info: 	z2m: Stopped zigbee-herdsman
+[2024-12-15 16:33:32] info: 	z2m: Stopped Zigbee2MQTT
