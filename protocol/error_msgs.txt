@@ -1,3 +1,32 @@
+# sending messages to a router (regardless of if from coordinator or router)
+
+pi@raspberrypi2:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
+Traceback (most recent call last):
+  File "/home/pi/Desktop/dev/leader_follower/protocol/test_zigbee.py", line 25, in <module>
+    sending_test()
+  File "/home/pi/Desktop/dev/leader_follower/protocol/test_zigbee.py", line 4, in sending_test
+    transceiver = ZigbeeTransceiver()
+  File "/home/pi/Desktop/dev/leader_follower/protocol/zigbee_network.py", line 40, in __init__
+    self.sub_client.connect(self.broker_address, self.broker_port)
+  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 1435, in connect
+    return self.reconnect()
+  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 1598, in reconnect
+    self._sock = self._create_socket()
+  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 4609, in _create_socket
+    sock = self._create_socket_connection()
+  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 4640, in _create_socket_connection
+    return socket.create_connection(addr, timeout=self._connect_timeout, source_address=source)
+  File "/usr/lib/python3.9/socket.py", line 843, in create_connection
+    raise err
+  File "/usr/lib/python3.9/socket.py", line 831, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+
+#######################################################################################
+
+
+
 pi@raspberrypi1:~/Desktop/dev/leader_follower/protocol $ docker-compose up
 
 # for sending:
