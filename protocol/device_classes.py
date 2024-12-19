@@ -22,6 +22,7 @@ OUTPUT_DIR = PROTOCOL_DIR / "output"
 MISSED_THRESHOLD: int = 2
 RESPONSE_ALLOWANCE: float = 1  # subject to change
 PRECISION_ALLOWANCE: int = 5
+SETUP_WAIT = 5
 RECEIVE_TIMEOUT: float = 0.2
 ATTENDANCE_DURATION: float = 2
 D_LIST_DURATION: float = 2
@@ -216,7 +217,7 @@ class ThisDevice(Device):
         :return: None
         """
         print("Listening for leader's attendance")
-        if self.receive(duration=3):
+        if self.receive(duration=SETUP_WAIT):
             if not self.received_action() == Action.ATTENDANCE.value:
                 print("Heard someone, listening for attendance")
                 self.receive(duration=15, action_value=Action.ATTENDANCE.value)
