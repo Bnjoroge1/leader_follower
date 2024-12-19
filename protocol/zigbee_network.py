@@ -13,14 +13,12 @@ class ZigbeeNode():
         self.transceiver = ZigbeeTransceiver(broker_address='192.168.68.89', broker_port=1883)  # address and port subject to change
         self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
         #self.setup(node_id, target_func, target_args, active)
-        self.thisDevice.device_main()
+        
         #self.process = multiprocessing.Process(target=self.thisDevice.device_main)
         
     def start(self):
-        self.process.start()
-        
-    def stop(self):
-        self.process.terminate()
+        #self.process.start()
+        self.thisDevice.device_main()
 
 class ZigbeeTransceiver():
     

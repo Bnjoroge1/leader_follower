@@ -1,4 +1,5 @@
 #from abstract_driver import AbstractDriver
+import time
 import asyncio
 from uuid import getnode
 from zigbee_network import ZigbeeTransceiver, ZigbeeNode
@@ -12,7 +13,8 @@ class ZigbeeDriver():
         node = ZigbeeNode(self.mac_id)  # takes care of channel setup and looping (non-blocking)
 
         # all UI comms will take place over Zigbee, websocket not necessary
-        
+        print("Sleep for 5 sec to position robot")
+        time.sleep(5)
         node.start()
         
     async def test():

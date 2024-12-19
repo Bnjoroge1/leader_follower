@@ -229,7 +229,7 @@ class ThisDevice(Device):
         print("Assuming position of leader")
         self.make_leader()
         self.leader_id = self.id
-        self.device_list.add_device(id=self.id, task_index=1, thisDeviceId= self.id)  # put itself in devicelist with first task
+        self.device_list.add_device(id=self.id, task_index=0, thisDeviceId= self.id)  # put itself in devicelist with first task
         self.leader_send_attendance()
 
     def leader_send_attendance(self):
@@ -791,7 +791,7 @@ class DeviceList:
         :param num_tasks: size of DeviceList, number of tasks.
         """
         self.devices = {}  # hashmap of id: Device object
-        self.task_options = [1, 2, 3, 4]  # 1, 2, 3, 4
+        self.task_options = [3, 4, 1]  # 1, 2, 3, 4
 
     def __str__(self):
         """
@@ -850,8 +850,8 @@ class DeviceList:
         :param id: identifier for device, assigned to new Device object.
         :param task_index: index of task for device, assigned to new Device object.
         """
-        if 1 <= task_index <= 4:
-            task = task_index + 1
+        if 0 <= task_index < 3:
+            task = self.task_options[task_index]
 
             # call to MainThread.py
             if (id == thisDeviceId):
