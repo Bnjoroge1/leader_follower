@@ -27,7 +27,7 @@ RECEIVE_TIMEOUT: float = 0.2
 ATTENDANCE_DURATION: float = 2
 D_LIST_DURATION: float = 2
 DELETE_DURATION: float = 2
-TAKEOVER_DURATION: float = 15
+TAKEOVER_DURATION: float = 7
 
 
 class Device:
@@ -389,13 +389,15 @@ class ThisDevice(Device):
                 self.leader_id = otherLeader
                 self.log_status("NEW LEADER: " + str(otherLeader))
         # if current leader remains the same, add the other leader as a follower
-        else:
+        elif self.leader_id > otherLeader:
             if self.leader and (otherLeader not in self.device_list.get_ids()):
                 unused_tasks = self.device_list.unused_tasks()
                 print("Unused tasks: ", unused_tasks)
                 task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", otherLeader)
                 self.device_list.add_device(id=otherLeader, task_index=task, thisDeviceId= self.id)  # has not assigned task yet
+        else:
+            print('here')
 
     def log_message(self, msg: int, direction: str):
         self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
@@ -714,6 +716,8 @@ class ThisDevice(Device):
                         #print("Device:", self.id, self.leader, "\n", self.device_list)
                         if not self.receive(duration=TAKEOVER_DURATION):
                             print("Is there anybody out there?")
+                            self.device_list.remove_device(id=self.leader_id)
+                            self.leader_id = self.id
                             self.make_leader()
                             continue
                         elif abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:  # account for loss of precision
