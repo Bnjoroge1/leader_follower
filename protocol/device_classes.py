@@ -326,6 +326,7 @@ class ThisDevice(Device):
         self.leader_id = self.received_leader_id()
         # preconditions handled - always send response
         time.sleep(ATTENDANCE_DURATION/2)
+        
         self.send(action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=ATTENDANCE_DURATION)
 
     def follower_respond_check_in(self):
@@ -349,16 +350,16 @@ class ThisDevice(Device):
 
         # handle already received device from original message
         # only add devices which are not already in device list
-        # if self.received_follower_id() not in self.device_list.get_ids():
-        self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-        self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
+        if self.received_follower_id() not in self.device_list.get_ids():
+            self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
+            self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
 
         # handle the rest of the list
         while self.receive(duration=0.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
             # only add new devices
-            #if self.received_follower_id() not in self.device_list.get_ids():
-            self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-            self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
+            if self.received_follower_id() not in self.device_list.get_ids():
+                self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
+                self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
 
     def follower_drop_disconnected(self):
         """
@@ -852,7 +853,7 @@ class DeviceList:
             task = self.task_options[task_index]
 
             # call to MainThread.py
-            if id == thisDeviceId:
+            if (id == thisDeviceId) and (Dev:
                 subprocess.Popen(["python3", "../TestTask/MainThread.py", str(task)])
         device = Device(id)
         device.set_task(task)
