@@ -10,7 +10,7 @@ class ZigbeeNode():
      
     def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
         self.node_id = node_id
-        self.transceiver = ZigbeeTransceiver(broker_address='192.168.68.67', broker_port=1883)  # address and port subject to change
+        self.transceiver = ZigbeeTransceiver(broker_address='192.168.0.219', broker_port=1883)  # address and port subject to change
         self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
         #self.setup(node_id, target_func, target_args, active)
         self.process = multiprocessing.Process(target=self.thisDevice.device_main)
@@ -23,7 +23,7 @@ class ZigbeeNode():
 
 class ZigbeeTransceiver():
     
-    def __init__(self, broker_address='192.168.68.67', broker_port=1883, username=None, password=None):
+    def __init__(self, broker_address='192.168.0.219', broker_port=1883, username=None, password=None):
         self.broker_address = broker_address
         self.broker_port = broker_port
         self.username = username
