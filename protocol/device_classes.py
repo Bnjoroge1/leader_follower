@@ -287,7 +287,7 @@ class ThisDevice(Device):
             end_time = time.time() + RESPONSE_ALLOWANCE
             # accounts for leader receiving another device's check-in response (which should never happen)
             while time.time() < end_time:  # times should line up with receive duration
-                if self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.CHECK_IN.value):
+                if self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.CHECK_IN_RESPONSE.value):
                     # if tiebreak occurred during receive and no longer leader, end check in
                     if not self.get_leader():
                         return
@@ -334,7 +334,7 @@ class ThisDevice(Device):
         """
         print("Follower responding to check-in")
         self.log_status("RESPONDING TO CHECKIN")
-        self.send(action=Action.CHECK_IN.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=2)
+        self.send(action=Action.CHECK_IN_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id, duration=2)
         # sending and receiving is along different channels for Transceiver, so this should not be a problem
 
     def follower_handle_dlist(self):
@@ -689,7 +689,7 @@ class ThisDevice(Device):
 
                         self.leader_send_device_list()
 
-                        time.sleep(2)
+                        time.sleep(0.5)
 
                         # will be helpful if leader works through followers in
                         # same order each time to increase clock speed
@@ -699,11 +699,11 @@ class ThisDevice(Device):
                         if not self.get_leader():
                             continue
 
-                        time.sleep(2)
+                        time.sleep(0.5)
 
                         self.leader_drop_disconnected()
 
-                        time.sleep(2)
+                        time.sleep(0.5)
 
                         #self.transceiver.clear()
 
@@ -767,8 +767,6 @@ class ThisDevice(Device):
                         elif action == Action.D_LIST.value:
                             self.follower_handle_dlist()
                             self.numHeardDLIST += 1
-                        elif action == Action.TASK_STOP.value:
-                            pass
                         elif action == Action.TASK_START.value:
                             pass
 

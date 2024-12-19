@@ -78,7 +78,7 @@ class ZigbeeTransceiver():
             if not self.rcv_queue.empty():
                 msg = int(self.rcv_queue.get())
                 break
-                
+        #print(self.rcv_queue.qsize())   
         return msg
 
     def __del__(self):
