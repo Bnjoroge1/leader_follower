@@ -39,7 +39,7 @@ class Device:
         """
         self.id: int = id  # unique device identifier, randomly generated
         self.leader: bool = False  # initialized as follower
-        self.received: int | None = None  # holds most recent message payload
+        self.received: int = None  # holds most recent message payload
         self.missed: int = 0  # number of missed check-ins, used by current leader
         self.task: int = 0  # task identifier, 0 denotes reserve
 
@@ -115,10 +115,10 @@ class ThisDevice(Device):
         super().__init__(id)
         self.leader: bool = True  # start ThisDevice as leader then change accordingly in setup
         self.device_list: DeviceList = DeviceList()  # default sizing
-        self.leader_id: int | None = None
-        self.leader_started_operating: float | None = None
-        self.task_folder_idx: int | None = None  # multiple operations can be preloaded
-        self.received: int | None = None  # will be an int representation of message
+        self.leader_id: int  = None
+        self.leader_started_operating: float = None
+        self.task_folder_idx: int  = None  # multiple operations can be preloaded
+        self.received: int  = None  # will be an int representation of message
 
         self.transceiver= transceiver  # plugin object for sending and receiving messages
         self.numHeardDLIST: int = 0
@@ -859,7 +859,7 @@ class DeviceList:
         device.set_task(task)
         self.devices[id] = device
 
-    def find_device(self, id: int) -> int | None:
+    def find_device(self, id: int) -> int :
         """
         Finds Device object with target id in DeviceList.
         :param id: identifier for target device.
@@ -914,7 +914,7 @@ class DeviceList:
                 task = 0
             self.devices[id].set_task(task)
 
-    def get_highest_id(self) -> Device | None:
+    def get_highest_id(self):
         """
         Gets Device with the largest id, used for leader takeover and tiebreaker.
         :return: Device object with the largest id
