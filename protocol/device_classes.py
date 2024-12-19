@@ -228,7 +228,7 @@ class ThisDevice(Device):
         print("Assuming position of leader")
         self.make_leader()
         self.leader_id = self.id
-        self.device_list.add_device(id=self.id, task=1)  # put itself in devicelist with first task
+        self.device_list.add_device(id=self.id, task_index=1, thisDeviceId= self.id)  # put itself in devicelist with first task
         self.leader_send_attendance()
 
     def leader_send_attendance(self):
@@ -251,7 +251,7 @@ class ThisDevice(Device):
                 task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", self.received_follower_id())
                 self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
-                self.device_list.add_device(id=self.received_follower_id(), task=task)  # has not assigned task yet
+                self.device_list.add_device(id=self.received_follower_id(), task_index=task, thisDeviceId= self.id)  # has not assigned task yet
 
     def leader_send_device_list(self):
         """
@@ -350,14 +350,14 @@ class ThisDevice(Device):
         # only add devices which are not already in device list
         # if self.received_follower_id() not in self.device_list.get_ids():
         self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-        self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
+        self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
 
         # handle the rest of the list
         while self.receive(duration=0.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
             # only add new devices
             #if self.received_follower_id() not in self.device_list.get_ids():
             self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
-            self.device_list.add_device(id=self.received_follower_id(), task=self.received_payload())
+            self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
 
     def follower_drop_disconnected(self):
         """
@@ -392,7 +392,7 @@ class ThisDevice(Device):
                 print("Unused tasks: ", unused_tasks)
                 task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", otherLeader)
-                self.device_list.add_device(id=otherLeader, task=task)  # has not assigned task yet
+                self.device_list.add_device(id=otherLeader, task_index=task, thisDeviceId= self.id)  # has not assigned task yet
 
     def log_message(self, msg: int, direction: str):
         self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
@@ -677,7 +677,7 @@ class ThisDevice(Device):
                 while self.active:
                     if self.get_leader():
                         # update websocket on each loop in case connection is too slow
-                        self.transceiver.log("LEADER")
+                        #self.transceiver.log("LEADER")
 
                         print("Device:", self.id, self.leader, "\n", self.device_list)
                         self.leader_send_attendance()
@@ -704,10 +704,10 @@ class ThisDevice(Device):
 
                         time.sleep(2)
 
-                        self.transceiver.clear()
+                        #self.transceiver.clear()
 
                     if not self.get_leader():
-                        self.transceiver.log("FOLLOWER")
+                        #self.transceiver.log("FOLLOWER")
                         # print("Device:", self.id, self.leader, "\n", self.device_list)
                         if not self.receive(duration=TAKEOVER_DURATION):
                             print("Is there anybody out there?")
@@ -782,7 +782,7 @@ class ThisDevice(Device):
 
 class DeviceList:
     """ Container for lightweight Device objects, held by ThisDevice. """
-    task_assignments = [1, 2, 3, 4] #1: leader defaulted to quadrant 1; 2-4: followers and their respective quadrant #s
+    #self.task_assignments = [1, 2, 3, 4] #1: leader defaulted to quadrant 1; 2-4: followers and their respective quadrant #s
 
     def __init__(self, num_tasks=8):
         """
@@ -790,7 +790,7 @@ class DeviceList:
         :param num_tasks: size of DeviceList, number of tasks.
         """
         self.devices = {}  # hashmap of id: Device object
-        self.task_options = task_assignments  # 1, 2, 3, 4
+        self.task_options = [1, 2, 3, 4]  # 1, 2, 3, 4
 
     def __str__(self):
         """
@@ -843,18 +843,18 @@ class DeviceList:
         """
         self.task_options = list(range(num_tasks))
 
-    def add_device(self, id: int, task_index: int):
+    def add_device(self, id: int, task_index: int, thisDeviceId: int):
         """
         Creates Device object with id and task, stores in DeviceList.
         :param id: identifier for device, assigned to new Device object.
         :param task_index: index of task for device, assigned to new Device object.
         """
-        if 0 <= task_index < len(self.task_assignments):
-            task = self.task_assignments[task_index]
+        if 0 <= task_index < len(self.task_options):
+            task = self.task_options[task_index]
 
             # call to MainThread.py
-            if id == ThisDevice.id:
-                subprocess.run(["python3", "RobotBase/MainThread.py", str(task)])
+            if id == thisDeviceId:
+                subprocess.run(["python3", "../RobotBase/MainThread.py", str(task)])
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device
@@ -908,8 +908,8 @@ class DeviceList:
         :param task_index: index of new task to be assigned to target.
         """
         if id in self.devices:
-            if 0 <= task_index < len(self.task_assignments):
-                task = self.task_assignments[task_index]
+            if 0 <= task_index < len(self.task_options):
+                task = self.task_options[task_index]
             else:
                 task = 0
             self.devices[id].set_task(task)

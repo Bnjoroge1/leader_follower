@@ -7,7 +7,7 @@ import device_classes as dc
 class ZigbeeDriver():
 
     async def main(self):
-    	self.mac_id = getnode() % 10000
+        self.mac_id = getnode() % 10000
 
         node = ZigbeeNode(self.mac_id)  # takes care of channel setup and looping (non-blocking)
 

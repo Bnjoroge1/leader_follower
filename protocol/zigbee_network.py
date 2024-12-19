@@ -13,6 +13,7 @@ class ZigbeeNode():
         self.transceiver = ZigbeeTransceiver(broker_address='192.168.68.67', broker_port=1883)  # address and port subject to change
         self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
         #self.setup(node_id, target_func, target_args, active)
+        self.thisDevice.device_main()
 
 class ZigbeeTransceiver():
     
@@ -60,7 +61,12 @@ class ZigbeeTransceiver():
     def receive(self, timeout):
         # sub client is already subscribed, we just wait for queue to receive
         end = time.time() + timeout
-        msg = self.rcv_queue.get(timeout=timeout)
+        msg = None
+        while time.time() < end:
+            if not self.rcv_queue.empty():
+                msg = int(self.rcv_queue.get())
+                break
+                
         return msg
 
     def __del__(self):
@@ -73,8 +79,8 @@ class ZigbeeTransceiver():
         # we want to put any message received since protocol will
         # handle whether it is valid or not
         # we could change this setup to allow for checks here which may be faster
-        print("msg")
-        userdata.put(self, message.payload)
+        print(int(message.payload))
+        self.rcv_queue.put(message.payload)
 
     def on_sub_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code.is_failure:
