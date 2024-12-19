@@ -853,7 +853,7 @@ class DeviceList:
             task = self.task_options[task_index]
 
             # call to MainThread.py
-            if (id == thisDeviceId) and (Dev:
+            if (id == thisDeviceId):
                 subprocess.Popen(["python3", "../TestTask/MainThread.py", str(task)])
         device = Device(id)
         device.set_task(task)
