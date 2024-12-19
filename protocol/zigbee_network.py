@@ -1,19 +1,20 @@
 import paho.mqtt.client as mqtt
 import json
 #from abstract_network import AbstractTransceiver, AbstractNode
-import multiprocessing
+#import multiprocessing
 import device_classes as dc
 from queue import Queue
 import time
 
 class ZigbeeNode():
      
-    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
+    def __init__(self, node_id, target_func = None, target_args = None):  # type: ignore
         self.node_id = node_id
-        self.transceiver = ZigbeeTransceiver(broker_address='192.168.0.219', broker_port=1883)  # address and port subject to change
+        self.transceiver = ZigbeeTransceiver(broker_address='192.168.68.89', broker_port=1883)  # address and port subject to change
         self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
         #self.setup(node_id, target_func, target_args, active)
-        self.process = multiprocessing.Process(target=self.thisDevice.device_main)
+        self.thisDevice.device_main()
+        #self.process = multiprocessing.Process(target=self.thisDevice.device_main)
         
     def start(self):
         self.process.start()
@@ -23,15 +24,16 @@ class ZigbeeNode():
 
 class ZigbeeTransceiver():
     
-    def __init__(self, broker_address='192.168.0.219', broker_port=1883, username=None, password=None):
+    def __init__(self, broker_address='192.168.68.89', broker_port=1883, username=None, password=None):
         self.broker_address = broker_address
         self.broker_port = broker_port
         self.username = username
         self.password = password
         self.sub_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-        self.pub_client = mqtt.Client()
+        self.pub_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self.sub_topic = 'zigbee2mqtt/bridge/request/device/permit_join'
         self.rcv_queue = Queue()
+        self.unacked = set()
 
         if username and password:
             self.sub_client.username_pw_set(username, password)
@@ -50,6 +52,8 @@ class ZigbeeTransceiver():
         self.sub_client.loop_start()  # Start the loop in a separate thread
 
         # start pub loop
+        self.pub_client.user_data_set(self.unacked)
+        self.pub_client.on_publish = self.on_pub
         self.pub_client.connect(self.broker_address, self.broker_port)
         self.pub_client.loop_start()  # Start the loop in a separate thread
 
@@ -61,6 +65,8 @@ class ZigbeeTransceiver():
         # Publish the message to the specified topic
         # qos=1 waits for acknowledgement from broker  (we could do 0 which has no wait)
         msg_info = self.pub_client.publish(topic, msg, qos=1)
+        self.unacked.add(msg_info.mid)
+        msg_info.wait_for_publish()
         # rc is at index 0 of msg_info - will be 0 if success
         # we could use this to decide whether we should resend or not?
     
@@ -102,3 +108,12 @@ class ZigbeeTransceiver():
     def on_unsubscribe(self, client, userdata, mid, reason_list, properties):
         print('unsub')
         client.disconnect()
+        
+    def on_pub(self, client, userdata, mid, reason_code, properties):
+        try:
+            #print(mid)
+            userdata.remove(mid)
+        except KeyError:
+            print("race condition occurred")
+        except:
+            print("other error ocurred")

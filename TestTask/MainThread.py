@@ -3,7 +3,7 @@
 import sys
 import time
 import os
-import cv2
+#import cv2
 
 if sys.version_info.major == 2:
     print('Please run this program with python3!')
