@@ -851,7 +851,7 @@ class DeviceList:
         :param task_index: index of task for device, assigned to new Device object.
         """
         if 1 <= task_index <= 4:
-            task = task_index
+            task = task_index + 1
 
             # call to MainThread.py
             if (id == thisDeviceId):
