@@ -691,7 +691,7 @@ class ThisDevice(Device):
 
                         self.leader_send_device_list()
 
-                        time.sleep(0.5)
+                        time.sleep(2)
 
                         # will be helpful if leader works through followers in
                         # same order each time to increase clock speed
@@ -701,11 +701,11 @@ class ThisDevice(Device):
                         if not self.get_leader():
                             continue
 
-                        time.sleep(0.5)
+                        time.sleep(1)
 
                         self.leader_drop_disconnected()
 
-                        time.sleep(0.5)
+                        time.sleep(1)
 
                         #self.transceiver.clear()
 
