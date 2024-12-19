@@ -19,7 +19,7 @@ CURRENT_FILE = Path(__file__).absolute()
 PROTOCOL_DIR = CURRENT_FILE.parent
 OUTPUT_DIR = PROTOCOL_DIR / "output"
 
-MISSED_THRESHOLD: int = 2
+MISSED_THRESHOLD: int = 3
 RESPONSE_ALLOWANCE: float = 1  # subject to change
 PRECISION_ALLOWANCE: int = 5
 SETUP_WAIT = 5
@@ -346,18 +346,17 @@ class ThisDevice(Device):
         self.log_status("HANDLING DLIST")
 
         # wipe current device list
-        self.device_list.clear()
+        #self.device_list.clear()
 
         # handle already received device from original message
         # only add devices which are not already in device list
-        if self.received_follower_id() not in self.device_list.get_ids():
+        if self.received_follower_id() not in self.device_list.get_device_list().keys():
             self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
             self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
-
         # handle the rest of the list
         while self.receive(duration=0.5, action_value=Action.D_LIST.value):  # while still receiving D_LIST
             # only add new devices
-            if self.received_follower_id() not in self.device_list.get_ids():
+            if self.received_follower_id() not in self.device_list.get_device_list().keys():
                 self.log_status("ADDING " + str(self.received_follower_id()) + " TO DLIST")
                 self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id)
 
@@ -366,6 +365,7 @@ class ThisDevice(Device):
         Called after follower receives DELETE action from leader. Drops device from device list.
         :return:
         """
+        print("deleting")
         self.device_list.remove_device(id=self.received_follower_id())
     
     def handle_tiebreaker(self, otherLeader : int):
@@ -766,6 +766,7 @@ class ThisDevice(Device):
                             self.follower_drop_disconnected()  # even if self is wrongly deleted
                             # that will be handled later in Action.ATTENDANCE.value
                         elif action == Action.D_LIST.value:
+                            self.device_list
                             self.follower_handle_dlist()
                             self.numHeardDLIST += 1
                         elif action == Action.TASK_START.value:
@@ -849,8 +850,8 @@ class DeviceList:
         :param id: identifier for device, assigned to new Device object.
         :param task_index: index of task for device, assigned to new Device object.
         """
-        if 0 <= task_index < len(self.task_options):
-            task = self.task_options[task_index]
+        if 1 <= task_index <= 4:
+            task = task_index
 
             # call to MainThread.py
             if (id == thisDeviceId):
@@ -858,6 +859,7 @@ class DeviceList:
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device
+        print("dlist", self.devices.keys())
 
     def find_device(self, id: int) -> int :
         """
