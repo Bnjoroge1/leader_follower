@@ -1,0 +1,30 @@
+[2024-12-16 01:40:22] info: 	z2m: Logging to console, file (filename: log.log)
+[2024-12-16 01:40:22] info: 	z2m: Starting Zigbee2MQTT version 1.41.0 (commit #cc31cea)
+[2024-12-16 01:40:22] info: 	z2m: Starting zigbee-herdsman (2.1.7)
+[2024-12-16 01:40:23] warning: 	zh:ezsp: 'ezsp' driver is deprecated and will only remain to provide support for older firmware (pre 7.4.x). Migration to 'ember' is recommended. If using Zigbee2MQTT see https://github.com/Koenkk/zigbee2mqtt/discussions/21462
+[2024-12-16 01:40:30] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":1} after 4000ms
+[2024-12-16 01:40:30] error: 	zh:ezsp:uart: -!- break waiting (1)
+[2024-12-16 01:40:30] error: 	zh:ezsp:uart: Can't send DATA frame (0,1,0): 1800012800
+[2024-12-16 01:40:32] info: 	z2m: zigbee-herdsman started (resumed)
+[2024-12-16 01:40:32] info: 	z2m: Coordinator firmware version: '{"meta":{"maintrel":"3 ","majorrel":"6","minorrel":"10","product":8,"revision":"6.10.3.0 build 297"},"type":"EZSP v8"}'
+[2024-12-16 01:40:32] info: 	z2m: Currently 0 devices are joined.
+[2024-12-16 01:40:32] warning: 	z2m: `permit_join` set to  `true` in configuration.yaml.
+[2024-12-16 01:40:32] warning: 	z2m: Allowing new devices to join.
+[2024-12-16 01:40:32] warning: 	z2m: Set `permit_join` to `false` once you joined all devices.
+[2024-12-16 01:40:32] info: 	z2m: Zigbee: allowing new devices to join.
+[2024-12-16 01:40:32] info: 	z2m: Connecting to MQTT server at mqtt://mqtt
+[2024-12-16 01:40:33] info: 	z2m: Connected to MQTT server
+[2024-12-16 01:40:33] info: 	z2m:mqtt: MQTT publish: topic 'zigbee2mqtt/bridge/state', payload '{"state":"online"}'
+[2024-12-16 01:40:33] info: 	z2m: Started frontend on port 8080
+[2024-12-16 01:40:33] info: 	z2m: Zigbee2MQTT started!
+[2024-12-16 01:40:36] info: 	zh:controller: Interview for '0x90395efffe3effe4' started
+[2024-12-16 01:40:36] info: 	z2m: Device '0x90395efffe3effe4' joined
+[2024-12-16 01:40:36] info: 	z2m: Starting interview of '0x90395efffe3effe4'
+[2024-12-16 01:40:36] info: 	z2m:mqtt: MQTT publish: topic 'zigbee2mqtt/bridge/event', payload '{"data":{"friendly_name":"0x90395efffe3effe4","ieee_address":"0x90395efffe3effe4"},"type":"device_joined"}'
+[2024-12-16 01:40:36] info: 	z2m:mqtt: MQTT publish: topic 'zigbee2mqtt/bridge/event', payload '{"data":{"friendly_name":"0x90395efffe3effe4","ieee_address":"0x90395efffe3effe4","status":"started"},"type":"device_interview"}'
+[2024-12-16 01:40:38] info: 	zh:controller: Succesfully interviewed '0x90395efffe3effe4'
+[2024-12-16 01:40:38] info: 	z2m: Successfully interviewed '0x90395efffe3effe4', device has successfully been paired
+[2024-12-16 01:40:38] info: 	z2m: Device '0x90395efffe3effe4' is supported, identified as: SONOFF Sonoff Zigbee 3.0 USB Dongle Plus (EFR32MG21) with router firmware (ZBDongle-E)
+[2024-12-16 01:40:38] info: 	z2m: Configuring '0x90395efffe3effe4'
+[2024-12-16 01:40:38] info: 	z2m: Successfully configured '0x90395efffe3effe4'
+[2024-12-16 01:40:38] info: 	z2m:mqtt: MQTT publish: topic 'zigbee2mqtt/bridge/event', payload '{"data":{"definition":{"description":"Sonoff Zigbee 3.0 USB Dongle Plus (EFR32MG21) with router firmware","exposes":[{"access":1,"description":"Brightness of the indicator light","label":"Light indicator level","name":"light_indicator_level","property":"light_indicator_level","type":"numeric"},{"access":1,"category":"diagnostic","description":"Link quality (signal strength)","label":"Linkquality","name":"linkquality","property":"linkquality","type":"numeric","unit":"lqi","value_max":255,"value_min":0}],"model":"ZBDongle-E","options":[],"supports_ota":false,"vendor":"SONOFF"},"friendly_name":"0x90395efffe3effe4","ieee_address":"0x90395efffe3effe4","status":"successful","supported":true},"type":"device_interview"}'

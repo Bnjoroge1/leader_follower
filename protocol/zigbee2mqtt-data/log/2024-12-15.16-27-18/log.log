@@ -1,0 +1,24 @@
+[2024-12-15 16:27:18] info: 	z2m: Logging to console, file (filename: log.log)
+[2024-12-15 16:27:18] info: 	z2m: Starting Zigbee2MQTT version 1.42.0 (commit #861cba6)
+[2024-12-15 16:27:18] info: 	z2m: Starting zigbee-herdsman (2.1.9)
+[2024-12-15 16:27:19] warning: 	zh:ezsp: 'ezsp' driver is deprecated and will only remain to provide support for older firmware (pre 7.4.x). Migration to 'ember' is recommended. If using Zigbee2MQTT see https://github.com/Koenkk/zigbee2mqtt/discussions/21462
+[2024-12-15 16:27:29] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+[2024-12-15 16:27:29] error: 	zh:ezsp:ezsp: Connection attempt 1 error: Error: Failure to connect
+[2024-12-15 16:27:44] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+[2024-12-15 16:27:44] error: 	zh:ezsp:ezsp: Connection attempt 2 error: Error: Failure to connect
+[2024-12-15 16:28:04] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+[2024-12-15 16:28:04] error: 	zh:ezsp:ezsp: Connection attempt 3 error: Error: Failure to connect
+[2024-12-15 16:28:29] error: 	zh:ezsp:uart: --> Error: Error: {"sequence":-1} after 10000ms
+[2024-12-15 16:28:29] error: 	zh:ezsp:ezsp: Connection attempt 4 error: Error: Failure to connect
+[2024-12-15 16:28:29] error: 	z2m: Error while starting zigbee-herdsman
+[2024-12-15 16:28:29] error: 	z2m: Failed to start zigbee
+[2024-12-15 16:28:29] error: 	z2m: Check https://www.zigbee2mqtt.io/guide/installation/20_zigbee2mqtt-fails-to-start.html for possible solutions
+[2024-12-15 16:28:29] error: 	z2m: Exiting...
+[2024-12-15 16:28:29] error: 	z2m: Error: Failure to connect
+    at Ezsp.connect (/app/node_modules/zigbee-herdsman/src/adapter/ezsp/driver/ezsp.ts:364:19)
+    at Driver.startup (/app/node_modules/zigbee-herdsman/src/adapter/ezsp/driver/driver.ts:186:13)
+    at EZSPAdapter.start (/app/node_modules/zigbee-herdsman/src/adapter/ezsp/adapter/ezspAdapter.ts:152:16)
+    at Controller.start (/app/node_modules/zigbee-herdsman/src/controller/controller.ts:137:29)
+    at Zigbee.start (/app/lib/zigbee.ts:69:27)
+    at Controller.start (/app/lib/controller.ts:161:27)
+    at start (/app/index.js:154:5)
