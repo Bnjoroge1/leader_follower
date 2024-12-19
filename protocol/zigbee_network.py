@@ -2,19 +2,21 @@ import paho.mqtt.client as mqtt
 import json
 #from abstract_network import AbstractTransceiver, AbstractNode
 import multiprocessing
-#import device_classes as dc
+import device_classes as dc
 from queue import Queue
 import time
 
 class ZigbeeNode():
      
     def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
-        self.transceiver = ZigbeeTransceiver(broker_address='localhost', broker_port=1883)  # address and port subject to change
-        self.setup(node_id, target_func, target_args, active)
+        self.node_id = node_id
+        self.transceiver = ZigbeeTransceiver(broker_address='192.168.68.67', broker_port=1883)  # address and port subject to change
+        self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
+        #self.setup(node_id, target_func, target_args, active)
 
 class ZigbeeTransceiver():
     
-    def __init__(self, broker_address='localhost', broker_port=1883, username=None, password=None):
+    def __init__(self, broker_address='192.168.68.67', broker_port=1883, username=None, password=None):
         self.broker_address = broker_address
         self.broker_port = broker_port
         self.username = username

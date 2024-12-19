@@ -4,16 +4,16 @@ Modified device_classes for test_harness
 import os
 import time
 from message_classes import Message, Action
-from zigbee_network import ZigbeeTransceiver
+#from zigbee_network import ZigbeeTransceiver
 from typing import Dict, List, Set
 from pathlib import Path
 import csv
 import subprocess
 
 # zigpy imports
-import asyncio
-from zigpy.zcl.clusters.general import OnOff
-from zigpy.types import EUI64
+#import asyncio
+#from zigpy.zcl.clusters.general import OnOff
+#from zigpy.types import EUI64
 
 CURRENT_FILE = Path(__file__).absolute()
 PROTOCOL_DIR = CURRENT_FILE.parent
@@ -106,7 +106,7 @@ class Device:
 class ThisDevice(Device):
     """ Object for main protocol to use, subclass of Device. """
 
-    def __init__(self, id, transceiver: AbstractTransceiver):  # inclusive bounds
+    def __init__(self, id, transceiver):  # inclusive bounds
         """
         Constructor (default/non-default) for ThisDevice, creates additional fields.
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
@@ -118,7 +118,7 @@ class ThisDevice(Device):
         self.leader_started_operating: float | None = None
         self.task_folder_idx: int | None = None  # multiple operations can be preloaded
         self.received: int | None = None  # will be an int representation of message
-        self.transceiver: AbstractTransceiver = transceiver  # plugin object for sending and receiving messages
+        self.transceiver = transceiver  # plugin object for sending and receiving messages
         self.numHeardDLIST: int = 0
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         self.outPath = OUTPUT_DIR / ("device_log_" + str(self.id) + ".csv")
@@ -788,7 +788,7 @@ class DeviceList:
         :param num_tasks: size of DeviceList, number of tasks.
         """
         self.devices = {}  # hashmap of id: Device object
-        self.task_options = list(range(1, num_tasks+1))  # 1, 2, 3, 4
+        self.task_options = task_assignments  # 1, 2, 3, 4
 
     def __str__(self):
         """
