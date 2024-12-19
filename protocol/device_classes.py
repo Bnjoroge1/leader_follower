@@ -222,7 +222,7 @@ class ThisDevice(Device):
                 print("Heard someone, listening for attendance")
                 self.receive(duration=15, action_value=Action.ATTENDANCE.value)
             if self.received_action() == Action.ATTENDANCE.value:
-                print("Heard attedance, becoming follower")             
+                print("Heard attendance, becoming follower")             
                 self.make_follower()
                 self.follower_handle_attendance()
                 return  # early exit if follower
@@ -366,7 +366,7 @@ class ThisDevice(Device):
         Called after follower receives DELETE action from leader. Drops device from device list.
         :return:
         """
-        print("deleting")
+        print("Follower received DELETE message")
         self.device_list.remove_device(id=self.received_follower_id())
     
     def handle_tiebreaker(self, otherLeader : int):
@@ -711,7 +711,7 @@ class ThisDevice(Device):
 
                     if not self.get_leader():
                         #self.transceiver.log("FOLLOWER")
-                        # print("Device:", self.id, self.leader, "\n", self.device_list)
+                        #print("Device:", self.id, self.leader, "\n", self.device_list)
                         if not self.receive(duration=TAKEOVER_DURATION):
                             print("Is there anybody out there?")
                             self.make_leader()
@@ -770,6 +770,7 @@ class ThisDevice(Device):
                             self.device_list
                             self.follower_handle_dlist()
                             self.numHeardDLIST += 1
+                            print("Device:", self.id, self.leader, "\n", self.device_list)
                         elif action == Action.TASK_START.value:
                             pass
 
@@ -860,7 +861,7 @@ class DeviceList:
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device
-        print("dlist", self.devices.keys())
+        #print("dlist", self.devices.keys())
 
     def find_device(self, id: int) -> int :
         """

@@ -46,7 +46,7 @@ class ZigbeeTransceiver():
         # start sub loop
         self.sub_client.user_data_set(self.rcv_queue)
         self.sub_client.connect(self.broker_address, self.broker_port)
-        print("here")
+        #print("here")
         self.sub_client.loop_start()  # Start the loop in a separate thread
 
         # start pub loop
@@ -89,7 +89,7 @@ class ZigbeeTransceiver():
         # we want to put any message received since protocol will
         # handle whether it is valid or not
         # we could change this setup to allow for checks here which may be faster
-        print(int(message.payload))
+        #print(int(message.payload))
         self.rcv_queue.put(message.payload)
 
     def on_sub_connect(self, client, userdata, flags, reason_code, properties):

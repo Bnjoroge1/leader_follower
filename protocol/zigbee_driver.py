@@ -13,8 +13,10 @@ class ZigbeeDriver():
         node = ZigbeeNode(self.mac_id)  # takes care of channel setup and looping (non-blocking)
 
         # all UI comms will take place over Zigbee, websocket not necessary
-        print("Sleep for 5 sec to position robot")
-        time.sleep(5)
+        print("Starting 5 second countdown to position robot!")
+        end = time.time() + 5
+        while time.time() < end:
+            node.transceiver.receive(5)
         node.start()
         
     async def test():
