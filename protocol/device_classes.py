@@ -19,7 +19,7 @@ CURRENT_FILE = Path(__file__).absolute()
 PROTOCOL_DIR = CURRENT_FILE.parent
 OUTPUT_DIR = PROTOCOL_DIR / "output"
 
-MISSED_THRESHOLD: int = 3
+MISSED_THRESHOLD: int = 2
 RESPONSE_ALLOWANCE: float = 1  # subject to change
 PRECISION_ALLOWANCE: int = 5
 SETUP_WAIT = 5
