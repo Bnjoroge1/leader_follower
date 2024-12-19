@@ -13,7 +13,7 @@ class ZigbeeDriver():
 
         # all UI comms will take place over Zigbee, websocket not necessary
         
-        #node.start()
+        node.start()
         
     async def test():
         node = ZigbeeNode()
@@ -28,4 +28,4 @@ class ZigbeeDriver():
 if __name__ == "__main__":
     driver = ZigbeeDriver()
     # asyncio.run(driver.test())
-    asyncio.run((driver.main()))
+    asyncio.run(driver.main())
