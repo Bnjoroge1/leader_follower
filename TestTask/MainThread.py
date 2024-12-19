@@ -12,10 +12,18 @@ if sys.version_info.major == 2:
 class MainThread:
     def __init__(self, quadrant_num):
         self.quad = quadrant_num
-        print(f"Main thread initialized")
+        self.running = True
+        print(f"Main thread initialized - no block")
         
     def run(self):
-        print(f"Quadrant task: {self.quad}")       
+        print(f"Quadrant task: {self.quad}")   
+        print("Starting infinite task!")
+        try:
+            while self.running:
+                time.sleep(3)
+        except KeyboardInterrupt:
+            self.running = False
+              
 
 if __name__ == '__main__':
     quadrant_num = int(sys.argv[1])

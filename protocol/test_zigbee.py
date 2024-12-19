@@ -22,7 +22,7 @@ def receiving_test():
 
 if __name__ == '__main__':
     # get send to work w no errors first 
-    sending_test()
+    #sending_test()
     # then get receive to run w no errors (but not receiving msg)
-    #receiving_test()
+    receiving_test()
     # once both run without errors, get two devices and have one run send and other run receive
