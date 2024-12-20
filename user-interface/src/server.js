@@ -46,6 +46,6 @@ app.get('/', (req, res) => {
     res.send('Hello World!');
 });
 
-server.listen(1883, () => {
-    console.log('Server listening on port 1883');
+server.listen(3000, () => {
+    console.log('Server listening on port 3000');
 });
