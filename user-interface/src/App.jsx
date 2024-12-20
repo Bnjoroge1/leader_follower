@@ -28,31 +28,18 @@ function App() {
     const tag = parts[0];
     const id = parts[1];
 
-    if (tag === 'CONNECTED') {
-      addNewDevice(id);
-    } else if (tag === 'REACTIVATED') {
-      reactivateDevice(id);
-    } else if (tag === 'DEACTIVATED') {
-      deactivateDevice(id);
-    } else if (tag === 'LEADER') {
-      markLeader(id);
-    } else if (tag === 'FOLLOWER') {
-      markFollower(id);
-    } else if (tag === 'SEND') {
-      // markSend(id);
+    if (tag === "NEW") {
+        addNewDevice(id);
+    } else if (tag === "DEAD") {
+        deactivateDevice(id);
+    } else if (tag === "ALIVE") {
+        reactivateDevice(id);
+    } else if (tag === "FOLLOWER") {
+        markFollower(id);
+    } else if (tag === "LEADER") {
+        markLeader(id);
     }
   });
-
-  async function markSend(id) {
-    const device = document.getElementById(`device-${id}`);
-    device.style.backgroundColor = 'green';
-    await Promise((resolve, reject) => {
-      setTimeout(() => {
-        device.style.backgroundColor = 'gray';
-        resolve();
-      }, 5000);
-    });
-  }
 
   function markLeader(id) {
     const device = document.getElementById(`device-${id}`);
@@ -67,13 +54,6 @@ function App() {
     const device = document.getElementById(`device-${id}`);
     if (device) {
       device.style.backgroundColor = 'skyblue';
-    }
-  }
-
-  function markDeactivated(id) {
-    const device = document.getElementById(`device-${id}`);
-    if (device) {
-      device.style.backgroundColor = 'gray';
     }
   }
 
@@ -121,17 +101,18 @@ function App() {
     label.style.width = '100%';
     label.style.top = '30px';
 
-    // const transceiver = document.createElement('div');
-    // transceiver.style.position = 'absolute';
-    // transceiver.style.width = '10px';
-    // transceiver.style.height = '10px';
-    // transceiver.style.borderRadius = '50%';
-    // transceiver.style.backgroundColor = 'gray';
-    // transceiver.style.top = '-20px';
-
     active_container.appendChild(newDevice);
     newDevice.appendChild(label);
-    // newDevice.appendChild(transceiver);
+
+    newDevice.addEventListener('click', () => {
+      console.log('Device clicked:', id);
+      // ensure the socket is open before sending
+      if (socket.current.readyState === WebSocket.OPEN) {
+        socket.current.send(`TOGGLE,${id}`);
+      } else {
+        console.error("WebSocket is not open. Current state:", socket.current.readyState);
+      }
+    });
   }
   
   function reshapeActiveDevices() {
@@ -164,49 +145,11 @@ function App() {
     }
   }
 
-  const buttons = document.querySelectorAll('#control-buttons button');
-  const handleClicks = [];
-
-  buttons.forEach((button, index) => {
-    const handleClick = (event) => {
-      button.style.animation = 'flash 0.5s';
-      console.log("Button clicked:", event.target.textContent)
-      // ensure the socket is open before sending
-      if (socket.current.readyState === WebSocket.OPEN) {
-        socket.current.send(`INJECT,${event.target.textContent}`);
-      } else {
-        console.error("WebSocket is not open. Current state:", socket.current.readyState);
-      }
-      button.addEventListener('animationend', () => {
-        button.style.animation = 'none';
-      });
-    };
-
-    handleClicks[index] = handleClick;  // storing reference for cleanup
-    button.addEventListener('click', handleClick);
-  });
-
-  // cleanup function to remove event listeners
-  return () => {
-    buttons.forEach((button, index) => {
-      button.removeEventListener('click', handleClicks[index]);
-    });
-  };
 }, []);
 
   return (
     <>
     <div id="parent">
-      <div id="control-div">
-        <h1 id="control-title">Control Panel</h1>
-        <div id="control-buttons">
-          <button>Create Device</button>
-          <button>Delete Device</button>
-          <button>Toggle Device</button>
-          <button>Toggle Simulation</button>
-        </div>
-      </div>
-
       <div id="device-container">
         <div id="active-devices">
         </div>
