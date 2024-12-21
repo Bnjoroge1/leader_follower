@@ -93,6 +93,7 @@ class UserInterface(ThisDevice):
                     del self.devices[follow]
                 elif self.leader and action == 6:
                     self.delete_robot(self.leader_id)
+                    del self.devices[self.leader_id]
                     self.leader_id = leader
                     self.make_leader(leader)
                 
@@ -167,8 +168,9 @@ class UserInterface(ThisDevice):
     def make_leader(self, robot_id):
         alert = self.axs[1, 0].text(0.5,0.5, f" Robot {self.devices[robot_id][1]}: \nBecame Leader", size=20, ha="center", va="center")
         plt.draw()
-        plt.pause(1)
+        plt.pause(0.5)
         self.devices[robot_id][2].set_facecolor('red')
+        self.devices[robot_id][2].set_edgecolor('red')
         plt.draw()
         plt.pause(0.05)
         
@@ -177,7 +179,6 @@ class UserInterface(ThisDevice):
         alert.remove()
         plt.draw()
         plt.pause(0.05)
-        return robot, rnum
         
     def received_action(self):
         """
