@@ -86,13 +86,13 @@ class MainThread:
             self.move_straight_reverse(12)
             time.sleep(0.5)
         elif quad_num == 3:
-            self.move_straight(48)
+            self.move_straight(43)
             time.sleep(0.2)
             self.turn_left()
             time.sleep(0.2)
             self.move_straight(5)
             time.sleep(0.2)
-            self.move_straight_reverse(15)
+            self.move_straight_reverse(14)
             time.sleep(0.5)
         elif quad_num == 4:
             self.move_straight(initialForwardDist)
@@ -137,12 +137,12 @@ class MainThread:
 
     def turn_right(self):
         self.car.set_velocity(0, 90, 0.55) 
-        time.sleep(0.58) # rpi1: 0.55 
+        time.sleep(0.58) # rpi1: 0.55; 11/20: 0.58
         self.car.set_velocity(0, 90, 0)
 
     def turn_left(self):
         self.car.set_velocity(0, 90, -0.52)  
-        time.sleep(0.61) # rpi1: 0.55
+        time.sleep(0.58) # rpi1: 0.55; 11/20: 0.61
         self.car.set_velocity(0, 90, 0)  
 
     def handle_last_tag(self):
@@ -161,11 +161,11 @@ class MainThread:
         elif (self.last_detected_tag == 2):
             if (self.quad):
                 self.turn_right()
-                time.sleep(0.5)
+                time.sleep(1.0)
                 self.turn_right()
             elif (not self.quad):
                 self.turn_left()
-                time.sleep(0.5)
+                time.sleep(1.0)
                 self.turn_left()
         elif (self.last_detected_tag == 3):
             if (self.quad):
@@ -218,7 +218,6 @@ class MainThread:
         self.stop_signal = True
 
     def run(self):
-        # print("Quadrant Number: " + str(self.quadrant_num))
         try:
             self.quadrant_init(self.quadrant_num)
             while self.running:
@@ -232,6 +231,17 @@ class MainThread:
                     time.sleep(0.5)
                     self.handle_last_tag()
                     time.sleep(5)
+
+                    if(self.last_detected_tag == 3 and current_tag == 1):
+                        print("Aligning with wall")
+                        self.turn_right()
+                        time.sleep(0.5)
+                        self.move_straight(16)
+                        time.sleep(0.5)
+                        self.move_straight_reverse(13)
+                        time.sleep(0.5)
+                        self.turn_left()
+                        time.sleep(0.5)
 
                     if current_tag == 1:
                         self.current_distance = self.map1dist
@@ -251,36 +261,42 @@ class MainThread:
                     time.sleep(1)
 
                     if self.align_with_tag(current_tag):
-                        # added 12/13
+                        time.sleep(0.5)
                         if self.quad:
                             self.turn_right()
                         else:
                             self.turn_left()
-                            
+
+                        time.sleep(0.5)    
                         self.move_straight_reverse(self.current_distance)
                         time.sleep(0.5)
 
                         if current_tag == 1:
                             if (self.quad):
+                                time.sleep(1.0)
                                 self.turn_left()
                             elif (not self.quad):
+                                time.sleep(1.0)
                                 self.turn_right()
                         elif current_tag == 2:
                             if (self.quad):
                                 self.turn_left()
-                                time.sleep(0.2)
+                                time.sleep(1.0)
                                 self.turn_left()
                             elif (not self.quad):
                                 self.turn_right()
-                                time.sleep(0.2)
+                                time.sleep(1.0)
                                 self.turn_right()
                         else:
                             if (self.quad):
+                                time.sleep(1.0)
                                 self.turn_right()
                             elif (not self.quad):
+                                time.sleep(1.0)
                                 self.turn_left()
                         
                         self.last_detected_tag = current_tag
+
                         time.sleep(5)
 
         except KeyboardInterrupt:
@@ -292,12 +308,6 @@ class MainThread:
 
 if __name__ == '__main__':
     quadrant_num = int(sys.argv[1])
-    
-    # testing only
-    # quadrant_num = int(1)
 
     main = MainThread(quadrant_num)
     main.run()
-
-
-# note from 12/12: if there's extra time, address the issue where if no tag is detected then the robot begins to navigate to quadrant again (can be solved offline)
