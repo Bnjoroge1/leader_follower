@@ -44,4 +44,9 @@ class Action(Enum):
     TASK_START = 7  # leader sends personalized message to a tracked follower
     CHECK_IN_RESPONSE = 8  # follower responds to check-in (prevents issue where follower hears its own check in and gets confused)
     INFORMATION = 9  # any device sends information to channel TODO: implement database
+    OFF = 10
+    ON = 11
+    NEW_FOLLOWER = 12
+    ACTIVATE = 13
+    DEACTIVATE = 14
 

@@ -155,14 +155,17 @@ class ThisDevice(Device):
         end_time = time.time() + duration
         while time.time() < end_time:
             self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
-            if self.leader and self.received == Message.DEACTIVATE:
+            if self.received and self.received_action() == Action.DEACTIVATE.value and self.received_follower_id():
                 print("Device got deactivated by user")
                 self.active = False
-                self.make_follower()  # essentially wipe data
+                self.leader = False  # essentially wipe data
+                self.send(Action = ACTION.OFF.value, payload=0, leader_id=0, follower_id=self.id)
                 return False
-            if self.received == Message.ACTIVATE:
+            if self.received and self.received_action() == Action.ACTIVATE.value and self.received_follower_id():
                 print("Device got reactivated by user")
                 self.active = True
+                self.send(Action = ACTION.ON.value, payload=0, leader_id=0, follower_id=self.id)
+                self.make_follower()
                 return False  # wait for next cycle, prevents interpreting injection as device
             # if a new leader is recognized, move into tiebreak scenario
             if self.received and self.leader_id and self.received_leader_id() != self.leader_id:  # another follower out there
@@ -398,7 +401,7 @@ class ThisDevice(Device):
                 self.device_list.add_device(id=otherLeader, task_index=task, thisDeviceId= self.id)  # has not assigned task yet
         else:
             print('here')
-
+    
     def log_message(self, msg: int, direction: str):
         self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
         self.file.flush()
@@ -411,10 +414,12 @@ class ThisDevice(Device):
 
     def make_follower(self):
         super().make_follower()
+        self.send(action=Action.NEW_FOLLOWER.value, payload=0, leader_id=0, follower_id=self.id)
         self.log_status("BECOMING FOLLOWER")
     
     def make_leader(self):
         super().make_leader()
+        self.send(action=Action.NEW_LEADER.value, payload=0, leader_id=self.id, follower_id=0)
         self.log_status("BECOMING LEADER")
         
     def test_setup_leader_only_sends_attendance(self):
@@ -861,7 +866,7 @@ class DeviceList:
 
             # call to MainThread.py
             if (id == thisDeviceId):
-                subprocess.Popen(["python3", "../RobotBase/MainThread.py", str(task)])
+                subprocess.Popen(["python3", "../TestTask/MainThread.py", str(task)])
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device

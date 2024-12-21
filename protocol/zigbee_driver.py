@@ -4,13 +4,14 @@ import asyncio
 from uuid import getnode
 from zigbee_network import ZigbeeTransceiver, ZigbeeNode
 import device_classes as dc
+import multiprocessing
 
 class ZigbeeDriver():
 
     async def main(self):
         self.mac_id = getnode() % 10000
-
-        node = ZigbeeNode(self.mac_id)  # takes care of channel setup and looping (non-blocking)
+        shared_active = multiprocessing.Value('i', 1)
+        node = ZigbeeNode(self.mac_id, active= shared_active, ip='fd2d:c5a0:a9ec:1:27f0:6266:88ef:dd22')  # takes care of channel setup and looping (non-blocking)
 
         # all UI comms will take place over Zigbee, websocket not necessary
         print("Starting 5 second countdown to position robot!")
