@@ -217,5 +217,5 @@ class UserInterface(ThisDevice):
         return self.rcvd % int(1e10) // int(1e8)  
             
 if __name__ == "__main__":
-    ui = UserInterface(transceiver=ZigbeeTransceiver(broker_address='192.168.0.229', broker_port=1883, active= multiprocessing.Value('i', 2)))
+    ui = UserInterface(transceiver=ZigbeeTransceiver(broker_address='192.168.0.219', broker_port=1883, active= multiprocessing.Value('i', 2)))
     asyncio.run(ui.main())
