@@ -1,65 +1,18 @@
-# sending messages to a router (regardless of if from coordinator or router)
-
-pi@raspberrypi2:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
-Traceback (most recent call last):
-  File "/home/pi/Desktop/dev/leader_follower/protocol/test_zigbee.py", line 25, in <module>
-    sending_test()
-  File "/home/pi/Desktop/dev/leader_follower/protocol/test_zigbee.py", line 4, in sending_test
-    transceiver = ZigbeeTransceiver()
-  File "/home/pi/Desktop/dev/leader_follower/protocol/zigbee_network.py", line 40, in __init__
-    self.sub_client.connect(self.broker_address, self.broker_port)
-  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 1435, in connect
-    return self.reconnect()
-  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 1598, in reconnect
-    self._sock = self._create_socket()
-  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 4609, in _create_socket
-    sock = self._create_socket_connection()
-  File "/usr/local/lib/python3.9/dist-packages/paho/mqtt/client.py", line 4640, in _create_socket_connection
-    return socket.create_connection(addr, timeout=self._connect_timeout, source_address=source)
-  File "/usr/lib/python3.9/socket.py", line 843, in create_connection
-    raise err
-  File "/usr/lib/python3.9/socket.py", line 831, in create_connection
-    sock.connect(sa)
-ConnectionRefusedError: [Errno 111] Connection refused
-
-
-#######################################################################################
-
-
-
-pi@raspberrypi1:~/Desktop/dev/leader_follower/protocol $ docker-compose up
-
-# for sending:
-
-step 4 output:
-pi@raspberrypi1:~ $ mosquitto_sub -d -t zigbee2mqtt/bridge/request/device/permit_join
-Client (null) sending CONNECT
-Client (null) received CONNACK (0)
-Client (null) sending SUBSCRIBE (Mid: 1, Topic: zigbee2mqtt/bridge/request/device/permit_join, QoS: 0, Options: 0x00)
-Client (null) received SUBACK
-Subscribed (mid: 1): 0
-
-step 6 output:
-Client (null) sending PINGREQ
-Client (null) received PINGRESP
-Client (null) received PUBLISH (d0, q0, r0, m0, 'zigbee2mqtt/bridge/request/device/permit_join', ... (35 bytes))
-{"test id": 1234, "payload": 12345}
-
-
-# for recieving:
-
-step 2 output:
-pi@raspberrypi1:~ $ mosquitto_pub -d -t zigbee2mqtt/bridge/request/device/permit_join -m “testmsg”
-Client (null) sending CONNECT
-Client (null) received CONNACK (0)
-Client (null) sending PUBLISH (d0, q0, r0, m1, 'zigbee2mqtt/bridge/request/device/permit_join', ... (13 bytes))
-Client (null) sending DISCONNECT
-
-step 4 output:
-pi@raspberrypi1:~/Desktop/dev/leader_follower/protocol $ sudo python3 test_zigbee.py 
-here
+(.venv) alexbattikha@Alexs-MacBook-Pro protocol % python3 ui.py
 suback
-waiting
-starting
-msg
-Received message: <zigbee_network.ZigbeeTransceiver object at 0x7f801b5fd0>
+Traceback (most recent call last):
+  File "/Users/alexbattikha/Desktop/dev/robotics/jhu-2024/leader_follower/protocol/ui.py", line 221, in <module>
+    asyncio.run(ui.main())
+  File "/opt/homebrew/Cellar/python@3.12/3.12.8/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.8/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.8/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/base_events.py", line 686, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/alexbattikha/Desktop/dev/robotics/jhu-2024/leader_follower/protocol/ui.py", line 86, in main
+    elif action == 3 and (self.devices[follow][0] == None):
+                          ~~~~~~~~~~~~^^^^^^^^
+KeyError: 5678
