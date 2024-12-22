@@ -79,7 +79,7 @@ class MainThread:
             self.move_straight_reverse(12)
             time.sleep(0.5)
         elif quad_num == 2:
-            self.move_straight(52)
+            self.move_straight(54)
             time.sleep(0.2)
             self.turn_left()
             time.sleep(0.2)
