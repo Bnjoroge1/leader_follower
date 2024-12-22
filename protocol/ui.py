@@ -130,13 +130,13 @@ class UserInterface(ThisDevice):
         
         if payload == 1:
             robot = patches.Rectangle((0.3,0.3), .4, .4, edgecolor=color, facecolor=color)
-            rnum = self.axs[0, 2].text(0.5,0.5, f"{self.devices[robot_id][1]}", size=20, ha="center", va="center")
-            self.axs[0, 2].add_patch(robot)
+            rnum = self.axs[1, 2].text(0.5,0.5, f"{self.devices[robot_id][1]}", size=20, ha="center", va="center")
+            self.axs[1, 2].add_patch(robot)
         
         elif payload == 2:
             robot = patches.Rectangle((0.3,0.3), .4, .4, edgecolor=color, facecolor=color)
-            rnum = self.axs[1, 2].text(0.5,0.5, f"{self.devices[robot_id][1]}", size=20, ha="center", va="center")
-            self.axs[1, 2].add_patch(robot)
+            rnum = self.axs[0, 2].text(0.5,0.5, f"{self.devices[robot_id][1]}", size=20, ha="center", va="center")
+            self.axs[0, 2].add_patch(robot)
         elif payload == 3:
             robot = patches.Rectangle((0.3,0.3), .4, .4, edgecolor=color, facecolor=color)
             rnum = self.axs[0, 1].text(0.5,0.5, f"{self.devices[robot_id][1]}", size=20, ha="center", va="center")
@@ -217,5 +217,5 @@ class UserInterface(ThisDevice):
         return self.rcvd % int(1e10) // int(1e8)  
             
 if __name__ == "__main__":
-    ui = UserInterface(transceiver=ZigbeeTransceiver(broker_address='192.168.68.89', broker_port=1883, active= multiprocessing.Value('i', 2)))
+    ui = UserInterface(transceiver=ZigbeeTransceiver(broker_address='192.168.0.229', broker_port=1883, active= multiprocessing.Value('i', 2)))
     asyncio.run(ui.main())

@@ -866,7 +866,7 @@ class DeviceList:
 
             # call to MainThread.py
             if (id == thisDeviceId):
-                subprocess.Popen(["python3", "../TestTask/MainThread.py", str(task)])
+                subprocess.Popen(["python3", "../RobotBase/MainThread.py", str(task)])
         device = Device(id)
         device.set_task(task)
         self.devices[id] = device
