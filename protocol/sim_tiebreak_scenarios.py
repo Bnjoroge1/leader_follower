@@ -4,12 +4,17 @@ from simulation_network import SimulationNode, Network
 from message_classes import Action
 import csv
 
-class test_tiebreak_protocol(unittest.TestCase):
+class TestTiebreakProtocol(unittest.TestCase):
     
     def setUp(self):
+        print("\n[TEST] Setting up test...")
+
         self.leader = SimulationNode(1)
         self.conflict = SimulationNode(2)
         self.extra = SimulationNode(3)
+        print(f"[TEST] Device IDs: leader={self.leader.thisDevice.id}, "
+              f"conflict={self.conflict.thisDevice.id}, "
+              f"extra={self.extra.thisDevice.id}")
 
         self.network = Network()
         self.network.add_node(1, self.leader)
@@ -24,7 +29,9 @@ class test_tiebreak_protocol(unittest.TestCase):
         self.conflict_file_name = f'output/device_log_{self.conflict.thisDevice.id}.csv'
         self.extra_file_name = f'output/device_log_{self.extra.thisDevice.id}.csv'
     
-    def correct_leader_chosen_from_attendance(self):
+    def test_correct_leader_chosen_from_attendance(self):
+        print("\n[TEST] Starting leader election test...")
+
         self.leader.set_process(self.leader.thisDevice.device_main)
         self.conflict.set_process(self.conflict.thisDevice.test_tiebreak_conflicting_leader_sends_after_attendance)
         self.extra.set_process(self.extra.thisDevice.device_main)
@@ -32,7 +39,7 @@ class test_tiebreak_protocol(unittest.TestCase):
         self.leader.start()
         time.sleep(3)
         self.extra.start()
-        self.sleep(3)
+        time.sleep(3)
         self.conflict.start()
         
         time.sleep(10)
@@ -40,7 +47,7 @@ class test_tiebreak_protocol(unittest.TestCase):
         self.leader.stop()
         self.conflict.stop()
         self.extra.stop()
-        
+        print(f"ids: {self.leader.thisDevice.id}, {self.conflict.thisDevice.id}, {self.extra.thisDevice.id}")
         if self.leader.thisDevice.id > self.conflict.thisDevice.id and self.leader.thisDevice.id > self.extra.thisDevice.id:
             self.assertTrue(self.leader.thisDevice.leader)
             self.assertEqual(self.conflict.thisDevice.leader_id, self.leader.thisDevice.id)
@@ -55,7 +62,7 @@ class test_tiebreak_protocol(unittest.TestCase):
             self.assertEqual(self.conflict.thisDevice.leader_id, self.extra.thisDevice.id)
             
     
-    def correct_leader_chosen_from_check_in(self):
+    def test_correct_leader_chosen_from_check_in(self):
         self.leader.set_process(self.leader.thisDevice.device_main)
         self.conflict.set_process(self.conflict.thisDevice.test_tiebreak_conflicting_leader_sends_after_check_in)
         self.extra.set_process(self.extra.thisDevice.device_main)
@@ -63,7 +70,7 @@ class test_tiebreak_protocol(unittest.TestCase):
         self.leader.start()
         time.sleep(3)
         self.extra.start()
-        self.sleep(3)
+        time.sleep(3)
         self.conflict.start()
         
         time.sleep(10)
@@ -86,7 +93,7 @@ class test_tiebreak_protocol(unittest.TestCase):
             self.assertEqual(self.conflict.thisDevice.leader_id, self.extra.thisDevice.id)
         
     
-    def correct_leader_chosen_out_of_three_conflicting(self):
+    def test_correct_leader_chosen_out_of_three_conflicting(self):
         self.leader.set_process(self.leader.thisDevice.device_main)
         self.conflict.set_process(self.conflict.thisDevice.test_tiebreak_conflicting_leader_sends_after_attendance)
         self.extra.set_process(self.extra.thisDevice.test_tiebreak_conflicting_leader_sends_after_attendance)
@@ -116,7 +123,7 @@ class test_tiebreak_protocol(unittest.TestCase):
             self.assertEqual(self.conflict.thisDevice.leader_id, self.extra.thisDevice.id)
         
     
-    def correct_leader_chosen_out_of_five_conflicting(self):
+    def test_correct_leader_chosen_out_of_five_conflicting(self):
         self.leader.set_process(self.leader.thisDevice.device_main)
         self.conflict.set_process(self.conflict.thisDevice.test_tiebreak_conflicting_leader_sends_after_attendance)
         self.extra.set_process(self.extra.thisDevice.test_tiebreak_conflicting_leader_sends_after_attendance)
@@ -162,7 +169,7 @@ class test_tiebreak_protocol(unittest.TestCase):
                 self.assertTrue(node.thisDevice.leader)
             else:
                 self.assertEqual(node.thisDevice.leader_id, highest_node.thisDevice.id)
-                
+
 if __name__ == '__main__':
     unittest.main()
             

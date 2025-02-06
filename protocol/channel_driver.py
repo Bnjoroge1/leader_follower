@@ -130,7 +130,7 @@ async def main():
         print("started tasks", started_tasks)
 
         for node in nodes:
-            time.sleep(5)  # intentional synchronous delay
+            #time.sleep(5)  # intentional synchronous delay
             node.start()
 
         # indefinitely awaiting websocket tasks
