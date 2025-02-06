@@ -1,3 +1,9 @@
 __pycache__/
 .DS_Store
 output/
+checkpoints/
+tla/states/
+*log
+*out
+protocol/tla/states/
+venv/
