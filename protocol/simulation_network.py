@@ -20,9 +20,12 @@ def device_process_function(device_id: int, node_id: int, active_value: int):
     try:
         # Create fresh active value
         active = multiprocessing.Value('i', active_value)
-        
+        # Create a dummy parent node to hold the node_id
+        class DummyParent:
+            def __init__(self, node_id):
+                self.node_id = node_id
         # Create fresh transceiver without parent reference
-        transceiver = SimulationTransceiver(parent=None, active=active)
+        transceiver = SimulationTransceiver(parent=DummyParent(node_id), active=active)
         transceiver.parent_id = node_id  # Store just the ID
         
         # Create fresh device
@@ -50,6 +53,7 @@ class SimulationNode(AbstractNode):
         # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
         # for testing purposes, so node can be tested without device protocol fully implemented
         # can be removed later
+        
         if not target_func:
             target_func = self.thisDevice.device_main
         if target_args:
@@ -301,7 +305,28 @@ class SimulationNode(AbstractNode):
         for node_id, messages in queue_state['outgoing'].items():
             for msg in messages:
                 self.transceiver.outgoing_channels[node_id].put(msg)
-
+    def set_process(self, process_func):
+        """Sets the process function to be run by this node"""
+        if self.process is not None and self.process.is_alive():
+            self.process.terminate()
+            
+        # Create new active value for the process
+        if self.active is None:
+            self.active = multiprocessing.Value('i', 2)  # 2 is the default "active" state
+            
+        self.process = multiprocessing.Process(
+            target=device_process_function,
+            args=(
+                self.thisDevice.id,  # device_id
+                self.node_id,        # node_id 
+                self.active.value,   # active_value
+            ),
+            daemon=True
+        )
+        print(f"Process set for node {self.node_id} with function {process_func.__name__}")
+        
+        # Update the device's process
+        self.thisDevice.device_main = process_func
     def get_checkpoint_state(self) -> Dict[str, Any]:
         """Captures node state for checkpointing"""
         state = NodeState(
@@ -461,7 +486,7 @@ class SimulationTransceiver(AbstractTransceiver):
             asyncio.run(self.notify_server(f"SENT,{self.parent.node_id}"))
         except OSError:
             pass
-
+    
     def receive(self, timeout: float) -> int | None:  # get from all queues
         if self.active_status() == 0:
             print("returning DEACTIVATE")
