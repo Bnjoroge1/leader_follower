@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Set
 from pathlib import Path
 import csv
 import subprocess
+from threading import Lock
 
 # zigpy imports
 #import asyncio
@@ -292,8 +293,11 @@ class ThisDevice(Device):
         number of missed check-ins if a device does not respond in time.
         :return:
         """
+        #Take snapshot of device list in a thread-safe manner first
+        with self.device_list._lock:
+            device_list = self.device_list.get_device_list()
         # leader should listen for check-in response before moving on to ensure scalability
-        for id, device in self.device_list.get_device_list().items():
+        for id, device in device_list.items():
 
             if id == self.id:
                 continue
@@ -319,9 +323,11 @@ class ThisDevice(Device):
                         self.log_status("HEARD CHECKIN RESPONSE FROM " + str(id))
                         break
             if got_response:
-                device.reset_missed()
+                with self.device_list._lock:
+                    device.reset_missed()
             else:
-                device.incr_missed()
+                with self.device_list._lock:
+                    device.incr_missed()
 
     def leader_drop_disconnected(self):
         """
@@ -835,7 +841,9 @@ class DeviceList:
         :param num_tasks: size of DeviceList, number of tasks.
         """
         self.devices = {}  # hashmap of id: Device object
-        self.task_options = [3, 4, 1, 2]  # 1, 2, 3, 4
+        self.task_options = list(range(1, num_tasks+1))  # 1, 2, 3, 4
+        #adding a lock to the device list
+        self._lock = Lock()
 
     def __str__(self):
         """
