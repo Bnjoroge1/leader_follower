@@ -40,6 +40,8 @@ class Device:
         :param id: specified identifier for instance.
         """
         self.id: int = id  # unique device identifier, randomly generated
+        
+        
         self.leader: bool = False  # initialized as follower
         self.received: int = None  # holds most recent message payload
         self.missed: int = 0  # number of missed check-ins, used by current leader
@@ -294,8 +296,7 @@ class ThisDevice(Device):
         :return:
         """
         #Take snapshot of device list in a thread-safe manner first
-        with self.device_list._lock:
-            device_list = self.device_list.get_device_list()
+        device_list = self.device_list.get_device_list()
         # leader should listen for check-in response before moving on to ensure scalability
         for id, device in device_list.items():
 
@@ -323,11 +324,9 @@ class ThisDevice(Device):
                         self.log_status("HEARD CHECKIN RESPONSE FROM " + str(id))
                         break
             if got_response:
-                with self.device_list._lock:
-                    device.reset_missed()
+                device.reset_missed()
             else:
-                with self.device_list._lock:
-                    device.incr_missed()
+                device.incr_missed()
 
     def leader_drop_disconnected(self):
         """
@@ -840,10 +839,18 @@ class DeviceList:
         Non-default constructor for DeviceList object.
         :param num_tasks: size of DeviceList, number of tasks.
         """
+        #self.manager = Manager()  #use manager to create the shared disctionary
         self.devices = {}  # hashmap of id: Device object
         self.task_options = list(range(1, num_tasks+1))  # 1, 2, 3, 4
         #adding a lock to the device list
-        self._lock = Lock()
+        
+    def __getstate__(self):
+        # Only serialize the device data
+        return {'devices': dict(self.devices)}
+        
+    def __setstate__(self, state):
+        # Restore from serialized data
+        self.devices = state['devices']
 
     def __str__(self):
         """
@@ -881,12 +888,14 @@ class DeviceList:
         """
         :return: hashable set of device ids
         """
+
         return set(self.devices.keys())
 
     def get_devices(self) -> Set[Device]:
         """
         :return: hashable set of Device objects
         """
+
         return set(self.devices.values())
 
     def update_num_tasks(self, num_tasks: int):
@@ -927,6 +936,7 @@ class DeviceList:
         :param id: identifier for target device
         :return: True if found and removed, False otherwise.
         """
+        
         try:
             self.devices.pop(id)
             return True
