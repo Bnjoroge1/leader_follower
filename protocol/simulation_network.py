@@ -25,8 +25,7 @@ def device_process_function(device_id: int, node_id: int, active_value: int):
             def __init__(self, node_id):
                 self.node_id = node_id
         # Create fresh transceiver without parent reference
-        transceiver = SimulationTransceiver(parent=DummyParent(node_id), active=active)
-        transceiver.parent_id = node_id  # Store just the ID
+        transceiver = SimulationTransceiver(active=active, parent_id=node_id)
         
         # Create fresh device
         device = dc.ThisDevice(device_id, transceiver)
@@ -43,7 +42,8 @@ class SimulationNode(AbstractNode):
     def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None, checkpoint_mgr: Optional[CheckpointManager] = None):  # type: ignore
         self.node_id = node_id
         self.active = active
-        self.transceiver = SimulationTransceiver(parent=self, active=active)
+        self.transceiver = SimulationTransceiver(active=active, parent_id=node_id)
+        self.transceiver.parent_id = node_id
         self.checkpoint_mgr = checkpoint_mgr
         self.trace_enabled = False
         self.SECRET_KEY = "secret_key"
@@ -387,40 +387,58 @@ class ChannelQueue:
     messages in channel and updates. Maintains thread safety.
     """
     def __init__(self):
-        self.queue = multiprocessing.Queue()
-        self.size = multiprocessing.Value('i', 0, lock=True)  # shared value with lock for size
+        self._queue = None
+        self._size_value = 0  # Store just the integer value
+        self.size = None  # Will be created in each process
+        
+    def _init_size(self):
+        if self.size is None:
+            self.size = multiprocessing.Value('i', self._size_value)
+    
+    @property
+    def queue(self):
+        if self._queue is None:
+            self._queue = multiprocessing.Queue()
+        self._init_size()  # Ensure size is initialized
+        return self._queue
+
+    def __getstate__(self):
+        # Only serialize the raw value
+        return {'size_value': self._size_value}
+
+    def __setstate__(self, state):
+        # Recreate everything in the new process
+        self._queue = None
+        self._size_value = state['size_value']
+        self.size = None  # Will be initialized on first use
 
     def put(self, msg):
         self.queue.put(msg)
+        self._init_size()
         with self.size.get_lock():
             self.size.value += 1
+            self._size_value = self.size.value
 
     def get(self, timeout=None):
+        self._init_size()
         msg = self.queue.get(timeout=timeout)
         with self.size.get_lock():
             self.size.value -= 1
+            self._size_value = self.size.value
         return msg
 
     def get_nowait(self):
+        self._init_size()
         msg = self.queue.get_nowait()
         with self.size.get_lock():
             self.size.value -= 1
+            self._size_value = self.size.value
         return msg
 
-    def get_size(self):
-        with self.size.get_lock():
-            return self.size.value
-
     def is_empty(self):
+        self._init_size()
         with self.size.get_lock():
             return self.size.value == 0
-
-    def empty(self):
-        while not self.queue.empty():
-            try:
-                self.queue.get_nowait()
-            except q.Empty:
-                break
 @dataclass
 class NodeState:
     node_id: str
@@ -433,12 +451,37 @@ class NodeState:
 # similar implementation to send/receive calling transceiver functions
 class SimulationTransceiver(AbstractTransceiver):
 
-    def __init__(self, parent: SimulationNode, active: multiprocessing.Value):  # type: ignore
-        self.outgoing_channels = {}  # hashmap between node_id and Queue (channel)
-        self.incoming_channels = {}
-        self.parent = parent
-        self.parent_id = None 
-        self.active: multiprocessing.Value = active  # type: ignore (can activate or deactivate device with special message)
+    def __init__(self, active: multiprocessing.Value, parent_id: int = None):  # type: ignore
+        self._outgoing_channels = {}  # hashmap between node_id and Queue (channel)
+        self._incoming_channels = {}
+        #self.parent = parent
+        self.parent_id = parent_id
+        self._active_value = active.value if active else 2
+        self.active = None  # Will be initialized in new process  # type: ignore (can activate or deactivate device with special message)
+        self.logQ = deque()
+
+    @property
+    def outgoing_channels(self):
+        return self._outgoing_channels
+
+    @property
+    def incoming_channels(self):
+        return self._incoming_channels
+
+    def __getstate__(self):
+        return {
+            'parent_id': self.parent_id,
+            'active_value': self._active_value,
+            'outgoing_channels': self._outgoing_channels,
+            'incoming_channels': self._incoming_channels
+        }
+
+    def __setstate__(self, state):
+        self._outgoing_channels = state['outgoing_channels']
+        self._incoming_channels = state['incoming_channels']
+        self.parent_id = state['parent_id']
+        self._active_value = state['active_value']
+        self.active = multiprocessing.Value('i', self._active_value)
         self.logQ = deque()
 
     def log(self, data: str):
@@ -471,8 +514,8 @@ class SimulationTransceiver(AbstractTransceiver):
             data = self.logQ.pop()
             if data:
                 try:
-                    asyncio.run(self.notify_server(f"{data},{self.parent.node_id}"))
-                except OSError:
+                    asyncio.run(self.notify_server(f"{data},{self.parent_id}"))
+                except OSError: 
                     pass
         except IndexError:  # empty logQ
             pass
@@ -483,7 +526,7 @@ class SimulationTransceiver(AbstractTransceiver):
                 # print("msg", msg, "put in device", id)
         # no need to wait for this task to finish before returning to protocol
         try:
-            asyncio.run(self.notify_server(f"SENT,{self.parent.node_id}"))
+            asyncio.run(self.notify_server(f"SENT,{self.parent_id}"))
         except OSError:
             pass
     
