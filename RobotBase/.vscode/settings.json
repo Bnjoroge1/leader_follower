@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./functionality_classes"
+    ]
+}

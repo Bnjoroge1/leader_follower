@@ -7,11 +7,13 @@ import cv2
 import apriltag
 import random
 
+from TurboPi.Functions import LineFollower
+
 sys.path.append('/home/pi/TurboPi/')
 import Camera
 import HiwonderSDK.Board as Board
 import HiwonderSDK.mecanum as mecanum
-import LineFollowing
+from TurboPi.Functions.LineFollower import LineFollower
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
@@ -24,6 +26,7 @@ if sys.version_info.major == 2:
 class MainThread:
     def __init__(self, quadrant_num):
         self.car = mecanum.MecanumChassis()
+        self.line_follower = LineFollower()
         self.camera = None
         self.running = False
         try:
@@ -121,9 +124,8 @@ class MainThread:
         self.run()
     
     def move_to_quad_lf(self, quad_num):
-
         # need to test this
-        self.line_follower.start()
+        LineFollower.start()
         while True:
             sensor_data = self.line.readData()
             print(f"Sensor data: {sensor_data}")
