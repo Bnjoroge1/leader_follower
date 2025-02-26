@@ -22,7 +22,7 @@ class LineFollowing:
         'blue': (255, 0, 0),
         'green': (0, 255, 0),
         'black': (0, 0, 0),
-        'white': (255, 255, 255),
+        'white': (255, 255, 255)
     }
 
     def __init__(self):
