@@ -2,6 +2,8 @@ import os
 import sys
 import subprocess
 
+from RobotBase.TurboPi.Functions import LineFollower
+
 if 'pi' in os.uname().nodename:
     sys.path.append('/home/pi/Desktop/dev/leader_follower')
 else: 
@@ -19,7 +21,7 @@ class MessageNav:
         try:
             # self.camera = Camera.Camera()
             # self.camera.camera_open(correction=True)
-
+            self.line_follower = LineFollower()
             self.main_thread = MainThread(quadrant_num)
         except Exception as e:
             print(f"Error opening camera: {e}")
@@ -31,7 +33,8 @@ class MessageNav:
 
     def navigate_to_quadrant(self, quadrant_num):
         if self.main_thread:
-            self.main_thread.move_to_quad(quadrant_num)
+            # self.main_thread.move_to_quad(quadrant_num)
+            self.main_thread.move_to_quad_lf(quadrant_num)
         # subprocess.run(['python3', 'MainThread.py', str(quadrant_num)])
 
     def stop(self):

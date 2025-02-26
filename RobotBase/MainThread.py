@@ -11,6 +11,7 @@ sys.path.append('/home/pi/TurboPi/')
 import Camera
 import HiwonderSDK.Board as Board
 import HiwonderSDK.mecanum as mecanum
+import LineFollowing
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
@@ -49,7 +50,8 @@ class MainThread:
         self.quad = True
 
         print(f"Initializing with quadrant number: {self.quadrant_num}")
-        self.move_to_quad(self.quadrant_num)
+        # self.move_to_quad(self.quadrant_num)
+        self.move_to_quad_lf(self.quadrant_num)
 
     def __del__(self):
         if self.camera:
@@ -118,6 +120,62 @@ class MainThread:
         
         self.run()
     
+    def move_to_quad_lf(self, quad_num):
+
+        # need to test this
+        self.line_follower.start()
+        while True:
+            sensor_data = self.line.readData()
+            print(f"Sensor data: {sensor_data}")
+            if sensor_data == [1, 1, 1, 1]:  # stop when all sensors detect the line
+                break
+            time.sleep(0.05)  
+
+        self.stop()
+
+        if quad_num == 1:
+            time.sleep(0.2)
+            self.turn_right()
+            time.sleep(0.2)
+            self.move_straight(8)
+            time.sleep(0.2)
+            self.move_straight_reverse(12)
+            time.sleep(0.5)
+        elif quad_num == 2:
+            time.sleep(0.2)
+            self.turn_left()
+            time.sleep(0.2)
+            self.move_straight(7)
+            time.sleep(0.2)
+            self.move_straight_reverse(11.2)
+            time.sleep(0.5)
+        elif quad_num == 3:
+            time.sleep(0.2)
+            self.turn_left()
+            time.sleep(0.2)
+            self.move_straight(5)
+            time.sleep(0.2)
+            self.move_straight_reverse(12)
+            time.sleep(0.5)
+        elif quad_num == 4:
+            time.sleep(0.2)
+            self.turn_right()
+            time.sleep(0.2)
+            self.move_straight(10)
+            time.sleep(0.2)
+            self.move_straight_reverse(12)
+            time.sleep(0.5)
+        
+        print(f"Navigated to Quadrant {quad_num}")
+        
+        self.run()
+
+    def nav_home(self, quad_num):
+        # PLACEHOLDER -- update this section when everything else is working
+        self.move_straight(8)
+        time.sleep(0.2)
+        self.move_straight_reverse(12)
+
     def quadrant_init(self, qNum):
         print(f"Quadrant number: {self.quadrant_num}")
         if (qNum == 2 or qNum == 4):
@@ -218,6 +276,7 @@ class MainThread:
 
     def stop_after_tag(self):
         self.stop_signal = True
+        self.nav_home() # verify this is being called
 
     def run(self):
         try:
@@ -225,6 +284,7 @@ class MainThread:
             while self.running:
                 for map in range(len(self.mapSelection)):
                     if self.stop_signal:
+
                         self.running = False
                         break
 
