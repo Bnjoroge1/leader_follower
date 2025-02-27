@@ -125,7 +125,7 @@ class MainThread:
     
     def move_to_quad_lf(self, quad_num):
         # need to test this
-        LineFollower.start()
+        self.line_follower.start()
         while True:
             sensor_data = self.line.readData()
             print(f"Sensor data: {sensor_data}")
