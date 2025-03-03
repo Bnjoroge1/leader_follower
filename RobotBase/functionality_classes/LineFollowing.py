@@ -28,7 +28,7 @@ class LineFollowing:
     def __init__(self):
         self.car = mecanum.MecanumChassis()
         self.line = infrared.FourInfrared()
-        self.servo_data = None
+        self.servo_data = dict() # changed from 'None' for testing
         self.__isRunning = False
         self.car_stop = False
         self.detect_color = 'None'
@@ -39,7 +39,9 @@ class LineFollowing:
         self.turn_event = threading.Event()  # Initialize the event for turning
 
     def load_config(self):
+        print(yaml_handle.get_yaml_data(yaml_handle.servo_file_path))
         self.servo_data = yaml_handle.get_yaml_data(yaml_handle.servo_file_path)
+        print(len(self.servo_data))
 
     def initMove(self):
         self.car.set_velocity(0, 90, 0)
