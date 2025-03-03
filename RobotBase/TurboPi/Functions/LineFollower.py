@@ -275,13 +275,11 @@ class LineFollower:
         return img
 
 
-    #关闭前处理 Processing before exit
     def manualcar_stop(self, signum, frame):
         global __isRunning
         
-        print('关闭中...')
         __isRunning = False
-        self.car.set_velocity(0,90,0)  # 关闭所有电机 Turn off all motors
+        self.car.set_velocity(0,90,0)
 
 
     if __name__ == '__main__':
