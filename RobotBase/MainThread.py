@@ -125,7 +125,7 @@ class MainThread:
         # need to test this
         self.line_follower.start()
         while True:
-            sensor_data = self.line.readData()
+            sensor_data = self.line_follower.line.readData()
             print(f"Sensor data: {sensor_data}")
             if sensor_data == [1, 1, 1, 1]:  # stop when all sensors detect the line
                 break
