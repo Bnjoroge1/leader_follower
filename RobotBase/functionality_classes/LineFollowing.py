@@ -112,10 +112,12 @@ class LineFollowing:
                 continue
 
             sensor_data = self.line.readData()
+            # sensor_data = sensorData
             print(f"Sensor data: {sensor_data}")
 
             if sensor_data == [1, 1, 1, 1]:
                 angular_velocity = 0
+                return
             elif sensor_data == [0, 1, 1, 0]:
                 angular_velocity = 0
             elif sensor_data == [0, 0, 1, 0]:

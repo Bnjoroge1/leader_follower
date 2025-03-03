@@ -18,7 +18,7 @@ parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 sys.path.append(parent_dir)
 
 if sys.version_info.major == 2:
-    print('Please run this program with python3!')
+    # print('Please run this program with python3!')
     sys.exit(0)
 
 class MainThread:
@@ -50,7 +50,7 @@ class MainThread:
         # true quad indicates that it is 2/4; false quad is 1/3
         self.quad = True
 
-        print(f"Initializing with quadrant number: {self.quadrant_num}")
+        # print(f"Initializing with quadrant number: {self.quadrant_num}")
         # self.move_to_quad(self.quadrant_num)
         self.move_to_quad_lf(self.quadrant_num)
 
@@ -122,16 +122,16 @@ class MainThread:
         self.run()
     
     def move_to_quad_lf(self, quad_num):
-        # need to test this
         self.line_follower.start()
         while True:
             sensor_data = self.line_follower.line.readData()
-            print(f"Sensor data: {sensor_data}")
-            if sensor_data == [1, 1, 1, 1]:  # stop when all sensors detect the line
-                break
+            self.line_follower.move() # this stops running when all chanels are triggered
             time.sleep(0.05)  
+            break
 
-        self.stop()
+        self.car.set_velocity(0,0,0)
+        print("Completed Line Following")
+        time.sleep(2)
 
         if quad_num == 1:
             time.sleep(0.2)
@@ -177,7 +177,7 @@ class MainThread:
         self.move_straight_reverse(12)
 
     def quadrant_init(self, qNum):
-        print(f"Quadrant number: {self.quadrant_num}")
+        # print(f"Quadrant number: {self.quadrant_num}")
         if (qNum == 2 or qNum == 4):
             self.quad = True
         elif (qNum == 1 or qNum == 3):
@@ -207,7 +207,7 @@ class MainThread:
 
     def handle_last_tag(self):
         # tag0 isn't an actual april tag; it's used to define the initial turn direction
-        print(f"Handling last detected tag: {self.last_detected_tag}")
+        # print(f"Handling last detected tag: {self.last_detected_tag}")
         if (self.last_detected_tag == 0):
             if (self.quad):
                 self.turn_right()
@@ -235,7 +235,7 @@ class MainThread:
 
     def align_with_tag(self, tag):
         aligned = False
-        print(f"Aligning with tag: {tag}")
+        # print(f"Aligning with tag: {tag}")
         while self.running and not aligned:
             img = self.camera.frame
             if img is None or img.size == 0:
@@ -248,9 +248,9 @@ class MainThread:
                 if detected_tag.tag_id == tag:
                     # calculates misalignment (offset) from center
                     tag_center_x = detected_tag.center[0]
-                    print("Tag Center X: " + str(tag_center_x))
+                    # print("Tag Center X: " + str(tag_center_x))
                     frame_center_x = img.shape[1] / 2
-                    print("Frame Center X: " + str(frame_center_x))
+                    # print("Frame Center X: " + str(frame_center_x))
                     offset = tag_center_x - frame_center_x
 
                     if abs(offset) > 40:  # tolerance threshold
@@ -296,7 +296,7 @@ class MainThread:
 
                     if(self.last_detected_tag == 3 and current_tag == 1):
                         if(not self.quad):
-                            print("Aligning with wall")
+                            # print("Aligning with wall")
                             self.turn_right()
                             time.sleep(0.5)
                             self.move_straight(16)
@@ -307,7 +307,7 @@ class MainThread:
                             time.sleep(0.5)
                         elif(self.quad):
                             if(self.quadrant_num == 2):
-                                print("Aligning with wall")
+                                # print("Aligning with wall")
                                 self.turn_left()
                                 time.sleep(0.25)
                                 self.move_straight(16)
@@ -317,7 +317,7 @@ class MainThread:
                                 self.turn_right()
                                 time.sleep(0.5)
                             else:
-                                print("Aligning with wall")
+                                # print("Aligning with wall")
                                 self.turn_left()
                                 time.sleep(0.5)
                                 self.move_straight(16)
