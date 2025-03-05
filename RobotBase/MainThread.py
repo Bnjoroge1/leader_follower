@@ -122,6 +122,9 @@ class MainThread:
         self.run()
     
     def move_to_quad_lf(self, quad_num):
+        self.move_straight(9.5)
+        time.sleep(2)
+        
         self.line_follower.start()
         while True:
             sensor_data = self.line_follower.line.readData()
