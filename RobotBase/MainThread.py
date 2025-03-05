@@ -335,10 +335,13 @@ class MainThread:
                                 time.sleep(0.5)
 
                         if current_tag == 1:
+                            self.current_distance = self.map1dist
                             self.lf_stop(1)
                         elif current_tag == 2:
+                            self.current_distance = self.map2dist
                             self.lf_stop(2)
                         elif current_tag == 3:
+                            self.current_distance = self.map3dist
                             self.lf_stop(3)
 
                         time.sleep(0.5)
