@@ -122,21 +122,14 @@ class MainThread:
         self.run()
     
     def move_to_quad_lf(self, quad_num):
-        self.move_straight(9.5)
-        time.sleep(2)
-        
-        self.line_follower.start()
-        while True:
-            sensor_data = self.line_follower.line.readData()
-            self.line_follower.move() # this stops running when all chanels are triggered
-            time.sleep(0.05)  
-            break
-
-        self.car.set_velocity(0,0,0)
-        print("Completed Line Following")
-        time.sleep(2)
-
         if quad_num == 1:
+            self.move_straight(9.5)
+            time.sleep(0.2)
+            self.turn_right()
+            time.sleep(0.2)
+            self.move_straight(4)
+            time.sleep(2)
+            self.lf_stop(2)
             time.sleep(0.2)
             self.turn_right()
             time.sleep(0.2)
@@ -145,7 +138,9 @@ class MainThread:
             self.move_straight_reverse(12)
             time.sleep(0.5)
         elif quad_num == 2:
-            time.sleep(0.2)
+            self.move_straight(9.5)
+            time.sleep(2)
+            self.lf_stop(2)
             self.turn_left()
             time.sleep(0.2)
             self.move_straight(7)
@@ -153,7 +148,9 @@ class MainThread:
             self.move_straight_reverse(11.2)
             time.sleep(0.5)
         elif quad_num == 3:
-            time.sleep(0.2)
+            self.move_straight(9.5)
+            time.sleep(2)
+            self.lf_stop(1)
             self.turn_left()
             time.sleep(0.2)
             self.move_straight(5)
@@ -161,6 +158,13 @@ class MainThread:
             self.move_straight_reverse(12)
             time.sleep(0.5)
         elif quad_num == 4:
+            self.move_straight(9.5)
+            time.sleep(0.2)
+            self.turn_right()
+            time.sleep(0.2)
+            self.move_straight(4)
+            time.sleep(2)
+            self.lf_stop(1)
             time.sleep(0.2)
             self.turn_right()
             time.sleep(0.2)
@@ -172,6 +176,19 @@ class MainThread:
         print(f"Navigated to Quadrant {quad_num}")
         
         self.run()
+
+    def lf_stop(self, num):
+        self.line_follower.start()
+
+        while True:
+            sensor_data = self.line_follower.line.readData()
+            self.line_follower.move(num) # this stops running when all chanels are triggered
+            time.sleep(0.05)  
+            break
+
+        self.car.set_velocity(0,0,0)
+        print("Completed Line Following")
+        time.sleep(2)
 
     def nav_home(self, quad_num):
         # PLACEHOLDER -- update this section when everything else is working
@@ -282,35 +299,32 @@ class MainThread:
         self.nav_home() # verify this is being called
 
     def run(self):
-        try:
-            self.quadrant_init(self.quadrant_num)
-            while self.running:
-                for map in range(len(self.mapSelection)):
-                    if self.stop_signal:
+            try:
+                self.quadrant_init(self.quadrant_num)
+                while self.running:
+                    for map in range(len(self.mapSelection)):
+                        if self.stop_signal:
 
-                        self.running = False
-                        break
+                            self.running = False
+                            break
 
-                    current_tag = self.mapSelection[map]
+                        current_tag = self.mapSelection[map]
 
-                    time.sleep(0.5)
-                    self.handle_last_tag()
-                    time.sleep(5)
+                        time.sleep(0.5)
+                        self.handle_last_tag()
+                        time.sleep(5)
 
-                    if(self.last_detected_tag == 3 and current_tag == 1):
-                        if(not self.quad):
-                            # print("Aligning with wall")
-                            self.turn_right()
-                            time.sleep(0.5)
-                            self.move_straight(16)
-                            time.sleep(0.5)
-                            self.move_straight_reverse(12)
-                            time.sleep(0.5)
-                            self.turn_left()
-                            time.sleep(0.5)
-                        elif(self.quad):
-                            if(self.quadrant_num == 2):
-                                # print("Aligning with wall")
+                        if(self.last_detected_tag == 3 and current_tag == 1):
+                            if(not self.quad):
+                                self.turn_right()
+                                time.sleep(0.5)
+                                self.move_straight(16)
+                                time.sleep(0.5)
+                                self.move_straight_reverse(12)
+                                time.sleep(0.5)
+                                self.turn_left()
+                                time.sleep(0.5)
+                            elif(self.quad):
                                 self.turn_left()
                                 time.sleep(0.25)
                                 self.move_straight(16)
@@ -319,79 +333,177 @@ class MainThread:
                                 time.sleep(0.5)
                                 self.turn_right()
                                 time.sleep(0.5)
-                            else:
-                                # print("Aligning with wall")
-                                self.turn_left()
-                                time.sleep(0.5)
-                                self.move_straight(16)
-                                time.sleep(0.5)
-                                self.move_straight_reverse(12)
-                                time.sleep(0.5)
-                                self.turn_right()
-                                time.sleep(0.5)
-
-                    if current_tag == 1:
-                        self.current_distance = self.map1dist
-                    elif current_tag == 2:
-                        self.current_distance = self.map2dist
-                    elif current_tag == 3:
-                        self.current_distance = self.map3dist
-
-                    self.move_straight(self.current_distance)
-                    time.sleep(0.5)
-                    
-                    if (self.quad or self.quadrant_num == 0): # self.quadrant_num == 0 used for debugging
-                        self.turn_left()
-                    elif (not self.quad):
-                        self.turn_right()
-
-                    time.sleep(1)
-
-                    if self.align_with_tag(current_tag):
-                        time.sleep(0.5)
-                        if self.quad:
-                            self.turn_right()
-                        else:
-                            self.turn_left()
-
-                        time.sleep(0.5)    
-                        self.move_straight_reverse(self.current_distance)
-                        time.sleep(0.5)
 
                         if current_tag == 1:
-                            if (self.quad):
-                                time.sleep(1.0)
-                                self.turn_left()
-                            elif (not self.quad):
-                                time.sleep(1.0)
-                                self.turn_right()
+                            self.lf_stop(1)
                         elif current_tag == 2:
-                            if (self.quad):
-                                self.turn_left()
-                                time.sleep(1.0)
-                                self.turn_left()
-                            elif (not self.quad):
-                                self.turn_right()
-                                time.sleep(1.0)
-                                self.turn_right()
-                        else:
-                            if (self.quad):
-                                time.sleep(1.0)
-                                self.turn_right()
-                            elif (not self.quad):
-                                time.sleep(1.0)
-                                self.turn_left()
+                            self.lf_stop(2)
+                        elif current_tag == 3:
+                            self.lf_stop(3)
+
+                        time.sleep(0.5)
                         
-                        self.last_detected_tag = current_tag
+                        if (self.quad or self.quadrant_num == 0): # self.quadrant_num == 0 used for debugging
+                            self.turn_left()
+                        elif (not self.quad):
+                            self.turn_right()
 
-                        time.sleep(5)
+                        time.sleep(1)
 
-        except KeyboardInterrupt:
-            self.running = False
-        finally:
-            if self.camera:
-                self.camera.camera_close()
-            cv2.destroyAllWindows()
+                        if self.align_with_tag(current_tag):
+                            time.sleep(0.5)
+                            if self.quad:
+                                self.turn_right()
+                            else:
+                                self.turn_left()
+
+                            time.sleep(0.5)    
+                            self.move_straight_reverse(self.current_distance)
+                            time.sleep(0.5)
+
+                            if current_tag == 1:
+                                if (self.quad):
+                                    time.sleep(1.0)
+                                    self.turn_left()
+                                elif (not self.quad):
+                                    time.sleep(1.0)
+                                    self.turn_right()
+                            elif current_tag == 2:
+                                if (self.quad):
+                                    self.turn_left()
+                                    time.sleep(1.0)
+                                    self.turn_left()
+                                elif (not self.quad):
+                                    self.turn_right()
+                                    time.sleep(1.0)
+                                    self.turn_right()
+                            else:
+                                if (self.quad):
+                                    time.sleep(1.0)
+                                    self.turn_right()
+                                elif (not self.quad):
+                                    time.sleep(1.0)
+                                    self.turn_left()
+                            
+                            self.last_detected_tag = current_tag
+
+                            time.sleep(2.5)
+
+            except KeyboardInterrupt:
+                self.running = False
+            finally:
+                if self.camera:
+                    self.camera.camera_close()
+                cv2.destroyAllWindows()
+                
+    # def run(self):
+    #     try:
+    #         self.quadrant_init(self.quadrant_num)
+    #         while self.running:
+    #             for map in range(len(self.mapSelection)):
+    #                 if self.stop_signal:
+
+    #                     self.running = False
+    #                     break
+
+    #                 current_tag = self.mapSelection[map]
+
+    #                 time.sleep(0.5)
+    #                 self.handle_last_tag()
+    #                 time.sleep(5)
+
+    #                 if(self.last_detected_tag == 3 and current_tag == 1):
+    #                     if(not self.quad):
+    #                         self.turn_right()
+    #                         time.sleep(0.5)
+    #                         self.move_straight(16)
+    #                         time.sleep(0.5)
+    #                         self.move_straight_reverse(12)
+    #                         time.sleep(0.5)
+    #                         self.turn_left()
+    #                         time.sleep(0.5)
+    #                     elif(self.quad):
+    #                         if(self.quadrant_num == 2):
+    #                             self.turn_left()
+    #                             time.sleep(0.25)
+    #                             self.move_straight(16)
+    #                             time.sleep(0.5)
+    #                             self.move_straight_reverse(12)
+    #                             time.sleep(0.5)
+    #                             self.turn_right()
+    #                             time.sleep(0.5)
+    #                         else:
+    #                             self.turn_left()
+    #                             time.sleep(0.5)
+    #                             self.move_straight(16)
+    #                             time.sleep(0.5)
+    #                             self.move_straight_reverse(12)
+    #                             time.sleep(0.5)
+    #                             self.turn_right()
+    #                             time.sleep(0.5)
+
+    #                 if current_tag == 1:
+    #                     self.current_distance = self.map1dist
+    #                 elif current_tag == 2:
+    #                     self.current_distance = self.map2dist
+    #                 elif current_tag == 3:
+    #                     self.current_distance = self.map3dist
+
+    #                 self.move_straight(self.current_distance)
+    #                 time.sleep(0.5)
+                    
+    #                 if (self.quad or self.quadrant_num == 0): # self.quadrant_num == 0 used for debugging
+    #                     self.turn_left()
+    #                 elif (not self.quad):
+    #                     self.turn_right()
+
+    #                 time.sleep(1)
+
+    #                 if self.align_with_tag(current_tag):
+    #                     time.sleep(0.5)
+    #                     if self.quad:
+    #                         self.turn_right()
+    #                     else:
+    #                         self.turn_left()
+
+    #                     time.sleep(0.5)    
+    #                     self.move_straight_reverse(self.current_distance)
+    #                     time.sleep(0.5)
+
+    #                     if current_tag == 1:
+    #                         if (self.quad):
+    #                             time.sleep(1.0)
+    #                             self.turn_left()
+    #                         elif (not self.quad):
+    #                             time.sleep(1.0)
+    #                             self.turn_right()
+    #                     elif current_tag == 2:
+    #                         if (self.quad):
+    #                             self.turn_left()
+    #                             time.sleep(1.0)
+    #                             self.turn_left()
+    #                         elif (not self.quad):
+    #                             self.turn_right()
+    #                             time.sleep(1.0)
+    #                             self.turn_right()
+    #                     else:
+    #                         if (self.quad):
+    #                             time.sleep(1.0)
+    #                             self.turn_right()
+    #                         elif (not self.quad):
+    #                             time.sleep(1.0)
+    #                             self.turn_left()
+                        
+    #                     self.last_detected_tag = current_tag
+
+    #                     time.sleep(2.5)
+
+    #     except KeyboardInterrupt:
+    #         self.running = False
+    #     finally:
+    #         if self.camera:
+    #             self.camera.camera_close()
+    #         cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     quadrant_num = int(sys.argv[1])

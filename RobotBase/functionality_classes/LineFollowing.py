@@ -38,6 +38,9 @@ class LineFollowing:
         self.initMove()
         self.turn_event = threading.Event()  # Initialize the event for turning
 
+        self.prevTriggered = False
+        self.lfTrigger = 0
+
     def load_config(self):
         print(yaml_handle.get_yaml_data(yaml_handle.servo_file_path))
         self.servo_data = yaml_handle.get_yaml_data(yaml_handle.servo_file_path)
@@ -104,7 +107,9 @@ class LineFollowing:
             Board.RGB.setPixelColor(1, Board.PixelColor(0, 0, 0))
             Board.RGB.show()
 
-    def move(self):
+    def move(self, num):
+        self.prevTriggered = False
+        
         while self.__isRunning:
             if self.turn_event.is_set():  # Check if turning is needed
                 self.perform_turn()
@@ -112,13 +117,19 @@ class LineFollowing:
                 continue
 
             sensor_data = self.line.readData()
-            # sensor_data = sensorData
             print(f"Sensor data: {sensor_data}")
 
             if sensor_data == [1, 1, 1, 1]:
-                angular_velocity = 0
-                return
-            elif sensor_data == [0, 1, 1, 0]:
+                if not self.prev_tirggered:
+                    self.lfTrigger += 1
+                    self.prevTriggered = True
+                    
+                if self.lfTrigger >= num:
+                    angular_velocity = 0
+                    return
+            else:
+                self.prevTriggered = False
+            if sensor_data == [0, 1, 1, 0]:
                 angular_velocity = 0
             elif sensor_data == [0, 0, 1, 0]:
                 angular_velocity = 0.03
