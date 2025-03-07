@@ -8,7 +8,7 @@ import argparse
 from checkpoint_manager import CheckpointManager
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Protocol Simulation Driver')
+    parser = argparse.ArgumentParser(description='Protocol Simulation Driver') 
     parser.add_argument('-t', '--trace', 
                        nargs='*',
                        default=[],
@@ -130,7 +130,7 @@ async def main():
         print("started tasks", started_tasks)
 
         for node in nodes:
-            #time.sleep(5)  # intentional synchronous delay
+           
             node.start()
 
         # indefinitely awaiting websocket tasks
