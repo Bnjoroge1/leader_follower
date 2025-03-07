@@ -7,3 +7,5 @@ tla/states/
 *out
 protocol/tla/states/
 venv/
+.vscode/
+.venv/
