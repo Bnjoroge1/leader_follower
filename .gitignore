@@ -8,4 +8,5 @@ protocol/zigbee2mqtt-data/log/
 protocol/tla/states*
 protocol/checkpoints/
 venv/
-
+.vscode/
+.venv/
