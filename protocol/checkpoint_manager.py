@@ -36,7 +36,7 @@ class CheckpointManager:
 
         for node_id, node in nodes.items():
             checkpoint_data.node_states[node_id] = node.get_checkpoint_state()
-            print("adding checkpoint value he: ", checkpoint_data)
+            print("adding checkpoint value : ", checkpoint_data)
             checkpoint_data.message_queues[node_id] = node.get_queue_state()
 
         checkpoint_path = self._save_checkpoint(checkpoint_data)

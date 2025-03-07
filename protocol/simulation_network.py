@@ -15,7 +15,7 @@ from collections import deque
 import hashlib
 from checkpoint_manager import CheckpointManager
 
-def device_process_function(device_id: int, node_id: int, active_value: int):
+def device_process_function(device_id: int, node_id: int, active_value: int, outgoing_channels: Dict[int, Queue], incoming_channels: Dict[int, Queue]):
     """Standalone function for the device process"""
     try:
         # Create fresh active value
@@ -24,8 +24,10 @@ def device_process_function(device_id: int, node_id: int, active_value: int):
         class DummyParent:
             def __init__(self, node_id):
                 self.node_id = node_id
-        # Create fresh transceiver without parent reference
+        # Create fresh transceiver with the channel dictionaries from the parent
         transceiver = SimulationTransceiver(active=active, parent_id=node_id)
+        transceiver._outgoing_channels = outgoing_channels
+        transceiver._incoming_channels = incoming_channels
         
         # Create fresh device
         device = dc.ThisDevice(device_id, transceiver)
@@ -105,6 +107,8 @@ class SimulationNode(AbstractNode):
                             self.thisDevice.id,  # device_id
                             self.node_id,        # node_id
                             self.active.value,   # active_value
+                            self.transceiver._outgoing_channels,
+                            self.transceiver._incoming_channels,
                         ),
                         daemon=True
                     )
@@ -386,65 +390,57 @@ class ChannelQueue:
     Wrapper class for multiprocessing.Queue that keeps track of number of
     messages in channel and updates. Maintains thread safety.
     """
-    def __init__(self):
-        self._queue = None
-        self._size_value = 0  # Store just the integer value
-        self.size = None  # Will be created in each process
+    def __init__(self, manager=None):
+        if manager is None:
+            manager = multiprocessing.Manager()
+        self._queue = manager.Queue()  # Truly shared queue
+        self._size = manager.Value('i', 0)  # Shared size counter
+        self._lock = manager.Lock()
         
-    def _init_size(self):
-        if self.size is None:
-            self.size = multiprocessing.Value('i', self._size_value)
-    
     @property
     def queue(self):
-        if self._queue is None:
-            self._queue = multiprocessing.Queue()
-        self._init_size()  # Ensure size is initialized
         return self._queue
-
-    def __getstate__(self):
-        # Only serialize the raw value
-        return {'size_value': self._size_value}
-
-    def __setstate__(self, state):
-        # Recreate everything in the new process
-        self._queue = None
-        self._size_value = state['size_value']
-        self.size = None  # Will be initialized on first use
-
+    
+    @property
+    def size(self):
+        return self._size
+    
     def put(self, msg):
-        self.queue.put(msg)
-        self._init_size()
-        with self.size.get_lock():
-            self.size.value += 1
-            self._size_value = self.size.value
-
+        # Atomic put operation
+        self._queue.put(msg)
+        with self._lock:
+            self._size.value += 1
+            
     def get(self, timeout=None):
-        self._init_size()
-        msg = self.queue.get(timeout=timeout)
-        with self.size.get_lock():
-            self.size.value -= 1
-            self._size_value = self.size.value
-        return msg
-
+        try:
+            # Try to get a message
+            msg = self._queue.get(timeout=timeout)
+            # Update size counter atomically
+            with self._lock:
+                self._size.value = max(0, self._size.value - 1)
+            return msg
+        except q.Empty:
+            raise
+    
     def get_nowait(self):
-        self._init_size()
-        msg = self.queue.get_nowait()
-        with self.size.get_lock():
-            self.size.value -= 1
-            self._size_value = self.size.value
-        return msg
-
+        try:
+            msg = self._queue.get_nowait()
+            with self._lock:
+                self._size.value = max(0, self._size.value - 1)
+            return msg
+        except q.Empty:
+            raise
+    
     def is_empty(self):
-        self._init_size()
-        with self.size.get_lock():
-            return self.size.value == 0
+        with self._lock:
+            return self._size.value == 0
 @dataclass
 class NodeState:
     node_id: str
     active: int
     device_state: Dict[str, Any]
     process_state: Dict[str, Any]
+
 
 
 # TODO: implement removing channels (node_ids) as devices get dropped from devicelist
@@ -459,6 +455,9 @@ class SimulationTransceiver(AbstractTransceiver):
         self._active_value = active.value if active else 2
         self.active = None  # Will be initialized in new process  # type: ignore (can activate or deactivate device with special message)
         self.logQ = deque()
+        print(f"DEBUG: Creating transceiver for device {parent_id}")
+        print(f"DEBUG: Outgoing channels: {list(self._outgoing_channels.keys())}")
+        print(f"DEBUG: Incoming channels: {list(self._incoming_channels.keys())}")
 
     @property
     def outgoing_channels(self):
@@ -519,10 +518,12 @@ class SimulationTransceiver(AbstractTransceiver):
                     pass
         except IndexError:  # empty logQ
             pass
+        print(f"DEBUG: Sending message to {self.outgoing_channels.keys()}")
 
         for id, queue in self.outgoing_channels.items():
             if queue is not None:
                 queue.put(msg)
+                print(f"DEBUG: Message sent to {id}")
                 # print("msg", msg, "put in device", id)
         # no need to wait for this task to finish before returning to protocol
         try:
@@ -531,6 +532,8 @@ class SimulationTransceiver(AbstractTransceiver):
             pass
     
     def receive(self, timeout: float) -> int | None:  # get from all queues
+        print(f"DEBUG: Device {self.parent_id} attempting to receive with timeout={timeout}")
+
         if self.active_status() == 0:
             print("returning DEACTIVATE")
             return Message.DEACTIVATE  # indicator for protocol
@@ -539,28 +542,48 @@ class SimulationTransceiver(AbstractTransceiver):
             return Message.ACTIVATE
         # print(self.incoming_channels.keys())
         end_time = time.time() + timeout #changing from per-queue timeout to overall wall timeout.
-        for id, queue in self.incoming_channels.items():
-            try:
-                # Check if there's a message without consuming it
-                if not queue.queue.empty():
-                    # Capture state before consuming message
-                    if hasattr(self.parent, 'checkpoint_mgr'):
-                        print(f"DEBUG: Capturing pre-receive state for queue {id}")
-                        self.parent.checkpoint_mgr.create_checkpoint(
-                            f"pre_receive_{id}",
-                            {str(self.parent.node_id): self.parent}
-                        )
-                msg = queue.get_nowait()  #Non-blocking get - basically same as get(False)
-                print("Message", msg, "gotton from device", id, "waited", timeout, "seconds")
+        # Capture state before consuming message for checkpoints
+                        
+                            
+        try:
+            # First try to get messages without blocking
+            for device_id, queue in self._incoming_channels.items():
                 try:
-                    asyncio.run(self.notify_server(f"RCVD,{self.parent.node_id}"))
-                except OSError:
-                    pass
-                return msg
-            except q.Empty:
-                pass
-            time.sleep(0.01) #sleep for 10ms to avoid busy-waiting
-        return None
+                    msg = queue.get_nowait()
+                    print(f"DEBUG:{self.parent_id} device received this message {msg} from device {device_id}")
+                    return msg
+                except q.Empty:
+                    continue
+            
+            # If no immediate messages, wait for the timeout period
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                for device_id, queue in self._incoming_channels.items():
+                    if hasattr(self.parent_id, 'checkpoint_mgr'):  #TODO: use actual node object
+                            print(f"DEBUG: Capturing pre-receive state for queue {id}")
+                            self.parent_id.checkpoint_mgr.create_checkpoint(
+                                f"pre_receive_{id}",
+                                {str(self.parent_id): self.parent_id}
+                            )
+                    try:
+                        # Try each queue with a small timeout
+                        msg = queue.get(timeout=0.1)
+                        print(f"DEBUG:Device {self.parent_id} Received message {str(msg)} from device {device_id}")
+                        try:
+                            asyncio.run(self.notify_server(f"RCVD,{self.parent_id}"))
+                        except OSError:
+                            pass
+                        return msg
+                    except q.Empty:
+                        continue
+                time.sleep(0.01)  # Small sleep to prevent busy waiting
+            
+            print('No messages received')
+            return None
+            
+        except Exception as e:
+            print(f"DEBUG: Error in receive: {e}")
+            return None
 
     def clear(self):
         for queue in self.outgoing_channels.values():

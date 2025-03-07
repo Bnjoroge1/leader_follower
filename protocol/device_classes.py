@@ -18,8 +18,8 @@ OUTPUT_DIR = PROTOCOL_DIR / "output"
 MISSED_THRESHOLD: int = 2
 RESPONSE_ALLOWANCE: float = 1  # subject to change
 PRECISION_ALLOWANCE: int = 5
-RECEIVE_TIMEOUT: float = 0.2
-ATTENDANCE_DURATION: float = 2
+RECEIVE_TIMEOUT: float = 0.5
+ATTENDANCE_DURATION: float = 1
 D_LIST_DURATION: float = 2
 DELETE_DURATION: float = 2
 TAKEOVER_DURATION: float = 15
@@ -39,6 +39,7 @@ class Device:
         self.leader: bool = False  # initialized as follower
         self.received: int | None = None  # holds most recent message payload
         self.missed: int = 0  # number of missed check-ins, used by current leader
+        self.in_election: bool = False
         self.task: int = 0  # task identifier, 0 denotes reserve
 
     def get_id(self) -> int:
@@ -149,8 +150,11 @@ class ThisDevice(Device):
         """
         # must have low timeout and larger duration so we don't get hung up on a channel
         end_time = time.time() + duration
+        print("end time", end_time)
         while time.time() < end_time:
+            print("waiting for message")
             self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
+            print("message received", self.received)
             if self.leader and self.received == Message.DEACTIVATE:
                 print("Device got deactivated by user")
                 self.active = False
@@ -161,9 +165,10 @@ class ThisDevice(Device):
                 self.active = True
                 return False  # wait for next cycle, prevents interpreting injection as device
             # if a new leader is recognized, move into tiebreak scenario
-            if self.received and self.leader_id and self.received_leader_id() != self.leader_id:  # another follower out there
-                print(self.received_leader_id(), self.leader_id)
-                self.handle_tiebreaker(self.received_leader_id())
+            if not self.in_election:
+                if self.received and self.leader_id and self.received_leader_id() != self.leader_id:  # another follower out there
+                    print(self.received_leader_id(), self.leader_id)
+                    self.handle_tiebreaker(self.received_leader_id())
                 return False
             if self.received and (action_value == -1 or self.received_action() == action_value):
                 self.log_message(self.received, 'RCVD')
@@ -236,21 +241,24 @@ class ThisDevice(Device):
         broadcasts device list if new device is heard.
         """
         print("Leader sending attendance")
-        self.log_status("SENDING ATTENDANCE")
-        self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION)
+        for _ in range(5):
+
+            self.log_status("SENDING ATTENDANCE")
+            self.send(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0, duration=ATTENDANCE_DURATION)
+            print(f"sent attendance as leader. my device id is{self.leader_id}")
 
         # prevents deadlock
-        while self.receive(duration=ATTENDANCE_DURATION*2, action_value=Action.ATT_RESPONSE.value):
+        while self.receive(duration=0.1, action_value=Action.ATT_RESPONSE.value):
             print("Leader heard attendance response from", self.received_follower_id())
             self.log_status("HEARD ATT_RESP FROM " + str(self.received_follower_id()))
             if self.received_follower_id() not in self.device_list.get_ids():
-                unused_tasks = self.device_list.unused_tasks()
-                print("Unused tasks: ", unused_tasks)
-                self.log_status("UNUSED TASKS: " + str(unused_tasks))
-                task = unused_tasks[0] if unused_tasks else 0
+                #unused_tasks = self.device_list.unused_tasks()
+                #print("Unused tasks: ", unused_tasks)
+                #self.log_status("UNUSED TASKS: " + str(unused_tasks))
+                #task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", self.received_follower_id())
                 self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
-                self.device_list.add_device(id=self.received_follower_id(), task=task)  # has not assigned task yet
+                self.device_list.add_device(id=self.received_follower_id(), task=None)  # has not assigned task yet
     def get_state(self) -> Dict[str, Any]:
         """Return serializable state of the device"""
         return {
@@ -669,24 +677,75 @@ class ThisDevice(Device):
             self.csvWriter = csv.writer(self.file, dialect='excel')
             
             print("Starting main on device " + str(self.id))
-            # create device object
-            self.setup()
+            self.in_election = True
+            # Initial election phase
+            time.sleep(2)  # Give time for all devices to be ready
+        
+            # Initial election phase
+            election_duration = 10  # Longer election window
+            lowest_id_seen = self.id
+            received_candidacies = set()
+            
+            # First broadcast our candidacy multiple times to ensure delivery
+            for _ in range(3):
+                self.broadcast_candidacy()
+                time.sleep(0.1)  # Space out the broadcasts
+            print(f"Device {self.id} starting election window")
 
-            if self.get_leader():
-                print("--------Leader---------")
+            # Listen for other candidacies during election window
+            election_end = time.time() + election_duration
+            while time.time() < election_end:
+                if self.receive(duration=1.0):  # Shorter receive windows
+                    if self.received_action() == Action.ATTENDANCE.value:
+                        other_id = self.received_leader_id()
+                        print(f"Device {self.id} received candidacy from {other_id}")
+                        received_candidacies.add(other_id)
+                        if other_id < lowest_id_seen:
+                            lowest_id_seen = other_id
+                else:
+                    self.broadcast_candidacy()
+                    time.sleep(0.1)
+                    print("no message received in this check")
+            print(f"Device {self.id} saw candidacies from: {received_candidacies}")
+            print(f"Device {self.id} saw lowest ID: {lowest_id_seen}")
+            
+            # After election window, become leader or follower
+            if lowest_id_seen == self.id:  # Only become leader if we have lowest ID
+                print(f"Device {self.id} becoming leader (lowest ID)")
+                self.make_leader()
+                self.leader_id = self.id
+                self.device_list.add_device(id=self.id, task=1)
                 self.log_status("BECAME LEADER")
+                print("--------Leader---------")
+                time.sleep(1)  # Give followers time to finish their election
+                self.leader_send_attendance()  # Announce leadership
             else:
-                print("--------Follower, listening--------")
+                print(f"Device {self.id} becoming follower of {lowest_id_seen}")
+                self.make_follower()
+                self.leader_id = lowest_id_seen
                 self.log_status("BECAME FOLLOWER")
+                print("--------Follower, listening--------")
+            self.in_election = False
+            last_attendance_time = 0
+            ATTENDANCE_INTERVAL = 2.0  # Send attendance every 2 seconds
             while True:
                 # global looping
                 while self.active:
+                 
+                    current_time = time.time()
                     if self.get_leader():
                         # update websocket on each loop in case connection is too slow
                         self.transceiver.log("LEADER")
+                        # Send regular attendance messages
+                        if current_time - last_attendance_time > ATTENDANCE_INTERVAL:
+                            try:
+                                self.leader_send_attendance()
+                                last_attendance_time = current_time
+                            except Exception as e:
+                                print(f"Error in leader attendance: {e}")
+                                # Log but continue - don't let errors prevent heartbeats
+                                self.log_status(f"ERROR_IN_ATTENDANCE: {str(e)}")
 
-                        print("Device:", self.id, self.leader, "\n", self.device_list)
-                        self.leader_send_attendance()
 
                         # after receiving in attendance, make sure still leader
                         if not self.get_leader():
@@ -716,7 +775,7 @@ class ThisDevice(Device):
                         self.transceiver.log("FOLLOWER")
                         # print("Device:", self.id, self.leader, "\n", self.device_list)
                         if not self.receive(duration=TAKEOVER_DURATION):
-                            print("Is there anybody out there?")
+                            print(f"Device {self.id} asking: is there anybody out there?")
                             self.make_leader()
                             continue
                         elif abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:  # account for loss of precision
@@ -756,11 +815,27 @@ class ThisDevice(Device):
 
                             # probably do not need to clear follower channel
                             # self.transceiver.clear()
+                
                 while not self.active:
                     self.receive(duration=2)  # waiting for reactivation
                     time.sleep(2)  # can slow down clock speed here
                     # TODO: more formal dynamic clock
-                
+               
+
+    def broadcast_candidacy(self):
+        """
+        Broadcasts this device's candidacy for leadership using attendance message.
+        Uses the device's own ID as leader_id to announce candidacy.
+        """
+        print(f"Device {self.id} broadcasting candidacy")
+        self.send(
+            action=Action.ATTENDANCE.value,  # Using attendance action for candidacy
+            payload=0,                       # No payload needed for candidacy
+            leader_id=self.id,              # Using own ID to announce candidacy
+            follower_id=0,                  # No follower during election
+            duration=0.5                    # Short duration for election message
+        )
+        self.log_status("BROADCAST CANDIDACY")
 
 
 class DeviceList:
@@ -773,16 +848,18 @@ class DeviceList:
         """
         #self.manager = Manager()  #use manager to create the shared disctionary
         self.devices = {}  # hashmap of id: Device object
-        self.task_options = list(range(1, num_tasks+1))  # 1, 2, 3, 4
-        #adding a lock to the device list
+        self.task_options = [1, 2, 3, 4, 5]  
         
     def __getstate__(self):
-        # Only serialize the device data
-        return {'devices': dict(self.devices)}
+        # serialize the devices and task options
+        return {'devices': dict(self.devices),
+                'task_options': self.task_options
+        }
         
     def __setstate__(self, state):
         # Restore from serialized data
         self.devices = state['devices']
+        self.task_options = state.get('task_options', [1,2,3,4,5])
 
     def __str__(self):
         """
@@ -809,7 +886,14 @@ class DeviceList:
         :return: number of Devices in DeviceList as an int.
         """
         return len(self.devices)
-
+    def get_task_options(self):
+        """
+        Get the task options
+        """
+        if not hasattr(self, 'task_options') or self.task_options is None:
+            self.task_options = [1, 2, 3, 4, 5]
+        return self.task_options
+        
     def get_device_list(self) -> Dict[int, Device]:
         """
         :return: dictionary of {id : Device}
@@ -874,7 +958,7 @@ class DeviceList:
         Gets list of tasks not currently assigned to a device.
         :return: list of unused task indices.
         """
-        unused_tasks = self.task_options.copy()
+        unused_tasks = self.get_task_options().copy()
         for d in self.devices.values():
             if d.get_task() != 0 and d.get_task() in unused_tasks:
                 unused_tasks.remove(d.get_task())
