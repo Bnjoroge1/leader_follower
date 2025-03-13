@@ -599,25 +599,59 @@ class SimulationTransceiver(AbstractTransceiver):
                 except q.Empty:
                     pass
 
+    async def notify_state_change(self, old_state, new_state):
+        """Log state transitions for visualization"""
+        message = {
+            'device_id': self.parent_id,
+            'old_state': old_state,
+            'new_state': new_state,
+            'timestamp': time.time()
+        }
+        await self.notify_server(f"STATE_CHANGE,{json.dumps(message)}")
+
+    async def handle_tiebreaker(self, other_id):
+        """Log tiebreaker events for visualization"""
+        message = {
+            'device_id': self.parent_id,
+            'other_id': other_id,
+            'type': 'TIEBREAKER',
+            'timestamp': time.time()
+        }
+        await self.notify_server(f"TIEBREAKER,{json.dumps(message)}")
     # websocket client to connect to server.js and interact with injections
     async def websocket_client(self):
         uri = "ws://localhost:3000"  # server.js websocket server
-        async with websockets.connect(uri) as websocket:
-            await websocket.send(f"CONNECTED,{self.parent.node_id}")  # initial connection message
+        while True:
+            try:
+                async with websockets.connect(uri) as websocket:
+                    await websocket.send(f"CONNECTED,{self.parent_id}")  # initial connection message
 
-            async for message in websocket:
-                if isinstance(message, bytes):
-                    message = message.decode("utf-8")
-                print(f"Received message: {message}")
-                if message == "Toggle Device":
-                    print("Toggling device")
-                    if self.active_status() == 0:  # been off
-                        self.reactivate()  # goes through process to full activation
-                        await websocket.send(f"REACTIVATED,{self.parent.node_id}")  # reactivation
-                    else:
-                        self.deactivate()  # recently just turned on
-                        await websocket.send(f"DEACTIVATED,{self.parent.node_id}")  # deactivation
+                    async for message in websocket:
+                        if isinstance(message, bytes):
+                            message = message.decode("utf-8")
 
+                        print(f"Received message: {message}")
+                        # Leadership changes cause red/blue transitions    
+                        if "LEADER" in message:
+                            await self.notify_state_change("FOLLOWER", "LEADER")
+                        elif "FOLLOWER" in message:
+                            await self.notify_state_change("LEADER", "FOLLOWER")
+                        elif "TIEBREAKER" in message:
+                            await self.handle_tiebreaker(message.split(",")[1])
+                        if message == "Toggle Device":
+                            print("Toggling device")
+                            if self.active_status() == 0:  # been off
+                                self.reactivate()  # goes through process to full activation
+                                await websocket.send(f"REACTIVATED,{self.parent.node_id}")  # reactivation
+                            else:
+                                self.deactivate()  # recently just turned on
+                                await websocket.send(f"DEACTIVATED,{self.parent.node_id}")  # deactivation
+            except websockets.exceptions.ConnectionClosed:
+                print("WebSocket connection closed, reconnecting...")
+                await asyncio.sleep(1)
+            except Exception as e:
+                print(f"WebSocket error: {e}, reconnecting...")
+                await asyncio.sleep(1)
     # called via asyncio from a synchronous environment - send, receive
     async def notify_server(self, message: str):
         uri = "ws://localhost:3000"  # server.js websocket server
