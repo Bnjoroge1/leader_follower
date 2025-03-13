@@ -12,7 +12,6 @@ class CheckpointData:
     simulation_id: str
     node_states: Dict[str, Any]
     message_queues: Dict[str, List[Any]]
-     
 
     trace_points: List[str]
 

@@ -111,6 +111,7 @@ async def main():
         init_tasks = []
         for i in range(num_devices):
             shared_active = Value('i', 2)  # 0 == off, 1 == just reactivated, 2 == active
+            
             new_node = SimulationNode(i+1, active=shared_active, checkpoint_mgr=checkpoint_mgr)  # can we move active to lower level like size?
             nodes.append(new_node)
             init_tasks.append(new_node.async_init())  # prepare async initialization tasks
