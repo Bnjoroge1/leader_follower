@@ -7,6 +7,7 @@ from queue import Queue
 import time
 import asyncio
 from message_classes import Action
+from ui_device import UIDevice
 
 class ZigbeeNode():
      
@@ -33,8 +34,12 @@ class ZigbeeNode():
         
         
         self.thisDevice.device_main()
-    
 
+class ZigbeeUINode(ZigbeeNode):
+    def __init__(self):
+        super().__init__(node_id=-1)
+        self.thisDevice = UIDevice(self.node_id, self.transceiver)  # type: ignore
+    
 class ZigbeeTransceiver():
     
     def __init__(self, broker_address='192.168.68.89', broker_port=1883, active: multiprocessing.Value = None, parent: ZigbeeNode = None, username=None, password=None):
