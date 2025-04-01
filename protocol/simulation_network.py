@@ -14,6 +14,7 @@ from message_classes import Message
 from collections import deque
 import hashlib
 from checkpoint_manager import CheckpointManager
+from device_state import DeviceState
 
 def device_process_function(device_id: int, node_id: int, active_value: int, outgoing_channels: Dict[int, Queue], incoming_channels: Dict[int, Queue]):
     """Standalone function for the device process"""
@@ -93,12 +94,14 @@ class SimulationNode(AbstractNode):
                     new_active = multiprocessing.Value('i', self.active.value)
                     #self.transceiver.active = new_active
                     device_state = {
-                        'id': self.thisDevice.id,
-                        'leader': self.thisDevice.leader,
-                        'received': self.thisDevice.received,
-                        'missed': self.thisDevice.missed,
-                        'task': self.thisDevice.task,
-                        'active': True
+                    'device_id': self.thisDevice.id,
+                    'device_list': self.thisDevice.device_list,
+                    'known_leaders': self.thisDevice.known_leaders,
+                    'isLeader': self.thisDevice.leader,
+                    'currentLeader': self.thisDevice.leader_id,
+                    'received': self.thisDevice.received,
+                    'missed': self.thisDevice.missed,
+                    'task': self.thisDevice.task
                     }
 
                     self.process = multiprocessing.Process(
@@ -370,10 +373,12 @@ class Network:
     def create_channel(self, node_id1, node_id2):  # 2 channels for bidirectional comms
         queue1 = ChannelQueue()  # from 1 to 2
         queue2 = ChannelQueue()  # from 2 to 1
+        print(f"created both queuees: {queue1} and {queue2}")
         self.nodes[node_id1].set_outgoing_channel(node_id2, queue1)  # (other node, channel)
         self.nodes[node_id1].set_incoming_channel(node_id2, queue2)
         self.nodes[node_id2].set_outgoing_channel(node_id1, queue2)
         self.nodes[node_id2].set_incoming_channel(node_id1, queue1)
+        print(f"Set the incoming and outgoing channels in both {node_id1} and {node_id2}")
 
 
 class NetworkVisualizer:
@@ -438,7 +443,7 @@ class ChannelQueue:
 class NodeState:
     node_id: str
     active: int
-    device_state: Dict[str, Any]
+    device_state: DeviceState
     process_state: Dict[str, Any]
 
 
@@ -501,9 +506,12 @@ class SimulationTransceiver(AbstractTransceiver):
 
     def set_outgoing_channel(self, node_id, queue: ChannelQueue):
         self.outgoing_channels[node_id] = queue
+        print(f"DEBUG: Outgoing channel set for node {self.parent_id} to {node_id}")
 
     def set_incoming_channel(self, node_id, queue: ChannelQueue):
         self.incoming_channels[node_id] = queue
+        print(f"DEBUG: Incoming channel set for node {self.parent_id} to {node_id}")
+
 
     def send(self, msg: int):  # send to all channels
         # if msg // int(1e10) == 2:

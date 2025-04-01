@@ -1,15 +1,22 @@
 '''
 Modified device_classes for test_harness
 '''
+from dataclasses import asdict
+from operator import truediv
 import os
 import time
+import uuid
 from message_classes import Message, Action
 #from zigbee_network import ZigbeeTransceiver
 from typing import Any, Dict, List, Set
 from pathlib import Path
 import csv
+import json
 import subprocess
 from threading import Lock
+from device_state import DeviceState, DeviceStateStore
+from deviceid_util import generate_persistent_device_id
+import random
 
 # zigpy imports
 #import asyncio
@@ -44,7 +51,7 @@ class Device:
         
         
         self.leader: bool = False  # initialized as follower
-        self.received: int = None  # holds most recent message payload
+        self.received: int # holds most recent message payload
         self.missed: int = 0  # number of missed check-ins, used by current leader
         self.in_election: bool = False
         self.task: int = 0  # task identifier, 0 denotes reserve
@@ -129,22 +136,49 @@ class ThisDevice(Device):
         Constructor (default/non-default) for ThisDevice, creates additional fields.
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
         """
+        
+        
+        self.id = random.randint(1, 1000000) % int(1e6)
         super().__init__(id)
         self.leader: bool = True  # start ThisDevice as leader then change accordingly in setup
         self.device_list: DeviceList = DeviceList()  # default sizing
-        self.leader_id: int  = None
-        self.leader_started_operating: float = None
-        self.task_folder_idx: int  = None  # multiple operations can be preloaded
-        self.received: int  = None  # will be an int representation of message
-
-        self.transceiver= transceiver  # plugin object for sending and receiving messages
+        self.leader_id: int 
+        self.leader_started_operating: float | None = None
+        self.task_folder_idx: int | None = None  # multiple operations can be preloaded
+        self.received: int | None = None  # will be an int representation of message
+        self.transceiver: AbstractTransceiver = transceiver  # plugin object for sending and receiving messages
         self.numHeardDLIST: int = 0
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         self.outPath = OUTPUT_DIR / ("device_log_" + str(self.id) + ".csv")
         self.active = True
         self.is_ui_device = False
         self.known_leaders = set()  #keep track of all leaders with lower IDs.
+
+        #persistent id
+        self.device_uuid = self._get_or_create_uuid()
+        self.last_heard_from_leader = time.time()
+        self.disconnected = False
+
         
+    def _get_or_create_uuid(self):
+        """
+        Generate or retrieve a persistent UUID for this device"""
+        uuid_file = Path(f"device_uuid{self.id}.json")
+        if uuid_file.exists():
+            try:
+                with open(uuid_file, 'r') as file:
+                    return json.load(file).get('uuid')
+            except(json.JSONDecodeError, KeyError, FileNotFoundError):
+                pass
+
+        new_uuid  = str(uuid.uuid4())
+        with open(uuid_file, 'w') as f:
+            json.dump({'device_uuid ': new_uuid}, f)
+        return new_uuid
+    
+
+
+
 
     def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
         """
@@ -288,17 +322,22 @@ class ThisDevice(Device):
                 #task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", self.received_follower_id())
                 self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
-                self.device_list.add_device(id=self.received_follower_id(), task_index=task, thisDeviceId= self.id)  # has not assigned task yet
-    def get_state(self) -> Dict[str, Any]:
+                self.device_list.add_device(id=self.received_follower_id(), task=0)  # has not assigned task yet
+    def get_state(self) -> DeviceState:
         """Return serializable state of the device"""
-        return {
-            'device_id': self.id,
-            
-            'leader': self.leader,
-            'received': self.received,
-            'missed': self.missed,
-            'task': self.task
-        }
+        device_state  = DeviceState(
+            device_id=self.id,
+            device_uuid = self.device_uuid,
+            device_list=list(self.device_list.get_device_list().values()),
+            known_leaders=self.known_leaders,
+            is_leader = self.leader,
+            current_leader=self.leader_id,
+            received=self.received,
+            missed=self.missed,
+            task=self.task 
+        )
+        return device_state
+
     def leader_send_device_list(self):
         """
         Helper to leader_send_attendance. Broadcasts message for each new device in network.
@@ -359,16 +398,142 @@ class ThisDevice(Device):
         """
         for id, device in self.device_list.get_device_list().copy().items():  # prevents modifying during iteration
             if device.get_missed() > MISSED_THRESHOLD:
+                #save file state
+                device_state = self.get_state()
+                device_storage = DeviceStateStore()
+                device_storage.save_device_state(device_id=id, state_dict=asdict(device_state))
+
+
+                
                 self.device_list.remove_device(id=id)  # remove from own list
                 # sends a message for each disconnected device
                 print("Leader sending DELETE message")
                 self.log_status("SENDING DELETE")
                 self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
                 # broadcasts to entire channel, does not need a response confirmation
+    def follower_rejoin_after_dropping_off(self):
+        #detect if this device has been dropped off. check for messages within TAKEOVER DURATION, and not reeceiveing check in requests. 
+        """Handle device rejoining after disconnecting"""
+        print("Device {self.id} detected disconnection, attempting to rejoin")
+        self.disconnected = True
+
+        #load previous state
+        device_storage  = DeviceStateStore()
+        previous_state = device_storage.get_latest_device_state(self.id)
+        
+        if previous_state:
+            print(f"Device {self.id}. Found previous state with UUID: {previous_state.get('device_uuid')}")
+            self.known_leaders.clear()
+        else:
+            print(f"Device {self.id} has no previous state, joining as new device")
+        #get the current leader
+        current_leader  = self._detect_current_leader()
+        if current_leader:
+            #current leader exists, so rejoin as follower
+            print(f"Device {self.id} detected leader {current_leader}. Becoming its follower ")
+            self.leader_id = current_leader
+            self.leader = False
+            self.make_follower()
+            self._send_rejoin_request()
+        #if no current leader then participate in electon
+        else:
+            print(f"NO CURRENT LEADER DETECTED BY {self.id}, participating in leader election")
+            self.known_leaders.clear()
+            self.broadcast_candidacy()
+
+    def _detect_current_leader(self):
+        """Listen for network activity to identify current leader"""
+        print("Device {self.id} listening for current leader")
+
+        #try several short windows instead of one long one
+        for _ in range(5):
+            if self.receive(duration=1.0):
+                if self.received_action() == Action.ATTENDANCE.value:
+                    leader_id = self.received_leader_id()
+                    print(f"Device {self.id} detected leader {leader_id}")
+                    return leader_id
+            time.sleep(0.2) #small gap between listening attempts.
+        print(f"Device {self.id} did not detect any leader")
+        return None
+    def _send_rejoin_request(self):
+        """
+        send the actual rejoin request as a follower to leader"""
+        #create a payload with UUID fingerprint
+        uuid_hash  = abs(hash(self.device_uuid)) % 10000
+        payload = (self.task * 10000) + uuid_hash
+
+        self.send(
+            action=Action.REJOIN_REQUEST.value,
+            payload=payload,
+            leader_id=self.leader_id,
+            follower_id=self.id,
+            duration=1.0
+        )
+        #wait for response with certain timeout
+        rejoin_time = time.time() + 5.0
+        while time.time() < rejoin_time:
+            if self.receive(duration=0.5):
+                if self.received_action() == Action.REJOIN_RESPONSE.value:
+                    if self.received_follower_id() == self.id:
+                        print(f"Device {self.id} rejoined successfully")
+                        self.disconnected = False
+                        return True
+        print(f"Device {self.id} rejoin request timed out")
+        return False
+    def handle_leader_rejoin_request(self):
+        """Leader handles a rejoin request from a device"""
+        follower_id = self.received_follower_id()
+        payload = self.received_payload()
+        task = payload // 100000
+        uuid_hash = payload % 100000
+
+        print(f"Leader{self.id} received rejoin request from device")
+
+        #validate the device by checking teh stored state
+        device_storage = DeviceStateStore()
+        matching_states = device_storage.find_states_by_uuid_hash(uuid_hash)
+
+        if matching_states:
+            print(f"Leader {self.id} found matching previous state for follower device{follower_id}")
+            self.device_list.add_device(id=follower_id, task=task)
+            
+            #send acceptance
+            self.send(
+                action=Action.REJOIN_RESPONSE.value,
+                payload=payload,
+                leader_id=self.id,
+                follower_id=follower_id,
+                duration=1.0
+            )
+            #annouce to all other followers
+            self._announce_device_rejoined(follower_id)
+
+            #confirm that all followers have updated their device list. 
+            return True
+
+        else:
+            print(f"Leader {self.id} couldnt validate device {follower_id}")
+            return True
+    def _announce_device_rejoined(self, follower_id):
+        """ Announce device has rejoined"""
+        for follower in self.device_list.get_ids():
+            if follower != self.id and follower != follower_id:
+                self.send(
+                    action=Action.REJOIN_ANNOUNCE.value,
+                    payload=0,
+                    leader_id=self.id,
+                    follower_id=follower_id,
+                    duration=0.5
+                )
+    
+
+
+
+
 
     def follower_handle_attendance(self):
         """
-        Called after follower has received attendance message and assigned to self.received.
+            Called after follower has received attendance message and assigned to self.received.
         """
         print("Follower", self.id, "handling attendance")
         self.log_status("HANDLING ATTENDANCE")
@@ -900,6 +1065,7 @@ class ThisDevice(Device):
             duration=0.5                    # Short duration for election message
         )
         self.log_status("BROADCAST CANDIDACY")
+
 
 
 class DeviceList:
