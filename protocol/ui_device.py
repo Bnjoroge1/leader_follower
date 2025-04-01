@@ -173,53 +173,132 @@ class UIDevice(ThisDevice):
         # Notify connected clients we're online
         self.send_update("status", {"status": "online"})
         
-        # Create some mock devices for testing
+        # Set UI device to always be a follower
+        self.leader = False
+        
+        # Create five mock devices for testing - initially device 1001 is the leader
         mock_devices = [
-            {"id": 1001, "task": 1, "leader": True, "missed": 0},
-            {"id": 1002, "task": 2, "leader": False, "missed": 0},
-            {"id": 1003, "task": 3, "leader": False, "missed": 1}
+            {"id": 1001, "task": 1, "leader": True, "missed": 0},   # Initially in position 1
+            {"id": 1002, "task": 2, "leader": False, "missed": 0},  # Initially in position 2
+            {"id": 1003, "task": 3, "leader": False, "missed": 0},  # Initially in position 3
+            {"id": 1004, "task": 4, "leader": False, "missed": 0},  # Initially in position 4
+            {"id": 1005, "task": 5, "leader": False, "missed": 0},  # Initially in loading dock
         ]
+        
+        # Set the initial leader ID
+        current_leader_idx = 0
+        self.leader_id = mock_devices[current_leader_idx]["id"]
+        
+        # For simulating device activities
+        positions = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4}  # Maps position to device index
         
         # Just keep running - the WebSocket thread handles UI communication
         counter = 0
         try:
             while True:
-                if counter % 5 == 0:  # Every 5 seconds
-                    # Simulate status change
-                    is_leader = counter % 10 == 0
-                    self.leader = is_leader
-                    self.leader_id = self.id if is_leader else 1001
-                    self.send_update("status_change", {"is_leader": is_leader})
-                    print(f"Sent status change: {'Leader' if is_leader else 'Follower'}")
+                # Every 10 seconds, switch leader to another device (never UI device)
+                if counter % 10 == 0 and counter > 0:
+                    # Make current leader a follower
+                    mock_devices[current_leader_idx]["leader"] = False
                     
-                if counter % 7 == 0:  # Every 7 seconds
-                    # Simulate sending a message
+                    # Pick a new leader (cycling through devices 0-4)
+                    current_leader_idx = (current_leader_idx + 1) % 5
+                    mock_devices[current_leader_idx]["leader"] = True
+                    self.leader_id = mock_devices[current_leader_idx]["id"]
+                    
+                    # Broadcast leadership change
+                    self.send_update("status_change", {
+                        "is_leader": False,  # UI device is always follower
+                        "leader_id": self.leader_id
+                    })
+                    print(f"New leader: Device {self.leader_id}")
+                    
+                    # Simulate leader sending attendance request
                     self.send_update("message_log", {
                         "type": "send",
                         "action": 1,  # ATTENDANCE
                         "payload": counter,
-                        "leader_id": self.id if self.leader else 1001,
-                        "follower_id": 1002
+                        "leader_id": self.leader_id,
+                        "follower_id": 0  # Broadcast to all
                     })
-                    print("Sent mock message")
+                
+                # Every 15 seconds, move a random device to a new position
+                if counter % 15 == 0 and counter > 0:
+                    # Pick a random device to move
+                    device_idx = counter % 5
+                    old_task = mock_devices[device_idx]["task"]
                     
-                if counter % 11 == 0:  # Every 11 seconds
-                    # Simulate receiving a message
-                    self.send_update("received_message", {
-                        "action": 2,  # ATT_RESPONSE
-                        "leader_id": 1001,
-                        "follower_id": 1002,
-                        "payload": counter,
-                        "raw": 2000100210020
+                    # Find an empty position or swap with another device
+                    new_task = (old_task % 5) + 1
+                    
+                    # Update position mapping
+                    if new_task in positions:
+                        other_device_idx = positions[new_task]
+                        mock_devices[other_device_idx]["task"] = old_task
+                        positions[old_task] = other_device_idx
+                    
+                    # Set new task for moved device
+                    mock_devices[device_idx]["task"] = new_task
+                    positions[new_task] = device_idx
+                    
+                    # Broadcast task assignment
+                    self.send_update("message_log", {
+                        "type": "send",
+                        "action": 3,  # ASSIGN_TASK
+                        "payload": new_task,
+                        "leader_id": self.leader_id,
+                        "follower_id": mock_devices[device_idx]["id"]
                     })
-                    print("Sent mock received message")
-                    
-                if counter % 13 == 0:  # Every 13 seconds
-                    # Simulate device list update
-                    mock_devices[1]["missed"] = counter % 3
+                    print(f"Device {mock_devices[device_idx]['id']} moved to position {new_task}")
+                
+                # Every 8 seconds, simulate a heartbeat/ping
+                if counter % 8 == 0:
+                    # Leader pings a random follower
+                    target_idx = (counter // 8) % 5
+                    if target_idx != current_leader_idx:  # Don't ping self
+                        self.send_update("message_log", {
+                            "type": "send",
+                            "action": 5,  # PING
+                            "payload": 0,
+                            "leader_id": self.leader_id,
+                            "follower_id": mock_devices[target_idx]["id"]
+                        })
+                        
+                        # Simulate follower response
+                        self.send_update("received_message", {
+                            "action": 6,  # PONG
+                            "leader_id": self.leader_id,
+                            "follower_id": mock_devices[target_idx]["id"],
+                            "payload": 0,
+                            "raw": 6000000000000
+                        })
+                
+                # Every 17 seconds, simulate a device going inactive/active
+                if counter % 17 == 0 and counter > 0:
+                    inactive_idx = counter % 5
+                    if inactive_idx != current_leader_idx:  # Don't make leader inactive
+                        # Toggle missed count (0 = active, >0 = inactive)
+                        mock_devices[inactive_idx]["missed"] = 0 if mock_devices[inactive_idx]["missed"] > 0 else 2
+                        status = "inactive" if mock_devices[inactive_idx]["missed"] > 0 else "active"
+                        print(f"Device {mock_devices[inactive_idx]['id']} is now {status}")
+                
+                # Every 5 seconds, broadcast updated device list
+                if counter % 5 == 0:
                     self.send_update("device_list", mock_devices)
-                    print("Sent mock device list update")
-                    
+                    print("Device list updated")
+                
+                # Occasionally simulate arbitrary message exchange
+                if counter % 23 == 0 and counter > 0:
+                    # Random action type for variety
+                    action_type = (counter % 7) + 1
+                    self.send_update("received_message", {
+                        "action": action_type,
+                        "leader_id": self.leader_id,
+                        "follower_id": mock_devices[counter % 5]["id"],
+                        "payload": counter,
+                        "raw": int(f"{action_type}00{self.leader_id}0{mock_devices[counter % 5]['id']}{counter}")
+                    })
+                
                 counter += 1
                 time.sleep(1)
         except KeyboardInterrupt:
