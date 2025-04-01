@@ -173,9 +173,54 @@ class UIDevice(ThisDevice):
         # Notify connected clients we're online
         self.send_update("status", {"status": "online"})
         
+        # Create some mock devices for testing
+        mock_devices = [
+            {"id": 1001, "task": 1, "leader": True, "missed": 0},
+            {"id": 1002, "task": 2, "leader": False, "missed": 0},
+            {"id": 1003, "task": 3, "leader": False, "missed": 1}
+        ]
+        
         # Just keep running - the WebSocket thread handles UI communication
+        counter = 0
         try:
             while True:
+                if counter % 5 == 0:  # Every 5 seconds
+                    # Simulate status change
+                    is_leader = counter % 10 == 0
+                    self.leader = is_leader
+                    self.leader_id = self.id if is_leader else 1001
+                    self.send_update("status_change", {"is_leader": is_leader})
+                    print(f"Sent status change: {'Leader' if is_leader else 'Follower'}")
+                    
+                if counter % 7 == 0:  # Every 7 seconds
+                    # Simulate sending a message
+                    self.send_update("message_log", {
+                        "type": "send",
+                        "action": 1,  # ATTENDANCE
+                        "payload": counter,
+                        "leader_id": self.id if self.leader else 1001,
+                        "follower_id": 1002
+                    })
+                    print("Sent mock message")
+                    
+                if counter % 11 == 0:  # Every 11 seconds
+                    # Simulate receiving a message
+                    self.send_update("received_message", {
+                        "action": 2,  # ATT_RESPONSE
+                        "leader_id": 1001,
+                        "follower_id": 1002,
+                        "payload": counter,
+                        "raw": 2000100210020
+                    })
+                    print("Sent mock received message")
+                    
+                if counter % 13 == 0:  # Every 13 seconds
+                    # Simulate device list update
+                    mock_devices[1]["missed"] = counter % 3
+                    self.send_update("device_list", mock_devices)
+                    print("Sent mock device list update")
+                    
+                counter += 1
                 time.sleep(1)
         except KeyboardInterrupt:
-            self.log_status("UI Device shutting down")
+            print("UI Device shutting down")
