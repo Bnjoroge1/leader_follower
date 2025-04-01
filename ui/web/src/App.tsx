@@ -27,7 +27,10 @@ function App() {
           
           <div>
             <h2 className="text-xl font-semibold mb-4">Track Box</h2>
-            <TrackBox onCellClick={(num) => { console.log(`Cell ${num} clicked!`); }} />
+            <TrackBox 
+              onCellClick={(num) => { console.log(`Cell ${num} clicked!`); }} 
+              devices={devices}
+            />
             <MessageLog messages={messages} />
           </div>
         </div>
