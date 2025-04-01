@@ -16,6 +16,7 @@ class UIDevice(ThisDevice):
         super().__init__(id, transceiver)
         self.connected_clients = set()
         self.loop = None
+        self.is_ui_device = True
         # Start WebSocket server in a separate thread
         self.ws_thread = threading.Thread(target=self.start_ws_server)
         self.ws_thread.daemon = True
@@ -62,7 +63,9 @@ class UIDevice(ThisDevice):
                 "type": "initial_state",
                 "device_id": self.id,
                 "leader_id": self.leader_id,
-                "is_leader": self.leader,
+                "is_leader": False,
+                "is_follower": False,
+                "is_ui": True,
                 "device_list": self.format_device_list()
             }))
             
@@ -174,16 +177,19 @@ class UIDevice(ThisDevice):
         self.send_update("status", {"status": "online"})
         
         # Set UI device to always be a follower
-        self.leader = False
+        self.leader = None
+        self.device_role = "ui"
         
         # Create five mock devices for testing - initially device 1001 is the leader
         mock_devices = [
-            {"id": 1001, "task": 1, "leader": True, "missed": 0},   # Initially in position 1
-            {"id": 1002, "task": 2, "leader": False, "missed": 0},  # Initially in position 2
-            {"id": 1003, "task": 3, "leader": False, "missed": 0},  # Initially in position 3
-            {"id": 1004, "task": 4, "leader": False, "missed": 0},  # Initially in position 4
-            {"id": 1005, "task": 5, "leader": False, "missed": 0},  # Initially in loading dock
+            {"id": 1001, "task": 1, "leader": True, "missed": 0, "role": "leader"},   # Position 1
+            {"id": 1002, "task": 2, "leader": False, "missed": 0, "role": "follower"},  # Position 2
+            {"id": 1003, "task": 3, "leader": False, "missed": 0, "role": "follower"},  # Position 3
+            {"id": 1004, "task": 4, "leader": False, "missed": 0, "role": "follower"},  # Position 4
+            {"id": 1005, "task": 5, "leader": False, "missed": 0, "role": "follower"},  # Position 5
         ]
+
+        ui_device = {"id": self.id, "task": None, "leader": None, "missed": 0, "role": "ui"}
         
         # Set the initial leader ID
         current_leader_idx = 0

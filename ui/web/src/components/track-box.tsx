@@ -125,7 +125,7 @@ const TrackBox: React.FC<TrackBoxProps> = ({ className, onCellClick, devices }) 
             <RobotNode 
               node={{
                 id: robotPositions[5]?.id || '',
-                role: robotPositions[5]?.leader ? 'leader' : 'follower',
+                role: robotPositions[5]?.leader ? 'leader' : robotPositions[5]?.leader == null ? 'ui' : 'follower',
                 status: robotPositions[5]?.missed > 0 ? 'inactive' : 'active',
                 task: robotPositions[5]?.task,
                 missed: robotPositions[5]?.missed

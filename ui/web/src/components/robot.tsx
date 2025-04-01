@@ -22,9 +22,12 @@ const RobotNode: React.FC<RobotNodeProps> = ({ node }) => {
   };
   
   return (
-    <div style={circleStyle}>
-      {node.id}
-    </div>
+    node.role !== 'ui' &&
+    (
+      <div style={circleStyle}>
+        {node.id}
+      </div>
+    )
   );
 };
 
