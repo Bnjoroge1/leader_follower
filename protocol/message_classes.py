@@ -45,3 +45,9 @@ class Action(Enum):
     TASK_STOP = 8  # leader sends personalized message to a tracked follower
     INFORMATION = 9  # any device sends information to channel TODO: implement database
 
+    #new actions for rejoining
+    REJOIN_REQUEST  = 10
+    REJOIN_RESPONSE = 11
+    REJOIN_ANNOUNCE = 12
+     
+
