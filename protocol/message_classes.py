@@ -50,3 +50,9 @@ class Action(Enum):
     ACTIVATE = 13
     DEACTIVATE = 14
 
+    #new actions for rejoining
+    REJOIN_REQUEST  = 10
+    REJOIN_RESPONSE = 11
+    REJOIN_ANNOUNCE = 12
+     
+

@@ -69,10 +69,11 @@ async def main():
                 firstNode = nodes[i]
                 secondNode = nodes[j]
                 print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
+                
                 network.create_channel(firstNode.node_id, secondNode.node_id)
-                print(f"DEBUG: Created channel between {firstNode.node_id} and {secondNode.node_id}")
                 print(f"DEBUG: First node channels: {firstNode.transceiver.incoming_channels.keys()}")
                 print(f"DEBUG: Second node channels: {secondNode.transceiver.incoming_channels.keys()}")
+                print(f"DEBUG: Created channFel between {firstNode.node_id} and {secondNode.node_id}")
 
         # Restore nodes from checkpoint
         for node in nodes:
@@ -83,6 +84,8 @@ async def main():
                 node_state, 
                 queue_state
             )
+            print(f"DEBUG: Node state for {node.node_id}: {node_state}")
+            print(f"DEBUG: Queue state for {node.node_id}: {queue_state}")
             print(f"DEBUG: Node channels after restore: {node.transceiver.incoming_channels.keys()}")
 
             init_tasks.append(node.async_init())
