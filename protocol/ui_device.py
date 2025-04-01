@@ -15,6 +15,7 @@ class UIDevice(ThisDevice):
     def __init__(self, id, transceiver):
         super().__init__(id, transceiver)
         self.connected_clients = set()
+        self.loop = None
         # Start WebSocket server in a separate thread
         self.ws_thread = threading.Thread(target=self.start_ws_server)
         self.ws_thread.daemon = True
@@ -22,14 +23,39 @@ class UIDevice(ThisDevice):
         
     def start_ws_server(self):
         """Start WebSocket server in a separate thread"""
-        asyncio.set_event_loop(asyncio.new_event_loop())
-        loop = asyncio.get_event_loop()
-        server = websockets.serve(self.ws_handler, "0.0.0.0", 8765)
-        loop.run_until_complete(server)
-        loop.run_forever()
+        async def start_server():
+            async with websockets.serve(self.ws_handler, "0.0.0.0", 8765):
+                print(f"WebSocket server started on port 8765")
+                await asyncio.Future()  # Run forever
+        
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            self.loop = loop
+            loop.run_until_complete(start_server())
+        except Exception as e:
+            print(f"WebSocket server error: {e}")
+            import traceback
+            traceback.print_exc()
 
-    async def ws_handler(self, websocket, path):
+    def send_update(self, update_type, data):
+        """Helper to send updates via the event loop without await issues"""
+        if not self.loop:
+            print("Warning: WebSocket event loop not initialized")
+            return
+            
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_update(update_type, data), 
+                self.loop
+            )
+        except Exception as e:
+            print(f"Error scheduling update: {e}")
+
+    async def ws_handler(self, websocket):
         """Handle WebSocket connections from clients"""
+        client_address = websocket.remote_address
+        print(f"WebSocket client connected from {client_address[0]}:{client_address[1]}")
         self.connected_clients.add(websocket)
         try:
             await websocket.send(json.dumps({
@@ -41,13 +67,14 @@ class UIDevice(ThisDevice):
             }))
             
             async for message in websocket:
+                print(f"Received message from client: {message}")
                 # We could handle commands from UI here
-                pass
                 
-        except websockets.exceptions.ConnectionClosed:
-            pass
+        except websockets.exceptions.ConnectionClosed as e:
+            print(f"Client connection closed: {e}")
         finally:
             self.connected_clients.remove(websocket)
+            print(f"Client disconnected: {client_address[0]}:{client_address[1]}")
 
     def format_device_list(self) -> List[Dict]:
         """Format device list for JSON serialization"""
@@ -86,25 +113,25 @@ class UIDevice(ThisDevice):
         self.log_message(msg, 'WOULD_SEND')
         
         # Broadcast to UI clients instead
-        asyncio.run(self.broadcast_update("message_log", {
+        self.send_update("message_log", {
             "type": "send",
             "action": action,
             "payload": payload,
             "leader_id": leader_id,
             "follower_id": follower_id
-        }))
+        })
 
     def make_leader(self):
         """Override make_leader to not send any messages"""
-        super(Device, self).make_leader()
+        super().make_leader()
         self.log_status("WOULD BECOME LEADER")
-        asyncio.run(self.broadcast_update("status_change", {"is_leader": True}))
+        self.send_update("status_change", {"is_leader": True})
 
     def make_follower(self):
         """Override make_follower to not send any messages"""
-        super(Device, self).make_follower()
+        super().make_follower()
         self.log_status("WOULD BECOME FOLLOWER")
-        asyncio.run(self.broadcast_update("status_change", {"is_leader": False}))
+        self.send_update("status_change", {"is_leader": False})
 
     # Override receive to broadcast received messages to UI
     def receive(self, duration, action_value=-1) -> bool:
@@ -123,19 +150,32 @@ class UIDevice(ThisDevice):
                 follower_id = self.received_follower_id()
                 payload = self.received_payload()
                 
-                asyncio.run(self.broadcast_update("received_message", {
+                self.send_update("received_message", {
                     "action": action,
                     "leader_id": leader_id,
                     "follower_id": follower_id,
                     "payload": payload,
                     "raw": self.received
-                }))
+                })
                 
                 # Also broadcast device list updates when appropriate
                 if action in [Action.D_LIST.value, Action.DELETE.value]:
-                    asyncio.run(self.broadcast_update("device_list", self.format_device_list()))
+                    self.send_update("device_list", self.format_device_list())
                 
             except Exception as e:
                 self.log_status(f"Error broadcasting message: {e}")
                 
         return result
+    
+    # purely for testing without robots
+    def device_main(self):
+        """Override device_main to avoid requiring real messages"""        
+        # Notify connected clients we're online
+        self.send_update("status", {"status": "online"})
+        
+        # Just keep running - the WebSocket thread handles UI communication
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            self.log_status("UI Device shutting down")

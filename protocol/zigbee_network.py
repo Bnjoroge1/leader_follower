@@ -36,21 +36,83 @@ class ZigbeeNode():
         self.thisDevice.device_main()
 
 class ZigbeeUINode(ZigbeeNode):
-    def __init__(self):
-        super().__init__(node_id=-1)
+    def __init__(self, node_id=-1, active: multiprocessing.Value = None, ip= '192.168.68.89', target_func = None, target_args = None):
+        self.node_id = node_id
+        self.active = active
+        self.transceiver = ZigbeeTransceiver(
+            broker_address=ip,
+            broker_port=1883,
+            active=self.active,
+            parent=self,
+            use_mock=True  # Use mock for UI testing
+        )
         self.thisDevice = UIDevice(self.node_id, self.transceiver)  # type: ignore
-    
+
+class MockMQTTClient:
+    def __init__(self, api_version=None):
+        self.on_connect = None
+        self.on_message = None
+        self.on_subscribe = None
+        self.on_unsubscribe = None
+        self.on_publish = None
+        print("Mock MQTT client created")
+        
+    def user_data_set(self, data):
+        self.user_data = data
+        
+    def connect(self, host, port, keepalive=60):
+        print(f"Mock connecting to {host}:{port}")
+        # Simulate successful connection
+        if self.on_connect:
+            class MockRC:
+                is_failure = False
+            self.on_connect(self, self.user_data, {}, MockRC(), {})
+        
+    def loop_start(self):
+        print("Mock MQTT loop started")
+        
+    def loop_stop(self):
+        print("Mock MQTT loop stopped")
+        
+    def disconnect(self):
+        print("Mock MQTT disconnected")
+        
+    def subscribe(self, topic):
+        print(f"Mock subscribed to {topic}")
+        if self.on_subscribe:
+            class MockRC:
+                is_failure = False
+            self.on_subscribe(self, self.user_data, 1, [MockRC()], {})
+        
+    def publish(self, topic, payload, qos=0):
+        print(f"Mock publishing to {topic}: {payload}")
+        class MockMsgInfo:
+            def __init__(self):
+                self.mid = 1
+            def wait_for_publish(self):
+                if self.on_publish:
+                    self.on_publish(self, self.user_data, self.mid, 0, {})
+                return True
+        return MockMsgInfo()
+
 class ZigbeeTransceiver():
     
-    def __init__(self, broker_address='192.168.68.89', broker_port=1883, active: multiprocessing.Value = None, parent: ZigbeeNode = None, username=None, password=None):
+    def __init__(self, broker_address='192.168.68.89', broker_port=1883, active: multiprocessing.Value = None, parent: ZigbeeNode = None, username=None, password=None, use_mock=False):
         self.active = active
         self.parent = parent
         self.broker_address = broker_address
         self.broker_port = broker_port
         self.username = username
         self.password = password
-        self.sub_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-        self.pub_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+
+        if use_mock:
+            self.sub_client = MockMQTTClient()
+            self.pub_client = MockMQTTClient()
+            print("Using MockMQTTClient for testing")
+        else:
+            self.sub_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            self.pub_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            
         self.sub_topic = 'zigbee2mqtt/bridge/request/device/permit_join'
         self.rcv_queue = Queue()
         self.unacked = set()
