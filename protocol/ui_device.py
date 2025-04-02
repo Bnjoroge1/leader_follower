@@ -16,7 +16,7 @@ class UIDevice(ThisDevice):
         super().__init__(id, transceiver)
         self.connected_clients = set()
         self.loop = None
-        self.is_ui_device = True
+        self.is_ui_device = True  # overwrite
         # Start WebSocket server in a separate thread
         self.ws_thread = threading.Thread(target=self.start_ws_server)
         self.ws_thread.daemon = True

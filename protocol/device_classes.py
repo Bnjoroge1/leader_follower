@@ -126,6 +126,7 @@ class ThisDevice(Device):
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         self.outPath = OUTPUT_DIR / ("device_log_" + str(self.id) + ".csv")
         self.active = True
+        self.is_ui_device = False
 
     def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
         """
@@ -230,11 +231,13 @@ class ThisDevice(Device):
                 self.follower_handle_attendance()
                 return  # early exit if follower
         print("Assuming position of leader")
-        self.make_leader()
-        self.leader_id = self.id
-        task = self.device_list.unused_tasks()[0]
-        self.device_list.add_device(id=self.id, task_index=task, thisDeviceId= self.id)  # put itself in devicelist with first task
-        self.leader_send_attendance()
+
+        if not self.is_ui_device:
+            self.make_leader()
+            self.leader_id = self.id
+            task = self.device_list.unused_tasks()[0]
+            self.device_list.add_device(id=self.id, task_index=task, thisDeviceId= self.id)  # put itself in devicelist with first task
+            self.leader_send_attendance()
 
     def leader_send_attendance(self):
         """
