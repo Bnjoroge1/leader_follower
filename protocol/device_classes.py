@@ -419,7 +419,8 @@ class ThisDevice(Device):
 
     def make_follower(self):
         super().make_follower()
-        self.send(action=Action.NEW_FOLLOWER.value, payload=0, leader_id=self.received_leader_id(), follower_id=self.id)
+        rcvd_leader_id = self.received_leader_id() if self.received else 0
+        self.send(action=Action.NEW_FOLLOWER.value, payload=0, leader_id=rcvd_leader_id, follower_id=self.id)
         self.log_status("BECOMING FOLLOWER")
     
     def make_leader(self):
