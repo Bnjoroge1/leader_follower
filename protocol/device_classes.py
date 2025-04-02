@@ -737,7 +737,7 @@ class ThisDevice(Device):
                             # print("CONTINUE")
                             continue  # message was not from this device's leader - ignore
 
-                        action = self.received_action()
+                        action = self.received_action() if self.received else None
                         # print(action)
 
                         # messages for all followers
@@ -773,7 +773,7 @@ class ThisDevice(Device):
                                 self.follower_handle_attendance()
                                 self.numHeardDLIST = 0
                         elif action == Action.CHECK_IN.value:
-                            if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
+                            if self.received and abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
                                 print("Follower", self.id, "heard directed check-in")
                                 self.follower_respond_check_in()
                             else:

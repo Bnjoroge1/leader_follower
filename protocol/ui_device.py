@@ -171,7 +171,7 @@ class UIDevice(ThisDevice):
         return result
     
     # purely for testing without robots
-    def device_main(self):
+    def device_main_mocked(self):
         """Override device_main to avoid requiring real messages"""        
         # Notify connected clients we're online
         self.send_update("status", {"status": "online"})
