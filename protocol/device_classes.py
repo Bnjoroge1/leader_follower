@@ -722,7 +722,7 @@ class ThisDevice(Device):
                     if not self.get_leader():
                         #self.transceiver.log("FOLLOWER")
                         #print("Device:", self.id, self.leader, "\n", self.device_list)
-                        if not self.receive(duration=TAKEOVER_DURATION):
+                        if not self.receive(duration=TAKEOVER_DURATION) and not self.is_ui_device:
                             print("Is there anybody out there?")
                             self.device_list.remove_device(id=self.leader_id)
                             self.leader_id = self.id
