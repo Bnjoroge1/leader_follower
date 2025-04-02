@@ -731,7 +731,7 @@ class ThisDevice(Device):
                             self.leader_id = self.id
                             self.make_leader()
                             continue
-                        elif abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:  # account for loss of precision
+                        elif self.received and abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:  # account for loss of precision
                             # print(self.received_leader_id())
                             # print(self.leader_id)
                             # print("CONTINUE")
