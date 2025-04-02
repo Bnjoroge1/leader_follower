@@ -17,6 +17,7 @@ class UIDevice(ThisDevice):
         self.connected_clients = set()
         self.loop = None
         self.is_ui_device = True  # overwrite
+        self.leader = False
         # Start WebSocket server in a separate thread
         self.ws_thread = threading.Thread(target=self.start_ws_server)
         self.ws_thread.daemon = True
@@ -142,6 +143,7 @@ class UIDevice(ThisDevice):
         Gets first message heard from transceiver with specified action,
         and broadcasts it to connected UI clients.
         """
+        print(f"UI recv")
         # Use the original receive logic
         result = super().receive(duration, action_value)
         
