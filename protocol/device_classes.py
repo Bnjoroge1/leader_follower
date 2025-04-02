@@ -230,9 +230,11 @@ class ThisDevice(Device):
                 self.make_follower()
                 self.follower_handle_attendance()
                 return  # early exit if follower
-        print("Assuming position of leader")
 
-        if not self.is_ui_device:
+        if self.is_ui_device:
+            self.make_follower()
+        else:
+            print("Assuming position of leader")
             self.make_leader()
             self.leader_id = self.id
             task = self.device_list.unused_tasks()[0]
