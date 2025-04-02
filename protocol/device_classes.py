@@ -224,7 +224,7 @@ class ThisDevice(Device):
             if not self.received_action() == Action.ATTENDANCE.value:
                 print("Heard someone, listening for attendance")
                 self.receive(duration=15, action_value=Action.ATTENDANCE.value)
-            if self.received_action and self.received_action() == Action.ATTENDANCE.value:
+            if self.received and self.received_action() == Action.ATTENDANCE.value:
                 print("Heard attendance, becoming follower")             
                 self.make_follower()
                 self.follower_handle_attendance()
