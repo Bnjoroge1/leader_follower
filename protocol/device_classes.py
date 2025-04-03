@@ -95,6 +95,7 @@ class Device:
         Makes this Device a leader
         """
         self.leader = True
+        
         self.leader_id = self.id
         print("Device", self.id, "becoming leader (lowest ID)")
         print("--------Leader---------")
@@ -322,7 +323,7 @@ class ThisDevice(Device):
                 #task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", self.received_follower_id())
                 self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
-                self.device_list.add_device(id=self.received_follower_id(), task=0)  # has not assigned task yet
+                self.device_list.add_device(id=self.received_follower_id(),task_index=self.get_task(), thisDeviceId=self.id)  # has not assigned task yet
     def get_state(self) -> DeviceState:
         """Return serializable state of the device"""
         device_state  = DeviceState(
@@ -495,7 +496,7 @@ class ThisDevice(Device):
 
         if matching_states:
             print(f"Leader {self.id} found matching previous state for follower device{follower_id}")
-            self.device_list.add_device(id=follower_id, task=task)
+            self.device_list.add_device(id=follower_id, task_index=self.get_task(), thisDeviceId=self.id)
             
             #send acceptance
             self.send(
@@ -567,7 +568,7 @@ class ThisDevice(Device):
         if 'device_list' in state:
             self.device_list.clear()
             for device_id, device_data in state['device_list'].items():
-                self.device_list.add_device(device_id, device_data['task'])
+                self.device_list.add_device(id=device_id, thisDeviceId=self.id, task_index=self.get_task())
     def follower_handle_dlist(self):
         """
         Called after follower receives D_LIST action from leader. Updates device list.
@@ -644,9 +645,13 @@ class ThisDevice(Device):
         rcvd_leader_id = self.received_leader_id() if self.received else 0
         self.send(action=Action.NEW_FOLLOWER.value, payload=0, leader_id=rcvd_leader_id, follower_id=self.id)
         self.log_status("BECOMING FOLLOWER")
-    
+    def update_leader(self, new_leader_id):
+        pass
+
     def make_leader(self):
         super().make_leader()
+        if hasattr(self, 'is_ui_device') and self.is_ui_device:
+            self.update_leader(self.id)
         self.send(action=Action.NEW_LEADER.value, payload=0, leader_id=self.id, follower_id=0)
         self.log_status("BECOMING LEADER")
         
@@ -939,7 +944,7 @@ class ThisDevice(Device):
                     print(f"Device {self.id} becoming leader (lowest ID)")
                     self.make_leader()
                     self.leader_id = self.id
-                    self.device_list.add_device(id=self.id, task=1)
+                    self.device_list.add_device(id=self.id, task_index=self.get_task(), thisDeviceId=self.id)
                     self.log_status("BECAME LEADER")
                     print("--------Leader---------")
                     time.sleep(1)  # Give followers time to finish their election
