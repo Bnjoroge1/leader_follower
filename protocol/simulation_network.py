@@ -360,9 +360,10 @@ class SimulationNode(AbstractNode):
 
 class Network:
 
-    def __init__(self):
+    def __init__(self, manager=None):
         self.nodes = {}
         # self.channels - add later
+        self.manager = manager if manager else multiprocessing.Manager()
 
     def add_node(self, node_id, node):
         self.nodes[node_id] = node
@@ -628,7 +629,7 @@ class SimulationTransceiver(AbstractTransceiver):
         await self.notify_server(f"TIEBREAKER,{json.dumps(message)}")
     # websocket client to connect to server.js and interact with injections
     async def websocket_client(self):
-        uri = "ws://localhost:3000"  # server.js websocket server
+        uri = "ws://localhost:8765"  # server.js websocket server
         while True:
             try:
                 async with websockets.connect(uri) as websocket:
