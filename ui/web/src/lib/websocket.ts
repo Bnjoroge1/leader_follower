@@ -13,29 +13,31 @@ export function connectWebSocket() {
   }
 
   connectionStatus.set('connecting');
-  
+
   try {
     socket = new WebSocket(WS_URL);
-    
+
     socket.onopen = () => {
       connectionStatus.set('connected');
       reconnectAttempts = 0;
       console.log('WebSocket connection established');
     };
-    
+
     socket.onmessage = (event) => {
       try {
+        console.log('Received WebSocket message:', event.data);
         const message = JSON.parse(event.data) as WebSocketMessage;
+        console.log('Parsed WebSocket message:', message);
         processWebSocketMessage(message);
       } catch (err) {
         console.error('Error processing WebSocket message:', err);
       }
     };
-    
+
     socket.onclose = (event) => {
       connectionStatus.set('disconnected');
       console.log('WebSocket connection closed:', event.code, event.reason);
-      
+
       // Attempt to reconnect if the connection was lost (not closed intentionally)
       if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++;
@@ -45,11 +47,11 @@ export function connectWebSocket() {
         }, RECONNECT_DELAY);
       }
     };
-    
+
     socket.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
-    
+
   } catch (error) {
     console.error('Failed to connect to WebSocket:', error);
     connectionStatus.set('disconnected');
