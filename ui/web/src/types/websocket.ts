@@ -5,17 +5,20 @@ export interface InitialState {
   is_leader: boolean;
   device_list: DeviceInfo[];
 }
+export interface MessageLogData {
+  type: 'receive' | 'would_send'; // Type from UI device perspective
+  action: number;
+  leader_id: number;
+  follower_id: number;
+  payload: number;
+  raw?: number | string; // Raw message integer or string
+  device_id: number; // ID of the UI device logging this
+}
 
 export interface MessageLog {
   type: 'message_log';
   timestamp: number;
-  data: {
-    type: 'send';
-    action: number;
-    payload: number;
-    leader_id: number;
-    follower_id: number;
-  };
+  data: MessageLogData;
 }
 
 export interface StatusChange {
@@ -23,6 +26,16 @@ export interface StatusChange {
   timestamp: number;
   data: {
     is_leader: boolean;
+    leader_id: number;
+    
+  };
+}
+export interface CandidateUpdate {
+  type: 'candidate_update';
+  timestamp: number;
+  data: {
+    is_leader: boolean;
+    leader_id: number;
   };
 }
 
@@ -35,6 +48,7 @@ export interface ReceivedMessage {
     follower_id: number;
     payload: number;
     raw: string;
+    device_id: string;
   };
 }
 
@@ -45,8 +59,8 @@ export interface DeviceListUpdate {
 }
 
 export interface DeviceInfo {
-  id: string;
-  task?: string;
+  id: number;
+  task?: string | number | null;
   leader: boolean;
   missed: number;
 }

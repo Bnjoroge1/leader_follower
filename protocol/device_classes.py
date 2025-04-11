@@ -197,42 +197,63 @@ class ThisDevice(Device):
         self.transceiver.send(msg)  # transceiver only deals with integers
         self.log_message(msg, 'SEND')
 
-    def receive(self, duration, action_value=-1) -> bool:  # action_value=-1 means accepts any action
-        """
-        Gets first message heard from transceiver with specified action,
-        or any action if -1. Places integer message into self.received.
-        :param duration: listening duration in seconds
-        :param action_value: action value to listen for
-        :return: True if valid message heard, False otherwise
-        """
-        # must have low timeout and larger duration so we don't get hung up on a channel
+    def receive(self, duration, action_value=-1) -> bool:
         end_time = time.time() + duration
-        print("end time", end_time)
+        # print("end time", end_time) # Can be noisy
         while time.time() < end_time:
-            print("waiting for message")
-            self.received = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
-            print("message received", self.received)
-            if self.leader and self.received == Message.DEACTIVATE:
-                print("Device got deactivated by user")
-                self.active = False
-                self.leader = False  # essentially wipe data
-                self.send(Action = ACTION.OFF.value, payload=0, leader_id=0, follower_id=self.id)
-                return False
-            if self.received and self.received_action() == Action.ACTIVATE.value and self.received_follower_id():
-                print("Device got reactivated by user")
-                self.active = True
-                self.send(Action = ACTION.ON.value, payload=0, leader_id=0, follower_id=self.id)
-                self.make_follower()
-                return False  # wait for next cycle, prevents interpreting injection as device
-            # if a new leader is recognized, move into tiebreak scenario
-            if not self.in_election:
-                if self.received and self.leader_id and self.received_leader_id() != self.leader_id:  # another follower out there
-                    print(self.received_leader_id(), self.leader_id)
-                    self.handle_tiebreaker(self.received_leader_id())
-                return False
-            if self.received and (action_value == -1 or self.received_action() == action_value):
-                self.log_message(self.received, 'RCVD')
-                return True
+            # print("waiting for message") # Can be noisy
+            received_msg_int = self.transceiver.receive(timeout=RECEIVE_TIMEOUT)
+            # print("message received", received_msg_int) # Can be noisy
+
+            if received_msg_int is not None:
+                self.received = received_msg_int # Store the raw message
+                try:
+                    received_leader = self.received_leader_id()
+                    received_action = self.received_action()
+                    received_follower = self.received_follower_id()
+
+                    # --- Handle Tiebreaker ---
+                    # Check if the message is from a different leader *outside* of the election phase
+                    # Ensure we have a leader_id set (might be 0 right after init)
+                    if not self.in_election and hasattr(self, 'leader_id'):
+                         # Check if the message is from a *different*, *valid* leader ID
+                         if received_leader != 0 and received_leader != self.leader_id:
+                              self.handle_tiebreaker(received_leader)
+                              # After handling a tiebreaker, the role or leader_id might have changed.
+                              # The loop continues, and subsequent logic will use the updated state.
+
+                    # --- Handle Activate/Deactivate ---
+                    # These should probably be handled by external control or specific messages,
+                    # but keeping the basic check for now.
+                    if self.leader and received_action == Action.DEACTIVATE.value: # Assuming DEACTIVATE action exists
+                         print(f"Device {self.id} got deactivated")
+                         self.active = False
+                         self.leader = False
+                         # self.send(...) # Send OFF message?
+                         return False # Stop receiving loop for this call
+                    if received_action == Action.ACTIVATE.value and received_follower == self.id: # Assuming ACTIVATE action exists
+                         print(f"Device {self.id} got reactivated")
+                         self.active = True
+                         self.make_follower() # Rejoin as follower
+                         return False # Stop receiving loop for this call, main loop will handle new state
+
+                    # --- Check if received message matches requested action ---
+                    if action_value == -1 or received_action == action_value:
+                        self.log_message(self.received, 'RCVD') # type: ignore
+                        return True # Message received and matches criteria
+
+                    # If message didn't match action_value, loop continues to wait for the right one
+
+                except ValueError: # Handle potential errors from received_... methods if self.received is invalid
+                    print(f"Device {self.id}: Error parsing received message {self.received}")
+                    self.log_status(f"ERROR_PARSING_RCVD_{self.received}")
+                    self.received = None # Clear invalid message
+                    continue # Continue listening within the duration
+
+            # If transceiver.receive returned None (timeout), loop continues
+
+        # Loop finished without receiving a matching message within the duration
+        self.received = None # Ensure received is None if loop times out or no match found
         return False
 
     def received_action(self) -> int:
@@ -298,6 +319,8 @@ class ThisDevice(Device):
             self.leader_id = self.id
             task = self.device_list.unused_tasks()[0]
             self.device_list.add_device(id=self.id, task_index=task, thisDeviceId= self.id)  # put itself in devicelist with first task
+            print(f"DEBUG: Leader {self.id} added itself. Task in list: {self.get_task()  if self.get_task() else 'Not Found'}")
+
             self.leader_send_attendance()
 
     def leader_send_attendance(self):
@@ -317,13 +340,13 @@ class ThisDevice(Device):
             print("Leader heard attendance response from", self.received_follower_id())
             self.log_status("HEARD ATT_RESP FROM " + str(self.received_follower_id()))
             if self.received_follower_id() not in self.device_list.get_ids():
-                #unused_tasks = self.device_list.unused_tasks()
-                #print("Unused tasks: ", unused_tasks)
-                #self.log_status("UNUSED TASKS: " + str(unused_tasks))
-                #task = unused_tasks[0] if unused_tasks else 0
+                unused_tasks = self.device_list.unused_tasks()
+                print("Unused tasks: ", unused_tasks)
+                self.log_status("UNUSED TASKS: " + str(unused_tasks))
+                task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", self.received_follower_id())
                 self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
-                self.device_list.add_device(id=self.received_follower_id(),task_index=self.get_task(), thisDeviceId=self.id)  # has not assigned task yet
+                self.device_list.add_device(id=self.received_follower_id(),task_index=0, thisDeviceId=self.id)  # has not assigned task yet
     def get_state(self) -> DeviceState:
         """Return serializable state of the device"""
         device_state  = DeviceState(
@@ -347,6 +370,8 @@ class ThisDevice(Device):
         for id, device in self.device_list.get_device_list().items():
             # not using option since DeviceList.devices is a dictionary
             # simply sending all id's in its "list" in follower_id position
+            print(f"DEBUG: Leader {self.id} preparing D_LIST for {id}. Task value: {device.task}")
+
             print("Leader sending D_LIST", id, device.task)
             self.send(action=Action.D_LIST.value, payload=device.task, leader_id=self.id, follower_id=id, duration=D_LIST_DURATION)
 
@@ -391,6 +416,55 @@ class ThisDevice(Device):
                 device.reset_missed()
             else:
                 device.incr_missed()
+    def _perform_leader_election(self):
+        """
+        Performs the elader election by broadcasting candidacies and listening for others. currently, determines the device with the lowest ID. 
+        Returns:
+        int: The ID of the determin ed elected leader.
+        """
+        print(f"Device {self.id} starting leader election...")
+        self.in_election = True
+        self.log_status("STARTING ELECTION")
+        # Add a small random delay before broadcasting to reduce collisions
+        time.sleep(random.uniform(0.1, 0.5))
+
+        election_duration = 10.0  # Election window duration in seconds
+        lowest_id_seen = self.id
+        received_candidacies = {self.id} # Track IDs seen, including self
+
+        # Broadcast candidacy multiple times initially
+        for _ in range(3):
+            self.broadcast_candidacy()
+            time.sleep(random.uniform(0.1, 0.3)) # Space out broadcasts
+
+        print(f"Device {self.id} listening during election window ({election_duration}s)")
+        self.log_status("ELECTION_LISTENING")
+
+        election_end = time.time() + election_duration
+        while time.time() < election_end:
+            # Listen for short intervals within the election window
+            if self.receive(duration=0.5): # Listen for 0.5s
+                # Check if the received message is a candidacy broadcast
+                if self.received_action() == Action.CANDIDACY.value:
+                    other_id = self.received_leader_id()
+                    # Candidacy messages use the sender's ID in the leader_id field
+                    if other_id != 0: # Ignore if leader_id is 0 (not a valid candidacy)
+                        print(f"Device {self.id} received candidacy from {other_id}")
+                        self.log_status(f"HEARD_CANDIDACY_FROM_{other_id}")
+                        received_candidacies.add(other_id)
+                        if other_id < lowest_id_seen:
+                            lowest_id_seen = other_id
+                            self.log_status(f"NEW_LOWEST_ID_SEEN_{lowest_id_seen}")
+            # No need to constantly rebroadcast if nothing is heard;
+            # rely on initial broadcasts and others' broadcasts.
+
+        print(f"Device {self.id} finished election window.")
+        print(f"Device {self.id} saw candidacies from: {received_candidacies}")
+        print(f"Device {self.id} determined lowest ID: {lowest_id_seen}")
+
+        self.in_election = False # Mark election as complete
+        self.log_status(f"ELECTION_COMPLETE_LOWEST_ID_{lowest_id_seen}")
+        return lowest_id_seen
 
     def leader_drop_disconnected_devices(self):
         """
@@ -573,11 +647,18 @@ class ThisDevice(Device):
         """
         Called after follower receives D_LIST action from leader. Updates device list.
         """
+        print(f"Device {self.id} (Leader={self.leader}) handling D_LIST for Follower {self.received_follower_id()} Payload {self.received_payload()}")
+        if self.received_follower_id() == self.id:
+            print(f"!!! CRITICAL: Device {self.id} (Leader={self.leader}) received D_LIST for ITSELF. Payload={self.received_payload()}.")
+            print(f"!!! Checking if self.id ({self.id}) is in keys: {list(self.device_list.get_device_list().keys())}")
+            is_in_keys = self.id in self.device_list.get_device_list().keys()
+            print(f"!!! Is self.id in keys? {is_in_keys}")
+            
         print("Follower handling D_LIST")
         self.log_status("HANDLING DLIST")
 
         # wipe current device list
-        #self.device_list.clear()
+        self.device_list.clear()
 
         # handle already received device from original message
         # only add devices which are not already in device list
@@ -599,37 +680,69 @@ class ThisDevice(Device):
         print("Follower received DELETE message")
         self.device_list.remove_device(id=self.received_follower_id())
     
-    def handle_tiebreaker(self, otherLeader: int):
+    def handle_tiebreaker(self, other_leader_id: int):
         """
-        Called if any device hears a leader other than the leader it has been following.
-        Ensures the device with lowest ID becomes/remains leader.
+        Called if a device hears a message from a leader different from its current one.
+        Ensures the device follows the leader with the lowest ID.
         """
-        if otherLeader is None:
-            return
-            
-        print(f"Tiebreaker hit by device {self.id} and other leader trying: {otherLeader}")
-        self.log_status("HEARD OTHER LEADER: " + str(otherLeader))
+        # --- Pre-conditions ---
+        # Ensure we have a current leader ID (it might be 0 initially before election completes)
+        # and the other ID is valid (non-zero)
+        if not hasattr(self, 'leader_id'):
+             # Should not happen if initialized correctly, but safety check
+             print(f"Device {self.id}: Tiebreaker check skipped - self.leader_id attribute missing.")
+             return
+        if other_leader_id == 0:
+             print(f"Device {self.id}: Tiebreaker ignored - heard from invalid leader ID 0.")
+             self.log_status(f"TIEBREAK_IGNORE_INVALID_OTHER_LEADER_0")
+             return
+        # If we don't have a leader yet (leader_id is 0), accept the first valid leader heard.
+        if self.leader_id == 0:
+             print(f"Device {self.id}: Tiebreaker - Accepting first heard leader {other_leader_id}.")
+             self.log_status(f"TIEBREAK_ACCEPTING_FIRST_LEADER_{other_leader_id}")
+             self.leader_id = other_leader_id
+             if self.leader: # If I thought I was leader but hadn't set leader_id yet
+                 self.make_follower() # Step down immediately
+             return
+        # Ignore if it's the same leader we already know
+        if other_leader_id == self.leader_id:
+             return
 
-        # CORRECTED LOGIC: If other leader has LOWER ID, that one should win
-        if otherLeader < self.leader_id:
-            # If I'm currently a leader but heard from someone with lower ID
+        print(f"Device {self.id}: Tiebreaker check - Current Leader: {self.leader_id}, Heard Leader: {other_leader_id}")
+        self.log_status(f"TIEBREAK_CHECK_CURRENT_{self.leader_id}_HEARD_{other_leader_id}")
+
+        # --- Logic ---
+        # Case 1: Heard leader has a LOWER ID than my current leader
+        if other_leader_id < self.leader_id:
+            print(f"Device {self.id}: Heard leader {other_leader_id} has lower ID than current leader {self.leader_id}.")
             if self.leader:
-                print(f"Device {self.id} stepping down for leader {otherLeader}")
-                self.known_leaders.add(self.id)
-                self.make_follower()
-                self.leader_id = otherLeader
-                self.transceiver.clear()
-                self.log_status(f"BECAME FOLLOWER OF {otherLeader}")
-                print(f"-------- {self.id} have become follower of {otherLeader} after tiebreaker--------")
-            # If I'm already a follower but need to follow a different leader
+                # I was a leader, but someone with a lower ID exists. I must step down.
+                print(f"Device {self.id}: Stepping down to become follower of {other_leader_id}.")
+                self.log_status(f"TIEBREAK_STEPPING_DOWN_FOR_{other_leader_id}")
+                # self.known_leaders.add(self.id) # Record that I yielded
+                self.make_follower() # This sets self.leader = False and sends NEW_FOLLOWER msg
+                self.leader_id = other_leader_id # Update to follow the new leader
             else:
-                print(f"Updating leader from {self.leader_id} to {otherLeader}")
-                self.leader_id = otherLeader
-                self.log_status(f"NEW LEADER: {otherLeader}")
-        
-        # If my current leader has lower ID, make sure the other leader becomes a follower
-       
-    
+                # I was already a follower, but need to switch to the leader with the lower ID.
+                print(f"Device {self.id}: Switching follower allegiance from {self.leader_id} to {other_leader_id}.")
+                self.log_status(f"TIEBREAK_SWITCHING_FOLLOWER_TO_{other_leader_id}")
+                self.leader_id = other_leader_id
+                # Optional: Send ATT_RESPONSE to the new leader? Might be handled by regular attendance.
+
+        # Case 2: Heard leader has a HIGHER ID than my current leader
+        elif other_leader_id > self.leader_id:
+            print(f"Device {self.id}: Heard leader {other_leader_id} has higher ID than current leader {self.leader_id}. Ignoring.")
+            self.log_status(f"TIEBREAK_IGNORE_HIGHER_ID_{other_leader_id}")
+            # My current leader (with the lower ID) is correct.
+            # The device with ID `other_leader_id` is responsible for detecting `self.leader_id`
+            # (when my leader sends a message) and stepping down itself.
+            # This device takes no action based on hearing a higher ID leader.
+            # Optional: If I am the leader, maybe send an ATTENDANCE message to assert my leadership?
+            # if self.leader:
+            #    print(f"Device {self.id}: Re-asserting leadership after hearing higher ID {other_leader_id}")
+            #    self.leader_send_attendance() # Be careful not to spam
+            pass
+
     def log_message(self, msg: int, direction: str):
         self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
         self.file.flush()
@@ -905,155 +1018,181 @@ class ThisDevice(Device):
         with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
             # format is TIME, TYPE (STATUS, SENT, RECEIVED), CONTENT (<MSG>, <STATUS UPDATE>)
             self.csvWriter = csv.writer(self.file, dialect='excel')
-            if self.id not in self.known_leaders:
-                print("Starting main on device " + str(self.id))
-                self.in_election = True
-                # Initial election phase
-                time.sleep(2)  # Give time for all devices to be ready
-            
-                # Initial election phase
-                election_duration = 10  # Longer election window
-                lowest_id_seen = self.id
-                received_candidacies = set()
-                
-                # First broadcast our candidacy multiple times to ensure delivery
-                for _ in range(3):
-                    self.broadcast_candidacy()
-                    time.sleep(0.1)  # Space out the broadcasts
-                print(f"Device {self.id} starting election window")
+            self.log_status("DEVICE_MAIN STARTED.")
+            # --- Leader Election ---
+            # Perform election if eligible (e.g., not explicitly told to be follower)
+            # For simplicity, assume eligible unless known_leaders has entries preventing it.
+            if not self.known_leaders: # Check if we know we shouldn't be leader
+                elected_leader_id = self._perform_leader_election()
 
-                # Listen for other candidacies during election window
-                election_end = time.time() + election_duration
-                while time.time() < election_end:
-                    if self.receive(duration=1.0):  # Shorter receive windows
-                        if self.received_action() == Action.ATTENDANCE.value:
-                            other_id = self.received_leader_id()
-                            print(f"Device {self.id} received candidacy from {other_id}")
-                            received_candidacies.add(other_id)
-                            if other_id < lowest_id_seen:
-                                lowest_id_seen = other_id
-                    else:
-                        self.broadcast_candidacy()
-                        time.sleep(0.1)
-                        print("no message received in this check")
-                print(f"Device {self.id} saw candidacies from: {received_candidacies}")
-                print(f"Device {self.id} saw lowest ID: {lowest_id_seen}")
-                
-                # After election window, become leader or follower
-                if lowest_id_seen == self.id:  # Only become leader if we have lowest ID
-                    print(f"Device {self.id} becoming leader (lowest ID)")
-                    self.make_leader()
+                # Become leader or follower based on election result
+                if elected_leader_id == self.id:
+                    print(f"Device {self.id} becoming leader (result of election)")
+                    self.make_leader() # Sets self.leader=True, logs, sends NEW_LEADER
                     self.leader_id = self.id
-                    self.device_list.add_device(id=self.id, task_index=self.get_task(), thisDeviceId=self.id)
-                    self.log_status("BECAME LEADER")
+                    # Ensure self is in device list
+                    if not self.device_list.find_device(self.id):
+                         # Use get_task() if available, else default 0
+                         task = self.get_task() if hasattr(self, 'get_task') else 0
+                         self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
                     print("--------Leader---------")
-                    time.sleep(1)  # Give followers time to finish their election
-                    self.leader_send_attendance()  # Announce leadership
+                    time.sleep(1) # Allow followers to process election outcome
+                    self.leader_send_attendance() # Announce leadership
                 else:
-                    print(f"Device {self.id} becoming follower of {lowest_id_seen}")
-                    self.make_follower()
-                    self.leader_id = lowest_id_seen
-                    self.log_status("BECAME FOLLOWER")
+                    print(f"Device {self.id} becoming follower of {elected_leader_id} (result of election)")
+                    self.make_follower() # Sets self.leader=False, logs, sends NEW_FOLLOWER
+                    self.leader_id = elected_leader_id
                     print("--------Follower, listening--------")
-                self.in_election = False
-                last_attendance_time = 0
-                ATTENDANCE_INTERVAL = 2.0  # Send attendance every 2 seconds
-                while True:
-                    # global looping
-                    while self.active:
-                    
-                        current_time = time.time()
-                        if self.get_leader():
-                            # update websocket on each loop in case connection is too slow
-                            self.transceiver.log("LEADER")
-                            # Send regular attendance messages
-                            if current_time - last_attendance_time > ATTENDANCE_INTERVAL:
-                                try:
-                                    print("sending regular attendance messages ")
-                                    self.leader_send_attendance()
-                                    last_attendance_time = current_time
-                                except Exception as e:
-                                    print(f"Error in leader attendance: {e}")
-                                    # Log but continue - don't let errors prevent heartbeats
-                                    self.log_status(f"ERROR_IN_ATTENDANCE: {str(e)}")
+            else:
+                # If not eligible, start as follower and try to find the leader
+                print(f"Device {self.id} starting as follower (ineligible for election).")
+                self.make_follower()
+                self.log_status("STARTING_AS_FOLLOWER_INELIGIBLE")
+                print(f"Device {self.id} listening for leader announcement...")
+                # Listen for ATTENDANCE to identify the actual leader
+                if self.receive(duration=15, action_value=Action.ATTENDANCE.value):
+                     self.leader_id = self.received_leader_id()
+                     print(f"Device {self.id} identified leader {self.leader_id}")
+                     self.log_status(f"IDENTIFIED_LEADER_{self.leader_id}")
+                else:
+                     print(f"Device {self.id} could not identify leader after starting as follower.")
+                     self.log_status("ERROR_NO_LEADER_FOUND_AS_FOLLOWER")
+                     # Consider what to do here - maybe re-attempt election later?
 
+            # --- Main Operation Loop ---
+            last_attendance_time = 0
+            ATTENDANCE_INTERVAL = 5.0 # Interval for leader sending attendance
 
-                            # after receiving in attendance, make sure still leader
-                            if not self.get_leader():
-                                continue
+            while True:
+                # --- Active Device Loop ---
+                while self.active:
+                    current_time = time.time()
+                    if self.get_leader():
+                        # --- Leader Logic ---
+                        if hasattr(self.transceiver, 'log'): self.transceiver.log("LEADER")
+                        self.log_status("LEADER_LOOP")
 
+                        # Send regular attendance
+                        if current_time - last_attendance_time > ATTENDANCE_INTERVAL:
+                            try:
+                                print(f"Leader {self.id} sending attendance")
+                                self.leader_send_attendance()
+                                last_attendance_time = current_time
+                            except Exception as e:
+                                print(f"Error sending leader attendance: {e}")
+                                self.log_status(f"ERROR_LEADER_ATTENDANCE_{e}")
+                        if not self.get_leader(): continue # Re-check leadership
+
+                        # Send device list periodically or on change
+                        try:
+                            # print(f"Leader {self.id} sending device list") # Can be noisy
                             self.leader_send_device_list()
+                        except Exception as e:
+                            print(f"Error sending device list: {e}")
+                            self.log_status(f"ERROR_LEADER_DLIST_{e}")
+                        if not self.get_leader(): continue # Re-check leadership
 
-                            time.sleep(2)
+                        # Perform check-ins
+                        try:
+                            # print(f"Leader {self.id} performing check-in") # Can be noisy
+                            self.leader_perform_check_in()
+                        except Exception as e:
+                            print(f"Error during check-in: {e}")
+                            self.log_status(f"ERROR_LEADER_CHECKIN_{e}")
+                        if not self.get_leader(): continue # Re-check leadership
 
-                            # will be helpful if leader works through followers in
-                            # same order each time to increase clock speed
-                            self.leader_perform_check_in()  # takes care of sending and receiving
-
-                            # after receiving in check in, make sure still leader
-                            if not self.get_leader():
-                                continue
-
-                            time.sleep(2)
-
+                        # Drop disconnected devices
+                        try:
+                            # print(f"Leader {self.id} checking for disconnected") # Can be noisy
                             self.leader_drop_disconnected_devices()
+                        except Exception as e:
+                            print(f"Error dropping devices: {e}")
+                            self.log_status(f"ERROR_LEADER_DROP_{e}")
 
-                            time.sleep(2)
+                        time.sleep(1.0) # Prevent leader busy-loop
 
-                            self.transceiver.clear()
+                    else: # Not leader
+                        # --- Follower Logic ---
+                        if hasattr(self.transceiver, 'log'): self.transceiver.log("FOLLOWER")
+                        self.log_status("FOLLOWER_LOOP")
 
-                        if not self.get_leader():
-                            self.transceiver.log("FOLLOWER")
-                            # print("Device:", self.id, self.leader, "\n", self.device_list)
-                            if not self.receive(duration=5):
-                                if self.id not in self.known_leaders:
-                                    print(f"Device {self.id} asking: is there anybody out there?")
-                                    self.make_leader()
+                        # Listen for messages from the leader
+                        # Timeout slightly longer than leader's attendance interval
+                        if not self.receive(duration=ATTENDANCE_INTERVAL + 3.0):
+                            print(f"Follower {self.id} timed out waiting for leader {self.leader_id}.")
+                            self.log_status("LEADER_TIMEOUT")
+                            # If timeout occurs, consider leader lost, attempt to become leader
+                            if self.id not in self.known_leaders:
+                                print(f"Follower {self.id} attempting takeover.")
+                                self.log_status("ATTEMPTING_TAKEOVER")
+                                # Break the inner loop to re-trigger election logic
+                                # Setting self.leader = True here might be premature
+                                self.known_leaders.clear() # Allow self to participate
+                                break # Exit active loop to re-evaluate role
+                            else:
+                                print(f"Follower {self.id} ineligible for takeover.")
+                                self.log_status("LEADER_TIMEOUT_INELIGIBLE")
+                            continue # Continue follower loop if ineligible
+
+                        # Check if message is from the expected leader
+                        # Handle case where leader_id might still be 0 if election failed
+                        if self.leader_id != 0 and abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:
+                            print(f"Follower {self.id} received msg from unexpected source {self.received_leader_id()} (expected {self.leader_id}).")
+                            self.log_status(f"UNEXPECTED_SOURCE_{self.received_leader_id()}")
+                            # Potentially handle tiebreaker if it's another leader message
+                            self.handle_tiebreaker(self.received_leader_id())
+                            continue # Ignore this specific message
+
+                        # Process the message from the leader
+                        action = self.received_action()
+                        self.log_status(f"RECEIVED_ACTION_{action}_FROM_LEADER_{self.leader_id}")
+                        self.last_heard_from_leader = time.time() # Update timestamp
+
+                        match action:
+                            case Action.ATTENDANCE.value:
+                                print(f"Follower {self.id} received ATTENDANCE from leader {self.leader_id}")
+                                # Respond if not in leader's list (implicitly checked by leader)
+                                # Or respond if follower just joined/rejoined?
+                                # Current logic: Leader adds based on response. Follower sends response via follower_handle_attendance
+                                # Let's ensure follower_handle_attendance is called appropriately
+                                # Maybe call it here if follower thinks it should be known?
+                                # For now, just log receipt. Leader handles adding.
+                                pass
+                            case Action.CHECK_IN.value:
+                                if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:
+                                    print(f"Follower {self.id} received directed check-in.")
+                                    self.follower_respond_check_in()
                                 else:
-                                    print(f"Device {self.id} not eligible for leadership - waiting for messages")
-                                continue
-                            elif abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:  # account for loss of precision
-                                # print(self.received_leader_id())
-                                # print(self.leader_id)
-                                # print("CONTINUE")
-                                continue  # message was not from this device's leader - ignore
+                                    self.log_status(f"IGNORED_CHECKIN_FOR_{self.received_follower_id()}")
+                            case Action.DELETE.value:
+                                print(f"Follower {self.id} received DELETE for {self.received_follower_id()}")
+                                self.follower_drop_disconnected()
+                            case Action.D_LIST.value:
+                                print(f"Follower {self.id} received D_LIST for {self.received_follower_id()}")
+                                self.follower_handle_dlist() if self.get_leader() == False else None# Handles multiple D_LIST msg 
+                            case Action.NEW_FOLLOWER.value:
+                                print(f"Follower {self.id} received NEW_FOLLOWER for {self.received_follower_id()}")
+                                #add follower to device list if not already in device list
+                                self.device_list.add_device(id=self.received_follower_id(), task_index=self.received_payload(), thisDeviceId= self.id) if self.received_follower_id() not in self.device_list.get_device_list().keys() else None
+                            case _:
+                                print(f"Follower {self.id} received unknown action {action} from leader.")
+                                self.log_status(f"UNKNOWN_ACTION_{action}")
 
-                            action = self.received_action()
-                            # print(action)
-
-                            # messages for all followers
-                            match action:
-                                case Action.ATTENDANCE.value:
-                                    # prevents deadlock between leader-follower first attendance state
-                                    if self.numHeardDLIST > 1 and self.device_list.find_device(self.id) is None:  # O(1) operation, quick
-                                        self.follower_handle_attendance()
-                                        self.numHeardDLIST = 0
-                                case Action.CHECK_IN.value:
-                                    if abs(self.received_follower_id() - self.id) < PRECISION_ALLOWANCE:  # check-in directed to this device
-                                        print("Follower", self.id, "heard directed check-in")
-                                        self.follower_respond_check_in()
-                                    else:
-                                        continue  # not necessary?
-                                case Action.DELETE.value:
-                                    self.follower_drop_disconnected()  # even if self is wrongly deleted
-                                    # that will be handled later in Action.ATTENDANCE.value
-                                case Action.D_LIST.value:
-                                    self.follower_handle_dlist()
-                                    self.numHeardDLIST += 1
-                                case Action.TASK_STOP.value:
-                                    pass
-                                case Action.TASK_START.value:
-                                    pass
-                                case _:
-                                    pass
-
-                                # probably do not need to clear follower channel
-                                # self.transceiver.clear()
-                    
-                    while not self.active:
-                        self.receive(duration=2)  # waiting for reactivation
-                        time.sleep(2)  # can slow down clock speed here
-                        # TODO: more formal dynamic clock
+                # --- Inactive Device Loop ---
+                while not self.active:
+                    self.log_status("INACTIVE_LOOP")
+                    print(f"Device {self.id} is inactive. Waiting for activation.")
+                    # Listen specifically for ACTIVATE message directed to this device
+                    if self.receive(duration=5.0):
+                        if self.received_action() == Action.ACTIVATE.value and self.received_follower_id() == self.id:
+                             print(f"Device {self.id} received ACTIVATE. Reactivating.")
+                             self.log_status("REACTIVATED")
+                             self.active = True
+                             # Rejoin as follower, potentially triggering election if no leader found
+                             self.make_follower()
+                             # Break inner inactive loop, outer loop will handle role
+                             break # Exit inactive loop
+                    time.sleep(1) # Sleep if no activation message
                 
 
     def broadcast_candidacy(self):
@@ -1063,7 +1202,7 @@ class ThisDevice(Device):
         """
         print(f"Device {self.id} broadcasting candidacy")
         self.send(
-            action=Action.ATTENDANCE.value,  # Using attendance action for candidacy
+            action=Action.CANDIDACY.value,  # Using attendance action for candidacy
             payload=0,                       # No payload needed for candidacy
             leader_id=self.id,              # Using own ID to announce candidacy
             follower_id=0,                  # No follower during election
@@ -1163,6 +1302,7 @@ class DeviceList:
         :param id: identifier for device, assigned to new Device object.
         :param task_index: index of task for device, assigned to new Device object.
         """
+        task = 0
         if 1 <= task_index <= 4:
             task = task_index
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DeviceInfo } from '../types/websocket'; // Adjust the import path as necessary
-import RobotNode from './robot';
+import RobotNode from './robot'; // Assuming RobotNode handles styling based on props
 
 interface TrackBoxProps {
   className?: string;
@@ -9,32 +9,39 @@ interface TrackBoxProps {
 }
 
 const TrackBox: React.FC<TrackBoxProps> = ({ className, onCellClick, devices }) => {
-  const [robotPositions, setRobotPositions] = useState<Record<number, DeviceInfo | null>>({
-    1: null,
-    2: null,
-    3: null,
-    4: null,
-    5: null,
+  // --- Change state to hold arrays of devices per position ---
+  const [robotPositions, setRobotPositions] = useState<Record<number, DeviceInfo[]>>({
+    1: [], 2: [], 3: [], 4: [], 5: [],
   });
 
   useEffect(() => {
-    const newPositions: Record<number, DeviceInfo | null> = {1: null, 2: null, 3: null, 4: null, 5: null};
+    // --- Initialize with empty arrays ---
+    const newPositions: Record<number, DeviceInfo[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
 
     devices.forEach(device => {
-      const position = device.task ? parseInt(device.task) : 5; // 5 is the "sleeping" position
-      newPositions[position] = device;
+      // Ensure task is treated as a number for position calculation
+      let position = 5; // Default to reserve/loading dock
+      if (device.task != null) {
+          const taskNum = parseInt(String(device.task), 10);
+          if (!isNaN(taskNum) && taskNum >= 1 && taskNum <= 4) {
+              position = taskNum;
+          }
+      }
+      // --- Push device into the array for that position ---
+      newPositions[position].push(device);
     });
 
     setRobotPositions(newPositions);
-  }, [devices]);
+  }, [devices]); // Dependency array remains the same
 
+  // --- Styles remain the same ---
   const containerStyle: React.CSSProperties = {
     padding: '20px',
     display: 'flex',
     gap: '20px',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Align items to the start for stacking in cell 5
   };
-  
+
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
@@ -47,14 +54,17 @@ const TrackBox: React.FC<TrackBoxProps> = ({ className, onCellClick, devices }) 
 
   const loadingDockStyle: React.CSSProperties = {
     width: '100px',
-    height: '100px',
+    minHeight: '100px', // Use minHeight to allow expansion
     display: 'flex',
-    justifyContent: 'center',
+    flexDirection: 'column', // Stack robots vertically
+    justifyContent: 'flex-start', // Align robots to the top
     alignItems: 'center',
     backgroundColor: '#f0f0f0',
     border: '1px solid #ccc',
     borderRadius: '4px',
     position: 'relative',
+    padding: '5px', // Add some padding
+    gap: '5px', // Add gap between stacked robots
   };
 
   const cellStyle: React.CSSProperties = {
@@ -69,13 +79,14 @@ const TrackBox: React.FC<TrackBoxProps> = ({ className, onCellClick, devices }) 
     cursor: onCellClick ? 'pointer' : 'default',
     transition: 'background-color 0.2s',
     position: 'relative',
+    minHeight: '100px', // Ensure cells have a minimum height
   };
-  
+
   const cellNumberStyle: React.CSSProperties = {
     position: 'absolute',
     top: '5px',
     left: '5px',
-    fontSize: '22px',
+    fontSize: '12px', // Smaller cell number
     color: '#666',
     zIndex: 1,
   };
@@ -86,53 +97,47 @@ const TrackBox: React.FC<TrackBoxProps> = ({ className, onCellClick, devices }) 
     }
   };
 
+  // Helper to render RobotNode, ensuring props are correct
+  const renderRobot = (device: DeviceInfo) => (
+    <RobotNode
+      key={device.id} // Use device ID for key when mapping
+      node={{
+        id: String(device.id), // Ensure ID is string
+        // Determine role based on leader flag
+        role: device.leader ? 'leader' : 'follower',
+        // Determine status based on missed count
+        status: device.missed > 0 ? 'inactive' : 'active',
+        task: device.task,
+        missed: device.missed
+      }}
+    />
+  );
+
   return (
     <div className={`track-box ${className || ''}`} style={containerStyle}>
       {/* Main 2x2 grid for positions 1-4 */}
       <div style={gridStyle}>
         {[1, 2, 3, 4].map(cellNumber => (
-          <div 
+          <div
             key={cellNumber}
-            style={cellStyle} 
+            style={cellStyle}
             onClick={() => handleCellClick(cellNumber)}
           >
             <span style={cellNumberStyle}>{cellNumber}</span>
-            {robotPositions[cellNumber] && (
-              <div style={{ position: 'absolute' }}>
-                <RobotNode 
-                  node={{
-                    id: robotPositions[cellNumber]?.id || '',
-                    role: robotPositions[cellNumber]?.leader ? 'leader' : 'follower',
-                    status: robotPositions[cellNumber]?.missed > 0 ? 'inactive' : 'active',
-                    task: robotPositions[cellNumber]?.task,
-                    missed: robotPositions[cellNumber]?.missed
-                  }} 
-                />
-              </div>
-            )}
+            {/* --- Map over devices in this position (should ideally be 0 or 1) --- */}
+            {robotPositions[cellNumber].map(device => renderRobot(device))}
           </div>
         ))}
       </div>
-      
+
       {/* Loading dock (position 5) */}
-      <div 
+      <div
         style={loadingDockStyle}
         onClick={() => handleCellClick(5)}
       >
         <span style={cellNumberStyle}>5</span>
-        {robotPositions[5] && (
-          <div style={{ position: 'absolute' }}>
-            <RobotNode 
-              node={{
-                id: robotPositions[5]?.id || '',
-                role: robotPositions[5]?.leader ? 'leader' : robotPositions[5]?.leader == null ? 'ui' : 'follower',
-                status: robotPositions[5]?.missed > 0 ? 'inactive' : 'active',
-                task: robotPositions[5]?.task,
-                missed: robotPositions[5]?.missed
-              }} 
-            />
-          </div>
-        )}
+        {/* --- Map over potentially multiple devices in position 5 --- */}
+        {robotPositions[5].map(device => renderRobot(device))}
       </div>
     </div>
   );

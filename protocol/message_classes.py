@@ -35,6 +35,7 @@ class Message:
 
 
 class Action(Enum):
+    CANDIDACY = 0  # device sends candidacy for leadership
     ATTENDANCE = 1  # leader sends attendance to entire channel
     ATT_RESPONSE = 2  # untracked device responds to leader's attendance
     D_LIST = 3  # leader sends updated device list to entire channel
