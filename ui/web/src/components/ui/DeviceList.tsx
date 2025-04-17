@@ -14,8 +14,13 @@ export function DeviceList({ devices }: DeviceListProps) {
         ) : (
           <ul className="divide-y">
             {devices.map(device => (
-              <li key={device.id} className="py-2">
-                <p>ID: <span className="font-mono">{device.id}</span></p>
+              <li 
+                key={device.id} 
+                className={`py-2 ${device.active === false ? 'text-red-500' : (device.leader ? 'text-green-500' : 'text-blue-500')}`}
+              >
+                <p>ID: <span className="font-mono">{device.id}</span> 
+                  {device.active === false && <span className="ml-2">(Stopped)</span>}
+                </p>
                 <p>Role: {device.leader ? 'Leader' : 'Follower'}</p>
                 {device.task && <p>Task: {device.task}</p>}
                 <p>Missed: {device.missed}</p>

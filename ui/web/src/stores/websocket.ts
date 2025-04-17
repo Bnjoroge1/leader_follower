@@ -69,7 +69,7 @@ export function processWebSocketMessage(message: WebSocketMessage) {
     case 'message_log':
       console.log('Processing message_log:', message.data); // Log the received data
       // Handle both 'receive' and 'would_send' types from the nested data
-      if (message.data && (message.data.type === 'receive' || message.data.type === 'would_send')) {
+      if (message.data && (message.data.type === 'receive' || message.data.type === 'would_send' || message.data.type === 'log_event')) {
          // Pass the entire data object to addMessage
          addMessage(message.data);
       } else {
@@ -100,6 +100,7 @@ export function processWebSocketMessage(message: WebSocketMessage) {
       }
       console.log('Updated device list store:', deviceList.get());
       break;
+    
 
     default:
        console.warn('Received unhandled WebSocket message type:', (message as any)?.type);

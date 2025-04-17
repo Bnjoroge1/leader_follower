@@ -6,13 +6,15 @@ export interface InitialState {
   device_list: DeviceInfo[];
 }
 export interface MessageLogData {
-  type: 'receive' | 'would_send'; // Type from UI device perspective
-  action: number;
-  leader_id: number;
-  follower_id: number;
-  payload: number;
+  type: 'receive' | 'would_send' | 'log_event' ; // Type from UI device perspective
+  action?: number;
+  leader_id?: number;
+  follower_id?: number;
+  payload?: number;
   raw?: number | string; // Raw message integer or string
-  device_id: number; // ID of the UI device logging this
+  level?: string; // e.g., INFO, WARN
+  message?: string; // The log text from the API handler
+  device_id?: number; // ID of the UI device logging this
 }
 
 export interface MessageLog {
@@ -61,6 +63,7 @@ export interface DeviceListUpdate {
 export interface DeviceInfo {
   id: number;
   task?: string | number | null;
+  active: boolean;
   leader: boolean;
   missed: number;
 }
