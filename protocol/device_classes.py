@@ -2,8 +2,9 @@
 Modified device_classes for test_harness
 '''
 from dataclasses import asdict
-from operator import truediv
 import os
+import queue
+from queue import Queue
 import time
 import uuid
 from message_classes import Message, Action
@@ -15,9 +16,8 @@ import json
 import subprocess
 from threading import Lock
 from device_state import DeviceState, DeviceStateStore
-from deviceid_util import generate_persistent_device_id
 import random
-
+from multiprocessing import Queue as MPQueue
 # zigpy imports
 #import asyncio
 #from zigpy.zcl.clusters.general import OnOff
@@ -154,7 +154,8 @@ class ThisDevice(Device):
         self.active = True
         self.is_ui_device = False
         self.known_leaders = set()  #keep track of all leaders with lower IDs.
-
+        self.ui_update_queue = MPQueue()
+       
         #persistent id
         self.device_uuid = self._get_or_create_uuid()
         self.last_heard_from_leader = time.time()
@@ -223,8 +224,7 @@ class ThisDevice(Device):
                               # The loop continues, and subsequent logic will use the updated state.
 
                     # --- Handle Activate/Deactivate ---
-                    # These should probably be handled by external control or specific messages,
-                    # but keeping the basic check for now.
+                    #
                     if self.leader and received_action == Action.DEACTIVATE.value: # Assuming DEACTIVATE action exists
                          print(f"Device {self.id} got deactivated")
                          self.active = False
@@ -425,6 +425,11 @@ class ThisDevice(Device):
         print(f"Device {self.id} starting leader election...")
         self.in_election = True
         self.log_status("STARTING ELECTION")
+        # Log to UI if this is happening after timeout
+        global global_ui_update_queue
+        if hasattr(self, 'ui_update_queue') and self.ui_update_queue:
+            log_data = {"level": "INFO", "message": f"Device {self.id} starting election after leader timeout."}
+            self.ui_update_queue.put(("log_event", log_data))
         # Add a small random delay before broadcasting to reduce collisions
         time.sleep(random.uniform(0.1, 0.5))
 
@@ -744,12 +749,14 @@ class ThisDevice(Device):
             pass
 
     def log_message(self, msg: int, direction: str):
-        self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
-        self.file.flush()
+        #self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
+        #self.file.flush()
+        pass
 
     def log_status(self, status: str):
-        self.csvWriter.writerow([str(time.time()), 'STATUS', status])
-        self.file.flush()
+        #self.csvWriter.writerow([str(time.time()), 'STATUS', status])
+        #self.file.flush()
+        pass
 
     # START TEST HARNESS FUNCTIONS
 
@@ -1128,7 +1135,28 @@ class ThisDevice(Device):
                                 # Break the inner loop to re-trigger election logic
                                 # Setting self.leader = True here might be premature
                                 self.known_leaders.clear() # Allow self to participate
-                                break # Exit active loop to re-evaluate role
+                                 # Explicitly perform leader election here
+                                elected_leader_id = self._perform_leader_election()
+                                
+                                # Update role based on election results
+                                if elected_leader_id == self.id:
+                                    print(f"Device {self.id} becoming leader after timeout")
+                                    self.make_leader()
+                                    self.leader_id = self.id
+                                    
+                                    # Ensure self is in device list with a task
+                                    if not self.device_list.find_device(self.id):
+                                        task = self.get_task() if hasattr(self, 'get_task') else 0
+                                        self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
+                                    
+                                    # Announce leadership immediately
+                                    time.sleep(1)  # Allow others to process
+                                    self.leader_send_attendance()
+                                else:
+                                    print(f"Device {self.id} becoming follower of {elected_leader_id} after timeout")
+                                    self.make_follower()
+                                    self.leader_id = elected_leader_id
+                                
                             else:
                                 print(f"Follower {self.id} ineligible for takeover.")
                                 self.log_status("LEADER_TIMEOUT_INELIGIBLE")

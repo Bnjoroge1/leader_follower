@@ -5,6 +5,7 @@ import { Header } from "./components/ui/Header";
 import { DeviceStatus } from "./components/ui/DeviceStatus";
 import { DeviceList } from "./components/ui/DeviceList";
 import { MessageLog } from "./components/ui/MessageLog";
+import { SimulationControls } from "./components/ui/SimulationControls"; 
 
 function App() {
   const { connection, device, devices, messages } = useWebSocket();
@@ -24,6 +25,7 @@ function App() {
             <DeviceStatus device={device} />
             <DeviceList devices={devices} />
           </div>
+          <SimulationControls />
           
           <div>
             <h2 className="text-xl font-semibold mb-4">Track Box</h2>

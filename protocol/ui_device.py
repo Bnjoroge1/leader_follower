@@ -3,7 +3,7 @@ import json
 import asyncio
 import threading
 from multiprocessing import Queue
-import websockets
+import websockets 
 from device_classes import Device, ThisDevice
 from message_classes import Message, Action
 from typing import Dict, List
@@ -98,7 +98,7 @@ class UIDevice(ThisDevice):
                 if established_leader_id != 0:
                     # If this is different from our current leader OR we didn't have one, update.
                     # Attendance from the lowest ID leader confirms their leadership.
-                    if current_leader == 0 or established_leader_id <= current_leader: # Use <= to accept the lowest ID leader
+                    if current_leader == 0 or established_leader_id >= current_leader: # Use <= to accept the lowest ID leader
                          potential_new_leader = established_leader_id
                     # If we hear attendance from a HIGHER ID leader than we know, ignore it for leader update.
                     # The tiebreaker logic ensures the higher ID leader steps down 
@@ -163,6 +163,7 @@ class UIDevice(ThisDevice):
                 # For now, just adding/updating task is sufficient based on messages
 
             # --- Broadcast Updates ---
+            print(f"DEBUG: UI device preparng to queue message log")
             # Broadcast message log regardless
             self.send_update("message_log", {
                 "type": "receive", # Indicate it was received by UI device
@@ -284,7 +285,7 @@ class UIDevice(ThisDevice):
             "type": device_list_update,
             "timestamp": time.time(),
             "data": data
-        }
+        } 
         print(f"DEBUG: Broadcasting update: {message}")
 
         # Send to all connected clients

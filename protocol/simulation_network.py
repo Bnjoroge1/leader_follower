@@ -116,19 +116,28 @@ class SimulationNode(AbstractNode):
                         daemon=True
                     )
                 self.process.start()
+                self.log_status(f"Node {self.node_id} started")
                 print(f"Started process for node {self.node_id}")
             except Exception as e:
                 print(f"Error starting process for node {self.node_id}: {e}")
                 raise
-    
+    def log_message(self, msg: int, direction: str):
+        self.thisDevice.log_message(msg, direction)
+
+    def log_status(self, status: str):
+        self.thisDevice.log_status(status)
+        
     def stop(self):
         # terminate will kill process so I don't think we need to join after - this can corrupt shared data
         self.process.terminate()
+        self.log_status(f"Node {self.node_id} stopped")
+        
         # self.process.join()
 
     def join(self):
         # not sure if needed for protocol, but was used during testing
         self.process.join()
+        self.log_status(f"Node {self.node_id} joined")
 
     def set_outgoing_channel(self, target_node_id, queue):
         self.transceiver.set_outgoing_channel(target_node_id, queue)
@@ -338,7 +347,7 @@ class SimulationNode(AbstractNode):
         """Captures node state for checkpointing"""
         state = NodeState(
             node_id=self.node_id,
-            active=self.active.value,
+            active=self.active, # type: ignore
             device_state=self.thisDevice.get_state(),
             process_state=self._get_process_state()
         )
@@ -495,6 +504,7 @@ class SimulationTransceiver(AbstractTransceiver):
 
     def deactivate(self):
         self.active.value = 0
+        
 
     def reactivate(self):
         self.active.value = 1
