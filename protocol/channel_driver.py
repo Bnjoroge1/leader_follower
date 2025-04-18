@@ -296,7 +296,8 @@ async def main():
 
 
     # startup
-    num_devices = 4
+    num_devices = 4  #max tested is 1000
+
 
     network = Network()
     nodes = []
@@ -493,5 +494,12 @@ async def main():
 
 
 if __name__ == "__main__":
-    
+    start_time = time.time()
     asyncio.run(main())
+    end_time = time.time()
+    duration = end_time - start_time
+    minutes = int(duration // 60)
+    remaining_seconds = duration % 60
+    seconds = int(remaining_seconds)
+    milliseconds = int((remaining_seconds - seconds) * 1000)
+    print(f"Total time taken: {minutes:02d}:{seconds:02d}:{milliseconds:03d}")
