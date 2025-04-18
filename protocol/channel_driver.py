@@ -2,6 +2,9 @@ from multiprocessing import Queue
 from pathlib import Path
 import queue
 import time
+from typing import Any
+
+from blinker import ANY
 from simulation_network import SimulationNode, NetworkVisualizer, Network, SimulationTransceiver
 import multiprocessing
 import itertools
@@ -24,7 +27,7 @@ simulation_nodes_map: dict[int, SimulationNode] = {}
 CURRENT_FILE = Path(__file__).absolute()
 PROTOCOL_DIR = CURRENT_FILE.parent
 OUTPUT_DIR = PROTOCOL_DIR / "output"
-global_ui_update_queue: multiprocessing.Queue 
+global_ui_update_queue:Any =  asyncio.Queue
 
 
 def listener_configure():
@@ -77,12 +80,19 @@ async def handle_stop_device(request):
                 if node_to_stop.thisDevice.leader:
                     log_data = {"level": "WARN", "message": f"Leader node: {device_id} stopped. Triggerring leader election."}     
                 log_data = {"level": "WARN", "message": f"API Node: {device_id} stopping"}
-                global_ui_update_queue.put(("log_event", log_data))  
+                await global_ui_update_queue.put(("log_event", log_data))  
 
 
             if hasattr(node_to_stop, 'stop') and callable(node_to_stop.stop):
-                node_to_stop.stop()
+                # Check if stop is async
+                if asyncio.iscoroutinefunction(node_to_stop.stop):
+                     await node_to_stop.stop()
+                else:
+                    # If stop is sync, run in executor to avoid blocking
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, node_to_stop.stop)
                     # Update UI device list with active=false for this device
+
                 if 'ui_device' in globals() and isinstance(globals()['ui_device'], UIDevice):
                     # Get current device list
                     current_list = globals()['ui_device'].latest_device_list_cache
@@ -93,11 +103,11 @@ async def handle_stop_device(request):
                     # Force a device list update
                     globals()['ui_device'].latest_device_list_cache = current_list
                     if global_ui_update_queue:
-                        global_ui_update_queue.put(("device_list", current_list))
+                        await global_ui_update_queue.put(("device_list", current_list))
                 return web.Response(text=f"Node {device_id} stopping.")
             else:
                  # If no stop method, maybe set active flag? Less realistic for full stop.
-                 if hasattr(node_to_stop, 'active'): node_to_stop.active.value = 0 # Assuming 0 means stopped/inactive
+                 if hasattr(node_to_stop, 'active'): node_to_stop._active_value = 0 # Assuming 0 means stopped/inactive
                  return web.Response(text=f"Node {device_id} marked inactive (no stop method).")
         else:
             return web.Response(status=404, text=f"Node {device_id} not found")
@@ -122,34 +132,19 @@ async def handle_start_device(request):
             return web.Response(status=404, text=f"Node {device_id} not found")
 
         # Check if the node has a process and if it's already running
-        process_running = False
-        if hasattr(node_to_start, 'process') and isinstance(node_to_start.process, multiprocessing.Process):
-            if node_to_start.process.is_alive():
-                process_running = True
-
-        if process_running:
-            print(f"API: Node {device_id} process is already running.")
-            return web.Response(status=409, text=f"Node {device_id} process is already running.") # 409 Conflict
-
-        # Check if the node has a start method
         if hasattr(node_to_start, 'start') and callable(node_to_start.start):
             try:
                 print(f"API: Starting node {device_id}")
-                #logging the start action
                 global global_ui_update_queue
                 if global_ui_update_queue:
-                    log_data = {"level": "WARN", "message": f"{node_to_start}"}
-                    global_ui_update_queue.put(("log_event", log_data))
+                    log_data = {"level": "INFO", "message": f"API: Starting node {device_id}"} # Changed level
+                    # Use await put()
+                    await global_ui_update_queue.put(("log_event", log_data))
 
-                node_to_start.start()
-                # Give it a moment to potentially start up before confirming
-                await asyncio.sleep(0.5)
-                # Re-check process state after attempting start
-                if hasattr(node_to_start, 'process') and node_to_start.process.is_alive():
-                     return web.Response(text=f"Node {device_id} started successfully.")
-                else:
-                     print(f"API: Node {device_id} failed to start or start method doesn't manage process correctly.")
-                     return web.Response(status=500, text=f"Node {device_id} failed to start.")
+                # MUST await the async start method
+                await node_to_start.start()
+                
+                return web.Response(text=f"Node {device_id} start initiated.")
 
             except Exception as start_exc:
                 print(f"Error calling start() for node {device_id}: {start_exc}")
@@ -174,21 +169,44 @@ async def handle_set_active_state(request, target_active_state: int):
     try:
         device_id = int(device_id_str)
         node_to_modify = simulation_nodes_map.get(device_id)
-        if node_to_modify and hasattr(node_to_modify, 'active'):
+        if node_to_modify: # Simplified check
             print(f"API: Setting node {device_id} active state to {target_active_state}")
-            #log data
             global global_ui_update_queue
+            state_str = "active" if target_active_state == 2 else "inactive"
+            if global_ui_update_queue:
+                 log_data = {"level": "WARN", "message": f"API: Setting node {device_id} to {state_str}."}
+                 # Use await put()
+                 await global_ui_update_queue.put(("log_event", log_data))
+
+            # Call the appropriate method on the node instead of direct attribute access
+            if target_active_state == 0: # Deactivate
+                 if hasattr(node_to_modify, 'deactivate') and callable(node_to_modify.deactivate):
+                     node_to_modify.deactivate() # Assuming deactivate is sync
+                 else: print(f"WARN: Node {device_id} has no deactivate method.")
+            elif target_active_state == 1: # Reactivate (if needed)
+                 if hasattr(node_to_modify, 'reactivate') and callable(node_to_modify.reactivate):
+                     node_to_modify.reactivate() # Assuming reactivate is sync
+                 else: print(f"WARN: Node {device_id} has no reactivate method.")
+            elif target_active_state == 2: # Stay Active (or ensure active)
+                 if hasattr(node_to_modify, 'stay_active') and callable(node_to_modify.stay_active):
+                     node_to_modify.stay_active() # Assuming stay_active is sync
+                 else: print(f"WARN: Node {device_id} has no stay_active method.")
+            else:
+                 print(f"WARN: Unknown target active state {target_active_state} for node {device_id}")
+
+            #log data
             if global_ui_update_queue:
                  log_data = {"level": "WARN", "message": f"API: Node {device_id} stopping."}
-                 global_ui_update_queue.put(("log_event", log_data))
+                 await global_ui_update_queue.put(("log_event", log_data))
 
-            node_to_modify.active = target_active_state
+            node_to_modify._active_value = target_active_state
             state_str = "active" if target_active_state == 2 else "inactive"
             return web.Response(text=f"Node {device_id} set to {state_str}.")
         elif not node_to_modify:
             return web.Response(status=404, text=f"Node {device_id} not found")
         else:
-             return web.Response(status=500, text=f"Node {device_id} has no 'active' attribute.")
+            return web.Response(status=500, text=f"Node {device_id} has no 'active' attribute.")
+        
     except ValueError:
         return web.Response(status=400, text="Invalid device_id format")
     except Exception as e:
@@ -220,12 +238,12 @@ def parse_args():
     parser.add_argument('--partition_sim', action='store_true', help='Run a partitioned simulation')
     return parser.parse_args()
 
-async def process_ui_updates(ui_device: UIDevice, update_queue: Queue):
+async def process_ui_updates(ui_device: UIDevice, update_queue: asyncio.Queue):
     """Task to read updates from the queue and broadcast them via WebSocket."""
     print("UI Update Processor Task started.")
     while True:
         try:
-            update_type, data = update_queue.get_nowait()
+            update_type, data = await update_queue.get()
             # --- Update cache if it's a device_list update ---
             if update_type == 'device_list' and isinstance(data, list):
                 print(f"Main Process: Caching device_list update: {data}")
@@ -242,20 +260,23 @@ async def process_ui_updates(ui_device: UIDevice, update_queue: Queue):
                     "device_id" : "API server"
                 }
                 await ui_device.broadcast_update("message_log", log_payload)
-                continue
+                
             elif update_type == "message_log" and isinstance(data, dict):
                  print(f"Main Process: Processing message_log from UIDevice: {data}")
                  # The data should already be in the correct format (MessageLogData)
                  # Broadcast directly as 'message_log' type
                  print(f"DEBUG: Main Process broadcasting UIDevice log as message_log: {data}") # <-- ADD DEBUG
                  await ui_device.broadcast_update("message_log", data)
-
-        except queue.Empty:
-            await asyncio.sleep(0.1)
+            # Mark the task as done for the asyncio.Queue
+            update_queue.task_done()
+        except asyncio.CancelledError:
+             print("UI Update Processor Task cancelled.")
+             break # Exit loop on cancellation
         except Exception as e:
             print(f"Error processing UI update from queue: {e}")
             import traceback
             traceback.print_exc()
+            # Avoid busy-looping on persistent errors
             await asyncio.sleep(1)
 
 async def main():
@@ -263,251 +284,214 @@ async def main():
     Main driver for protocol simulation.
     :return:
     """
-    manager = multiprocessing.Manager()
-    ui_update_queue = manager.Queue()
-    global global_ui_update_queue
-    global_ui_update_queue = ui_update_queue  #type:ignore
-
 
     args = parse_args()
-    checkpoint_mgr = CheckpointManager(args.checkpoint_dir)
-    if args.list_checkpoints:
-        checkpoints = checkpoint_mgr.list_checkpoints()
-        print(f"Available checkpoints: ")
-        for cp in checkpoints:
-            print(f"    {cp}")
-        return
 
-    if args.restore:
-        checkpoint_path = args.restore
-        if checkpoint_path.lower() == "latest":
-            checkpoint_path = checkpoint_mgr.get_latest_checkpoint()
-            if not checkpoint_path:
-                print("No checkpoints available")
-                return
-        print(f"Restoring from checkpoint: {checkpoint_path}")
-        checkpoint_data = checkpoint_mgr.restore_checkpoint(checkpoint_path)
-        print("DEBUG: Checkpoint message queues during restore:", checkpoint_data.message_queues)
+    # --- Initialize Checkpoint Manager ---
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True) # Ensure output dir exists
+    checkpoint_dir = OUTPUT_DIR / args.checkpoint_dir
+    checkpoint_mgr = CheckpointManager(checkpoint_dir)
 
-        # Create network with restored state
-        network = Network()
-        nodes = []
-        init_tasks = []
-        # First create all nodes without restoring state
-        for node_id, node_state in checkpoint_data.node_states.items():
-            shared_active = multiprocessing.Value('i', node_state.get('active', 2))
-            new_node = SimulationNode(
-                node_id=node_id,
-                active=shared_active,
-                checkpoint_mgr=checkpoint_mgr
-            )
-            nodes.append(new_node)
-            network.add_node(node_id, new_node)
 
-        # Create all channels first
-        for i in range(len(nodes)):
+
+
+    # startup
+    num_devices = 4
+
+    network = Network()
+    nodes = []
+    init_tasks = []
+    for i in range(num_devices):
+        shared_active = 2
+
+        new_node = SimulationNode(i+1, active_value=shared_active, checkpoint_mgr=checkpoint_mgr)  # can we move active to lower level like size?
+        nodes.append(new_node)
+        #init_tasks.append(new_node.node_id, new_node)  # prepare async initialization tasks
+        network.add_node(new_node.node_id, new_node)
+    #update device list
+
+    #adding UI device
+    # --- Create UIDevice Node and Instance Correctly ---
+    ui_device_id = num_devices + 1
+    print(f"Creating UI device with ID {ui_device_id}")
+    ui_update_queue = asyncio.Queue() 
+    global global_ui_update_queue
+    global_ui_update_queue = ui_update_queue
+    # Pass None for transceiver initially, it gets set by network.add_node
+    ui_device = UIDevice(ui_device_id, update_queue=ui_update_queue, transceiver=None)
+    ui_shared_active = 2
+    
+
+    print(f"Creating UI simulation node with ID {ui_device_id}")
+    # 2. Create the SimulationNode for the UI device
+    ui_node = SimulationNode(
+        node_id=ui_device_id,
+        target_func=ui_device.device_main, # Pass the instance method
+        active_value=ui_shared_active,
+        checkpoint_mgr=checkpoint_mgr
+        
+    )
+
+    # 3. Add the UI node to the network (this initializes its transceiver)
+    print(f"Adding UI node {ui_device_id} to network")
+    network.add_node(ui_device_id, ui_node)
+    if hasattr(ui_node, 'transceiver'):
+        print(f"Assigning transceiver from UI node {ui_device_id} to UIDevice instance")
+        ui_device.transceiver = ui_node.transceiver
+    else:
+        print(f"WARN: UI node {ui_device_id} has no transceiver after being added to network.")
+    # 4. Assign the UIDevice instance back to the node AFTER adding to network
+    #    The transceiver is automatically assigned by network.add_node
+    print(f"Assigning UIDevice instance to UI node {ui_device_id}")
+    ui_node.thisDevice = ui_device
+    # ui_node.transceiver is handled by network.add_node
+
+    print(f"UI node {ui_device_id} configured successfully")
+    # --- End Corrected UIDevice Creation ---
+
+    partition_a = {1,2}
+    partition_b = {3,4}
+    def _is_same_partition(node_id1, node_id2 ):
+        return (node_id1 in partition_a and node_id2 in partition_a) or (node_id1 in partition_b and node_id2 in partition_b)
+    for i in range(len(nodes)):
             for j in range(i+1, len(nodes)):
+
                 firstNode = nodes[i]
                 secondNode = nodes[j]
-                print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
-
-                network.create_channel(firstNode.node_id, secondNode.node_id)
-                print(f"DEBUG: First node channels: {firstNode.transceiver.incoming_channels.keys()}")
-                print(f"DEBUG: Second node channels: {secondNode.transceiver.incoming_channels.keys()}")
-                print(f"DEBUG: Created channFel between {firstNode.node_id} and {secondNode.node_id}")
-
-        # Restore nodes from checkpoint
-        for node in nodes:
-            node_state = checkpoint_data.node_states[node.node_id]
-            print(f"DEBUG: Restoring node {node.node_id} with state before restore: {node_state}")
-            queue_state = checkpoint_data.message_queues.get(str(node.node_id), {})
-            node.restore_from_checkpoint(
-                node_state,
-                queue_state
-            )
-            print(f"DEBUG: Node state for {node.node_id}: {node_state}")
-            print(f"DEBUG: Queue state for {node.node_id}: {queue_state}")
-            print(f"DEBUG: Node channels after restore: {node.transceiver.incoming_channels.keys()}")
-
-            init_tasks.append(node.async_init())
-
-
-        # Start visualization and nodes
-        visualizer = NetworkVisualizer()
-        visualizer.ui_main()
-        started_tasks = [asyncio.create_task(task) for task in init_tasks]
-        print("started tasks", started_tasks)
-
-        for node in nodes:
-            time.sleep(5)  # intentional synchronous delay
-            node.start()
-
-
-
-    else:
-        if args.trace:
-            for point in args.trace:
-                checkpoint_mgr.enable_trace(point)
-        # startup
-        num_devices = 4
-
-        network = Network(manager)
-        nodes = []
-        init_tasks = []
-        for i in range(num_devices):
-            shared_active = multiprocessing.Value('i', 2)  # 0 == off, 1 == just reactivated, 2 == active
-
-            new_node = SimulationNode(i+1, active=shared_active, checkpoint_mgr=checkpoint_mgr)  # can we move active to lower level like size?
-            nodes.append(new_node)
-            init_tasks.append(new_node.async_init())  # prepare async initialization tasks
-            network.add_node(new_node.node_id, new_node)
-        #update device list
-
-        #adding UI device
-        # --- Create UIDevice Node and Instance Correctly ---
-        ui_device_id = num_devices + 1
-        print(f"Creating UI device node with ID {ui_device_id}")
-        ui_shared_active = manager.Value('i', 2)
-        #ui_update_queue = manager.Queue()
-
-        # 1. Create the Transceiver for the UI device first
-        ui_transceiver = SimulationTransceiver(active=ui_shared_active, parent_id=ui_device_id)
-         # 2. Create the UIDevice instance using the transceiver
-        print(f"Creating UIDevice instance for ID {ui_device_id}")
-        ui_device = UIDevice(ui_device_id, ui_transceiver, ui_update_queue)
-        print(f"UIDevice instance created successfully")
-        ui_node = SimulationNode(
-            node_id=ui_device_id, # Assign the ID here
-            target_func=ui_device.device_main,     # We'll set this later
-            active=ui_shared_active,
-            checkpoint_mgr=checkpoint_mgr # Pass checkpoint manager if needed
-        )
-         # 4. Assign the UIDevice instance and transceiver back to the node
-        #    (Important for state access and network setup)
-        print(f"Assigning components to UI node {ui_device_id}")
-        ui_node.thisDevice = ui_device
-        ui_node.transceiver = ui_transceiver # Ensure the node uses the same transceiver
-
-        # 2. Add the UI node to the network (this initializes its transceiver)
-        print(f"Adding UI node {ui_device_id} to network")
-        network.add_node(ui_device_id, ui_node)
-
-       
-        print(f"UI node {ui_device_id} configured successfully")
-        # --- End Corrected UIDevice Creation ---
-        partition_a = {1,2}
-        partition_b = {3,4}
-        def _is_same_partition(node_id1, node_id2 ):
-            return (node_id1 in partition_a and node_id2 in partition_a) or (node_id1 in partition_b and node_id2 in partition_b)
-        for i in range(len(nodes)):
-                for j in range(i+1, len(nodes)):
-
+                if args.partition_sim:
                     firstNode = nodes[i]
                     secondNode = nodes[j]
-                    if args.partition_sim:
-                        firstNode = nodes[i]
-                        secondNode = nodes[j]
-                        if not _is_same_partition(firstNode.node_id, secondNode.node_id):
-                            continue
-                        print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
-                        network.create_channel(firstNode.node_id, secondNode.node_id)
-                        print(f"DEBUG: First node channels: {firstNode.transceiver.incoming_channels.keys()}")
-                        print(f"DEBUG: Second node channels: {secondNode.transceiver.incoming_channels.keys()}")
-                        print(f"DEBUG: Created channel between {firstNode.node_id} and {secondNode.node_id} in same partition")
+                    if not _is_same_partition(firstNode.node_id, secondNode.node_id):
+                        continue
+                    print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
                     network.create_channel(firstNode.node_id, secondNode.node_id)
+                    print(f"DEBUG: First node channels: {firstNode.transceiver.incoming_channels.keys()}")
+                    print(f"DEBUG: Second node channels: {secondNode.transceiver.incoming_channels.keys()}")
+                    print(f"DEBUG: Created channel between {firstNode.node_id} and {secondNode.node_id} in same partition")
+                network.create_channel(firstNode.node_id, secondNode.node_id)
 
-        # Create channels between regular devices
-        # for i in range(len(nodes)):
-        #     for j in range(i+1, len(nodes)):
-        #         firstNode = nodes[i]
-        #         secondNode = nodes[j]
-        #         print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
-        #         network.create_channel(firstNode.node_id, secondNode.node_id)
+    # Create channels between regular devices
+    # for i in range(len(nodes)):
+    #     for j in range(i+1, len(nodes)):
+    #         firstNode = nodes[i]
+    #         secondNode = nodes[j]
+    #         print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
+    #         network.create_channel(firstNode.node_id, secondNode.node_id)
 
-        # Connect the UI device node to all other regular device nodes
-        print(f"Connecting UI node {ui_device_id} to other nodes")
-        for node in nodes:
-            network.create_channel(ui_device_id, node.node_id)
-        print(f"UI node {ui_device_id} connected")
+    # Connect the UI device node to all other regular device nodes
+    print(f"Connecting UI node {ui_device_id} to other nodes")
+    for node in nodes:
+        network.create_channel(ui_device_id, node.node_id)
+    print(f"UI node {ui_device_id} connected")
 
-        all_nodes = nodes + [ui_node] # Combine regular nodes and UI node
-        simulation_nodes_map.clear()
-        for n in all_nodes:
-            if hasattr(n, 'thisDevice') and hasattr(n.thisDevice, 'id'):
-                simulation_nodes_map[n.thisDevice.id] = n
-                print(f"Mapping dynamic device ID to simulaation node: {getattr(n, 'node_id')}")
-            print(f"could not map node {getattr(n, 'node_id')}")
-            
+    all_nodes = nodes + [ui_node] # Combine regular nodes and UI node
+    simulation_nodes_map.clear()
+    for n in all_nodes:
+        if hasattr(n, 'thisDevice') and hasattr(n.thisDevice, 'id'):
+            simulation_nodes_map[n.node_id] = n
+            print(f"Mapping dynamic device ID {n.thisDevice.id} to simulaation node: {getattr(n, 'node_id')}")
+        else:
+            print(f"WARN: Could not map node (missing node_id attribute): {n}")
 
-     
-      # Start the WebSocket server task using the main process's ui_device instance
-        print(f"Creating WebSocket server task")
-        ws_server_task = asyncio.create_task(ui_device.start_ws_server())
-        print(f"WebSocket server task created: {ws_server_task}")
+        
 
-        # Start the task that processes updates from the UI device process queue
-        print(f"Creating UI update processing task")
-        ui_update_processor_task = asyncio.create_task(process_ui_updates(ui_device, ui_update_queue)) # type: ignore
-        print(f"UI update processing task created: {ui_update_processor_task}")
+    
+    # Start the WebSocket server task using the main process's ui_device instance
+    print(f"Creating WebSocket server task")
+    ws_server_task = asyncio.create_task(ui_device.start_ws_server())
+    print(f"WebSocket server task created: {ws_server_task}")
+
+    # Start the task that processes updates from the UI device process queue
+    print(f"Creating UI update processing task")
+    ui_update_processor_task = asyncio.create_task(process_ui_updates(ui_device, ui_update_queue)) # type: ignore
+    print(f"UI update processing task created: {ui_update_processor_task}")
 
 
-        # starts each task - connects websockets to server..js before protocol starts
-        print(f"Creating tasks for node initialization")
-        started_tasks = [asyncio.create_task(task) for task in init_tasks]
-        print(f"Started initialization tasks: {started_tasks}")
-        print(f"WebSocket server task: {ws_server_task}")
-        print(f"UI Update Processor task: {ui_update_processor_task}")
+    # starts each task - connects websockets to server..js before protocol starts
+    print(f"Creating tasks for node initialization")
+    started_tasks = [asyncio.create_task(task) for task in init_tasks]
+    print(f"Started initialization tasks: {started_tasks}")
+    print(f"WebSocket server task: {ws_server_task}")
+    print(f"UI Update Processor task: {ui_update_processor_task}")
+    
 
-         # --- Setup HTTP Server ---
-        http_app = web.Application()
-        cors = aiohttp_cors.setup(http_app, defaults={
-        "http://localhost:5173": aiohttp_cors.ResourceOptions(
-                allow_credentials=True,
-                expose_headers="*",
-                allow_headers="*",
-                allow_methods="*", # Allow all standard methods including POST
-            ),
-        })
-         # --- Add routes and apply CORS ---
-        # Wrap each route registration with CORS configuration
-        resource_stop = cors.add(http_app.router.add_resource('/simulate/stop/{device_id}'))
-        cors.add(resource_stop.add_route("POST", handle_stop_device))
+        # --- Setup HTTP Server ---
+    http_app = web.Application()
+    cors = aiohttp_cors.setup(http_app, defaults={
+    "http://localhost:5173": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*",
+            allow_methods="*", # Allow all standard methods including POST
+        ),
+    })
+        # --- Add routes and apply CORS ---
+    # Wrap each route registration with CORS configuration
+    resource_stop = cors.add(http_app.router.add_resource('/simulate/stop/{device_id}'))
+    cors.add(resource_stop.add_route("POST", handle_stop_device))
 
-        resource_start = cors.add(http_app.router.add_resource('/simulate/start/{device_id}'))
-        cors.add(resource_start.add_route("POST", handle_start_device))
+    resource_start = cors.add(http_app.router.add_resource('/simulate/start/{device_id}'))
+    cors.add(resource_start.add_route("POST", handle_start_device))
 
-        resource_activate = cors.add(http_app.router.add_resource('/simulate/activate/{device_id}'))
-        cors.add(resource_activate.add_route("POST", handle_activate_device))
+    resource_activate = cors.add(http_app.router.add_resource('/simulate/activate/{device_id}'))
+    cors.add(resource_activate.add_route("POST", handle_activate_device))
 
-        resource_deactivate = cors.add(http_app.router.add_resource('/simulate/deactivate/{device_id}'))
-        cors.add(resource_deactivate.add_route("POST", handle_deactivate_device))
-        http_runner = web.AppRunner(http_app)
-        await http_runner.setup()
-        # Choose a different port for the HTTP API, e.g., 8080
-        http_site = web.TCPSite(http_runner, '0.0.0.0', 8080)
-        await http_site.start()
-        print("HTTP Simulation Control Server started on port 8080")
+    resource_deactivate = cors.add(http_app.router.add_resource('/simulate/deactivate/{device_id}'))
+    cors.add(resource_deactivate.add_route("POST", handle_deactivate_device))
+    http_runner = web.AppRunner(http_app)
+    await http_runner.setup()
+    # Choose a different port for the HTTP API, e.g., 8080
+    http_site = web.TCPSite(http_runner, '0.0.0.0', 8080)
+    await http_site.start()
+    print("HTTP Simulation Control Server started on port 8080")
 
-        for i, node in enumerate(nodes):
-            print(f"Starting node {i+1}/{len(nodes)}: {node.node_id}")
-            node.start()
-        print(f"Starting UI node: {ui_node.node_id}")
-        ui_node.start()
-        print(f"All nodes started successfully")
-        # indefinitely awaiting websocket tasks
-        try:
-            await asyncio.gather(ws_server_task,ui_update_processor_task, *started_tasks)
-            assert False  # making sure websockets have not stopped
-        except OSError:
-            await asyncio.Event().wait()
-        finally:
-            # Ensure cleanup happens even on errors if possible
-            await http_runner.cleanup()
+     # --- Start Node Main Tasks ---
+    node_main_tasks = []
+    # Start regular nodes
+    for i, node in enumerate(nodes):
+        print(f"Starting node {i+1}/{len(nodes)}: {node.node_id}")
+        # MUST await the async start method
+        await node.start()
+        # Store the task created by start() for the final gather
+        if hasattr(node, '_main_task') and node._main_task:
+             node_main_tasks.append(node._main_task)
+        else:
+             
+             print(f"WARN: Node {node.node_id} did not expose a main task after start.")
+    #MUST await the async start method for the UI node too
+    await ui_node.start()
+    if hasattr(ui_node, '_main_task') and ui_node._main_task:
+         node_main_tasks.append(ui_node._main_task)
+    else:
+         print(f"WARN: UI Node {ui_node.node_id} did not expose a main task after start.")
+    # indefinitely awaiting websocket tasks
+     # --- Wait Indefinitely (or for specific tasks) ---
+    # Gather background tasks AND the main node tasks
+    # Remove *started_tasks (init tasks) as they should be complete implicitly before node.start
+    tasks_to_wait_for = [ws_server_task, ui_update_processor_task] + node_main_tasks
+    print(f"Gathering {len(tasks_to_wait_for)} essential tasks...")
+    try:
+        # Wait for all essential tasks to complete (which might be never for servers/nodes)
+        await asyncio.gather(*tasks_to_wait_for)
+        print("Main gather completed (unexpected for long-running tasks).")
+    except asyncio.CancelledError:
+         print("Main gather was cancelled.")
+    except Exception as e:
+         print(f"Error during main gather: {e}")
+         traceback.print_exc()
+    finally:
+        print("Cleaning up HTTP runner...")
+        await http_runner.cleanup()
+        # Optional: Add explicit node stopping logic here if needed on exit
+        print("Stopping node tasks...")
+        for task in node_main_tasks:
+             if not task.done():
+                 task.cancel()
+        # Allow cancellations to process
+        await asyncio.sleep(0.1)
+        print("Cleanup finished.")
 
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method('spawn', force=True)
-
-    # Create manager before running main
-    with multiprocessing.Manager() as manager:
-        asyncio.run(main())
+    
+    asyncio.run(main())
