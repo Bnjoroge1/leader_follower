@@ -1,11 +1,12 @@
 from dataclasses import asdict, dataclass
+import json
 import time
 import device_classes as dc
 import multiprocessing
 from multiprocessing import Queue
 import queue as q
 from queue import Empty
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 from abstract_network import AbstractNode, AbstractTransceiver
 import asyncio
 import websockets
@@ -16,57 +17,42 @@ import hashlib
 from checkpoint_manager import CheckpointManager
 from device_state import DeviceState
 
-def device_process_function(device_id: int, node_id: int, active_value: int, outgoing_channels: Dict[int, Queue], incoming_channels: Dict[int, Queue]):
-    """Standalone function for the device process"""
-    try:
-        # Create fresh active value
-        active = multiprocessing.Value('i', active_value)
-        # Create a dummy parent node to hold the node_id
-        class DummyParent:
-            def __init__(self, node_id):
-                self.node_id = node_id
-        # Create fresh transceiver with the channel dictionaries from the parent
-        transceiver = SimulationTransceiver(active=active, parent_id=node_id)
-        transceiver._outgoing_channels = outgoing_channels
-        transceiver._incoming_channels = incoming_channels
-        
-        # Create fresh device
-        device = dc.ThisDevice(device_id, transceiver)
-        
-        # Run device main
-        device.device_main()
-    except Exception as e:
-        print(f"Error in device process: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+
 class SimulationNode(AbstractNode):
 
-    def __init__(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None, checkpoint_mgr: Optional[CheckpointManager] = None):  # type: ignore
+    def __init__(self, node_id: int,  active_value: int, target_func = None, target_args = None,  checkpoint_mgr: Optional[CheckpointManager] = None):  # type: ignore
         self.node_id = node_id
-        self.active = active
-        self.transceiver = SimulationTransceiver(active=active, parent_id=node_id)
+        self._active_value = active_value
+        self.transceiver = SimulationTransceiver(active_value=active_value, parent_id=node_id)
         self.transceiver.parent_id = node_id
         self.checkpoint_mgr = checkpoint_mgr
         self.trace_enabled = False
         self.SECRET_KEY = "secret_key"
-        self.process = None
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
-        # self.thisDevice = dc.ThisDevice(self.generate_device_id(node_id), self.transceiver)
-        # self.thisDevice = dc.ThisDevice(node_id*100, self.transceiver)  # used for repeatable testing
-        # for testing purposes, so node can be tested without device protocol fully implemented
-        # can be removed later
+        self.target_func = target_func if target_func is not None else self.thisDevice.device_main 
         
-        if not target_func:
-            target_func = self.thisDevice.device_main
-        if target_args:
-            target_args = (self.transceiver, self.node_id)
-            self.process = multiprocessing.Process(target=target_func, args=target_args)
-        else:
-            self.process = multiprocessing.Process(target=target_func)
+        self._main_task: Optional[asyncio.Task] = None 
+
+    def join(self) ->None:
+        '''satisfy abstract class'''
+        raise NotImplementedError
+        
             
     
     
+    def deactivate(self):
+        self._active_value = 0
+        
+
+    def reactivate(self):
+        self._active_value = 1
+        
+
+    def stay_active(self):
+        self._active_value = 2
+
+    def active_status(self):
+        return self._active_value
     def generate_device_id(self, node_id):
         # Combine node_id and secret key
         input_string = f"{self.SECRET_KEY}{node_id}"
@@ -79,68 +65,77 @@ class SimulationNode(AbstractNode):
         device_id = int(hash_hex[:16], 16)
         
         return device_id
-    async def async_init(self):  # SimulationTransceiver
-        await self.transceiver.websocket_client()
+    
     
 
-    def start(self):
-        """Start the node's process"""
-        if self.process is None or not self.process.is_alive():
-            try:
-                print(f"DEBUG: Starting process for node {self.node_id}")
-                print(f"DEBUG: Device state before process start: {self.thisDevice.__dict__}")
-                print(f"DEBUG: Transceiver state: {self.transceiver.__dict__}")
-                if not hasattr(self, 'process') or self.process is None:
-                    new_active = multiprocessing.Value('i', self.active.value)
-                    #self.transceiver.active = new_active
-                    device_state = {
-                    'device_id': self.thisDevice.id,
-                    'device_list': self.thisDevice.device_list,
-                    'known_leaders': self.thisDevice.known_leaders,
-                    'isLeader': self.thisDevice.leader,
-                    'currentLeader': self.thisDevice.leader_id,
-                    'received': self.thisDevice.received,
-                    'missed': self.thisDevice.missed,
-                    'task': self.thisDevice.task
-                    }
+    async def start(self):
+        """Starts the node's main execution task asynchronously."""
+        # Check if task already exists and is running
+        if self._main_task and not self._main_task.done():
+            print(f"Node {self.node_id} main task is already running.")
+            return # Don't start again
 
-                    self.process = multiprocessing.Process(
-                        target=device_process_function,
-                        args=(
-                            self.thisDevice.id,  # device_id
-                            self.node_id,        # node_id
-                            self.active.value,   # active_value
-                            self.transceiver._outgoing_channels,
-                            self.transceiver._incoming_channels,
-                        ),
-                        daemon=True
-                    )
-                self.process.start()
-                self.log_status(f"Node {self.node_id} started")
-                print(f"Started process for node {self.node_id}")
-            except Exception as e:
-                print(f"Error starting process for node {self.node_id}: {e}")
-                raise
+        if self.target_func:
+            print(f"Node {self.node_id}: Creating main task for {getattr(self.target_func, '__name__', 'target_func')}")
+            # Create the task that runs the node's main logic (e.g., thisDevice.device_main)
+            # Ensure self.target_func is awaitable (it should be if it's device_main)
+            self._main_task = asyncio.create_task(self.target_func())
+            # Optional: Add a callback for when the task finishes or errors
+            # self._main_task.add_done_callback(self._handle_task_completion)
+            print(f"Node {self.node_id}: Main task created: {self._main_task}")
+        else:
+            print(f"WARN: Node {self.node_id} has no target_func to start.")
     def log_message(self, msg: int, direction: str):
         self.thisDevice.log_message(msg, direction)
 
     def log_status(self, status: str):
         self.thisDevice.log_status(status)
         
-    def stop(self):
-        # terminate will kill process so I don't think we need to join after - this can corrupt shared data
-        self.process.terminate()
-        self.log_status(f"Node {self.node_id} stopped")
-        
-        # self.process.join()
+    async def _async_stop(self):
+        """Internal async implementation to stop the node's task"""
+        if self._main_task and not self._main_task.done():
+            print(f"DEBUG: Stopping task for node {self.node_id}")
+            self._main_task.cancel()
+            try:
+                await self._main_task # Wait for cancellation to complete
+            except asyncio.CancelledError:
+                print(f"Task for node {self.node_id} cancelled successfully.")
+            except Exception as e:
+                 print(f"Error during task cancellation for node {self.node_id}: {e}")
+            self.log_status(f"Node {self.node_id} stopped")
+        self._main_task = None
 
-    def join(self):
-        # not sure if needed for protocol, but was used during testing
-        self.process.join()
-        self.log_status(f"Node {self.node_id} joined")
+    def stop(self) -> None: # Synchronous interface method
+        """Stop the node's task (synchronous wrapper)."""
+        print(f"DEBUG: Initiating stop for node {self.node_id}")
+        try:
+            # Get existing loop or create new one
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # Only create a new loop if absolutely necessary,
+                # usually stop should be called from an async context
+                # or the main thread managing the loop.
+                print(f"WARNING: Creating temporary event loop to stop node {self.node_id}. This might indicate an issue.")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
 
-    def set_outgoing_channel(self, target_node_id, queue):
-        self.transceiver.set_outgoing_channel(target_node_id, queue)
+            # Run async stop operation
+            if loop.is_running():
+                 # If the loop is running, schedule the stop and wait briefly.
+                 # Avoid blocking the loop with run_until_complete if called from within it.
+                 # This is a simplification; robust handling might need futures.
+                 asyncio.ensure_future(self._async_stop(), loop=loop)
+                 # Note: This doesn't guarantee completion before returning.
+                 # A more complex mechanism (like passing a future/event)
+                 # would be needed for guaranteed synchronous completion from within the loop.
+                 print(f"DEBUG: Scheduled async stop for node {self.node_id} in running loop.")
+            else:
+                 loop.run_until_complete(self._async_stop())
+                 print(f"DEBUG: Completed async stop for node {self.node_id} in dedicated loop run.")
+
+        except Exception as e:
+            print(f"Error in sync stop wrapper for node {self.node_id}: {e}")
 
     def set_incoming_channel(self, target_node_id, queue):
         self.transceiver.set_incoming_channel(target_node_id, queue)
@@ -148,247 +143,86 @@ class SimulationNode(AbstractNode):
     async def async_init(self):  # SimulationTransceiver
         await self.transceiver.websocket_client()
     
-    def get_queue_state(self) -> Dict[str, Any]:
-        """Captures queue state for checkpointing"""
-        print(f"\nDEBUG: Starting queue state capture for node {self.node_id}")
+    
+    
+    
 
-        queue_state = {
-            'incoming': {},
-            'outgoing': {}
-        }
-        print(f"DEBUG: Capturing incoming channels: {self.transceiver.incoming_channels.values()}")
-
-        
-        # Save incoming queues
-        for node_id, channel in self.transceiver.incoming_channels.items():
-            messages = []
-            try:
-                
-                print(f"DEBUG: Capturing incoming queue for channel {node_id}")
-                print(f"DEBUG: Channel queue empty? {channel.queue.empty()}")
-                # Create temporary queue to preserve original
-                temp_queue = Queue()
-                while not channel.queue.empty():
-                    msg = channel.queue.get()
-                    print(f"DEBUG: Got message from incoming queue: {msg}")
-                    messages.append(msg)
-                    temp_queue.put(msg)
-                    print(f"DEBUG: Put message in temp queue: {msg}")
-                    
-                # Restore original queue
-                print(f"DEBUG: Restoring original queue")
-                while not temp_queue.empty():
-                    channel.queue.put(temp_queue.get())
-                    print(f"DEBUG: Put message in original queue: {msg}")
-                    
-                queue_state['incoming'][str(node_id)] = messages.copy()
-                print(f"DEBUG: Incoming queue state for node {node_id}: {queue_state['incoming'][str(node_id)]}")
-                
-            except Exception as e:
-                print(f"Error capturing incoming queue state for node {node_id}: {e}")
-        print(f"DEBUG: Capturing outgoing channels: {self.transceiver.outgoing_channels.keys()}")
-
-        # Save outgoing queues
-        for node_id, channel in self.transceiver.outgoing_channels.items():
-            messages = []
-            temp_queue = Queue()
-            try:
-                print(f"DEBUG: Capturing outgoing queue for channel {node_id}")
-                print(f"DEBUG: Channel queue empty? {channel.queue.empty()}")
-                
-                
-                while not channel.queue.empty():
-                    msg = channel.queue.get()
-                    print(f"DEBUG: Got message from outgoing queue: {msg}")
-                    messages.append(msg)
-                    temp_queue.put(msg)
-                    print(f"DEBUG: Put outgoing message in temp queue: {msg}")
-
-                # Restore original queue
-                print(f"DEBUG: Restoring original outgoing queue")
-                while not temp_queue.empty():
-                    msg = temp_queue.get()
-                    channel.queue.put(msg)
-                    print(f"DEBUG: Put outgoing message in original queue: {msg}")
-                queue_state['outgoing'][str(node_id)] = messages.copy()
-            except Exception as e:
-                print(f"Error capturing outgoing queue state for node {node_id}: {e}")
-        print(f"DEBUG: Final queue state for node {self.node_id}: {queue_state}")
-
-        return queue_state
-
-    def restore_from_checkpoint(self, node_state: Dict[str, Any], queue_state: Dict[str, Any] = None):
-        """Restores node state from checkpoint data"""
-        print(f"Restoring node {self.node_id} from state: {node_state}")  
-        print(f"Queue state: {queue_state}")  
-        
-        self.node_id = node_state['node_id']
-        active_value =  node_state.get('active', 2)
-        self.active = None
-        if hasattr(self, 'active'):
-            old_active = self.active
-            self.active = multiprocessing.Value('i', active_value)
-            print("restored active value from old value to new value in checkpoint", active_value)
-        else:
-            self.active = multiprocessing.Value('i', active_value)
-        self.transceiver.active = self.active
-        print("restored active value from cehckpoint", active_value)
-        
-        # Restore device state
-        if 'device_state' in node_state:
-            self.thisDevice.restore_state(node_state['device_state'])
-            
-        
-        print("Resoritng queue state: ", queue_state)
-        # Restore queue state if provided
-        if queue_state:
-            self.restore_queue_state(queue_state) 
-
-    def restore_queue_state(self, queue_state: Dict[str, Any]): 
-        """Restores queue state from checkpoint data"""
-        print(f"Restoring queues for node {self.node_id}")
-        print(f"Queue state structure: {queue_state.keys()}")
-        
-        try:
-            #create channels
-            for node_id in queue_state.get('incoming', {}).keys():
-                print(f"creating incoming channel for {node_id}")
-                if str(node_id) not in self.transceiver.incoming_channels:
-                    self.transceiver.incoming_channels[str(node_id)] = ChannelQueue()
-                
-            for node_id in queue_state.get('outgoing', {}).keys():
-                print(f"creating outgoing channel for {node_id}")
-                if str(node_id) not in self.transceiver.outgoing_channels:
-                    self.transceiver.outgoing_channels[str(node_id)] = ChannelQueue()
-
-            # Restore messages to existing queues
-            for node_id, messages in queue_state.get('incoming', {}).items():
-                print(f"Restoring incoming queues from node id {node_id}: {messages}")
-                if str(node_id) in self.transceiver.incoming_channels:
-                    channel = self.transceiver.incoming_channels[str(node_id)]
-                    # Clear existing messages
-                    while not channel.queue.empty():
-                        try:
-                            channel.queue.get_nowait()
-                        except:
-                            pass
-                    # Add new messages
-                    for msg in messages:
-                        channel.queue.put(msg)
-                        
-            for node_id, messages in queue_state.get('outgoing', {}).items():
-                print(f"Restoring outgoing messages to node {node_id}: {messages}")
-                if str(node_id) in self.transceiver.outgoing_channels:
-                    channel = self.transceiver.outgoing_channels[str(node_id)]
-                    # Clear existing messages
-                    while not channel.queue.empty():
-                        try:
-                            channel.queue.get_nowait()
-                        except:
-                            pass
-                    # Add new messages
-                    for msg in messages:
-                        channel.queue.put(msg)
-
-            print(f"DEBUG: Channels after restore: "
-                f"incoming={self.transceiver.incoming_channels.keys()}, "
-                f"outgoing={self.transceiver.outgoing_channels.keys()}")
-                
-        except Exception as e:
-            import traceback
-            print(f"Error restoring queue state:")
-            print(traceback.format_exc())
-
-    def trace_point(self, point_name: str):
-        """Called at trace points to potentially checkpoint"""
-        if self.checkpoint_mgr and self.checkpoint_mgr.should_checkpoint(point_name):
-            print(f"Creating checkpoint at {point_name} for node {self.node_id}")
-            self.checkpoint_mgr.create_checkpoint(f"trace_{point_name}", {self.node_id: self})
-            print(f"Checkpoint created for {point_name}")
-
-    def _get_process_state(self) -> Dict[str, Any]:
-        """Captures process state"""
-        return {
-            'pid': self.process.pid if self.process else None,
-            # Add other relevant process state
-        }
-
-    def _restore_queues(self, queue_state: Dict[str, Any]):
-        """Restores queue state"""
-        for node_id, messages in queue_state['incoming'].items():
-            for msg in messages:
-                self.transceiver.incoming_channels[node_id].put(msg)
-        for node_id, messages in queue_state['outgoing'].items():
-            for msg in messages:
-                self.transceiver.outgoing_channels[node_id].put(msg)
-    def set_process(self, process_func):
-        """Sets the process function to be run by this node"""
-        if self.process is not None and self.process.is_alive():
-            self.process.terminate()
-            
-        # Create new active value for the process
-        if self.active is None:
-            self.active = multiprocessing.Value('i', 2)  # 2 is the default "active" state
-            
-        self.process = multiprocessing.Process(
-            target=device_process_function,
-            args=(
-                self.thisDevice.id,  # device_id
-                self.node_id,        # node_id 
-                self.active.value,   # active_value
-            ),
-            daemon=True
-        )
-        print(f"Process set for node {self.node_id} with function {process_func.__name__}")
-        
-        # Update the device's process
-        self.thisDevice.device_main = process_func
-    def get_checkpoint_state(self) -> Dict[str, Any]:
-        """Captures node state for checkpointing"""
-        state = NodeState(
-            node_id=self.node_id,
-            active=self.active, # type: ignore
-            device_state=self.thisDevice.get_state(),
-            process_state=self._get_process_state()
-        )
-        return asdict(state)
-    def _restore_process_state(self, state: Dict[str, Any]):
-        """Restores process state from checkpoint"""
-        if state.get('is_running', False):
-            # If process was running in checkpoint, start a new process
-            if not hasattr(self, 'process') or not self.process.is_alive():
-                self.process = multiprocessing.Process(target=self.thisDevice.device_main)
-                self.process.start()
-        else:
-            # If process wasn't running, make sure it's stopped
-            if hasattr(self, 'process') and self.process.is_alive():
-                self.process.terminate()
-                self.process.join()
 
     
 
 class Network:
 
     def __init__(self, manager=None):
-        self.nodes = {}
-        # self.channels - add later
-        self.manager = manager if manager else multiprocessing.Manager()
+        self.nodes: Dict[int, SimulationNode] = {}
+        self.incoming_queue: Dict[int, asyncio.Queue] = {}
+        self.topology: Dict[int, Set[int]] = {}  #adjacency list of node_id: set of adjacent nodes. 
+       
 
     def add_node(self, node_id, node):
-        self.nodes[node_id] = node
-
+        if node_id not in self.nodes:
+            self.nodes[node_id] = node
+            #create the incoming queue
+            self.incoming_queue[node_id] = asyncio.Queue()
+            self.topology[node_id] = set()
+            
+           # Assign the queue and network reference to the node's transceiver
+            if hasattr(node, 'transceiver') and isinstance(node.transceiver, SimulationTransceiver):
+                # Assign the specific queue for this node_id
+                node.transceiver._incoming_queue = self.incoming_queue.get(node_id)
+                node.transceiver.network = self
+                # --- ADD THIS ---
+                # If the node has a ThisDevice instance, assign the transceiver to it too
+                if hasattr(node, 'thisDevice') and node.thisDevice:
+                    if hasattr(node.thisDevice, 'transceiver'):
+                         print(f"Network: Assigning transceiver to node {node_id}'s ThisDevice instance.")
+                         node.thisDevice.transceiver = node.transceiver
+                    else:
+                         print(f"WARN: Node {node_id}'s ThisDevice instance has no 'transceiver' attribute.")
+                        
+                        
+            
+            print(f"Network: Added node {node_id} and {node.transceiver.incoming_channels} channels.")
+        else:
+            print(f"Warn: Node {node_id} already exists. ")
     def get_node(self, node_id):
         return self.nodes.get(node_id)
 
-    def create_channel(self, node_id1, node_id2):  # 2 channels for bidirectional comms
-        queue1 = ChannelQueue()  # from 1 to 2
-        queue2 = ChannelQueue()  # from 2 to 1
-        print(f"created both queuees: {queue1} and {queue2}")
-        self.nodes[node_id1].set_outgoing_channel(node_id2, queue1)  # (other node, channel)
-        self.nodes[node_id1].set_incoming_channel(node_id2, queue2)
-        self.nodes[node_id2].set_outgoing_channel(node_id1, queue2)
-        self.nodes[node_id2].set_incoming_channel(node_id1, queue1)
-        print(f"Set the incoming and outgoing channels in both {node_id1} and {node_id2}")
+    def create_channel(self, node_id1, node_id2):
+        if node_id1 in self.topology and node_id2 in self.topology:
+            self.topology.setdefault(node_id1, set()).add(node_id2)
+            self.topology.setdefault(node_id2, set()).add(node_id1)
+            # Crucially, update transceivers with references to the *other* node's incoming queue
+            node1 = self.nodes[node_id1]
+            node2 = self.nodes[node_id2]
+            queue_for_node1 = self.incoming_queue.get(node_id1)
+            queue_for_node2 = self.incoming_queue.get(node_id2)
+            if hasattr(node1, 'transceiver') and queue_for_node2:
+                node1.transceiver._outgoing_channels[node_id2] = queue_for_node2
+            if hasattr(node2, 'transceiver') and queue_for_node1:
+                 node2.transceiver._outgoing_channels[node_id1] = queue_for_node1
+            print(f"Network: Created link between {node_id1} and {node_id2}")
+        else:
+             print(f"WARN: Cannot create channel, one or both nodes not found: {node_id1}, {node_id2}")
+
+
+    async def distribute_message(self, sender_id, msg):
+        """Distributes a message from sender_id to all connected nodes."""
+        if sender_id not in self.topology:
+            print(f"WARN: Sender {sender_id} not in network topology.")
+            return
+
+        #print(f"Network: Distributing message from {sender_id} to {self.topology[sender_id]}")
+        for receiver_id in self.topology[sender_id]:
+            if receiver_id in self.incoming_queue:
+                try:
+                    # Put the message into the receiver's incoming queue
+                    # print(f"Network: Putting message for {receiver_id}") # Can be noisy
+                    await self.incoming_queue[receiver_id].put(msg)
+                except Exception as e:
+                    print(f"Error putting message into queue for {receiver_id}: {e}")
+            else:
+                print(f"WARN: Receiver {receiver_id} (connected to {sender_id}) has no channel queue.")
+
 
 
 class NetworkVisualizer:
@@ -400,61 +234,8 @@ class NetworkVisualizer:
         pass
 
 
-class ChannelQueue:
-    """
-    Wrapper class for multiprocessing.Queue that keeps track of number of
-    messages in channel and updates. Maintains thread safety.
-    """
-    def __init__(self, manager=None):
-        if manager is None:
-            manager = multiprocessing.Manager()
-        self._queue = manager.Queue()  # Truly shared queue
-        self._size = manager.Value('i', 0)  # Shared size counter
-        self._lock = manager.Lock()
-        
-    @property
-    def queue(self):
-        return self._queue
-    
-    @property
-    def size(self):
-        return self._size
-    
-    def put(self, msg):
-        # Atomic put operation
-        self._queue.put(msg)
-        with self._lock:
-            self._size.value += 1
-            
-    def get(self, timeout=None):
-        try:
-            # Try to get a message
-            msg = self._queue.get(timeout=timeout)
-            # Update size counter atomically
-            with self._lock:
-                self._size.value = max(0, self._size.value - 1)
-            return msg
-        except q.Empty:
-            raise
-    
-    def get_nowait(self):
-        try:
-            msg = self._queue.get_nowait()
-            with self._lock:
-                self._size.value = max(0, self._size.value - 1)
-            return msg
-        except q.Empty:
-            raise
-    
-    def is_empty(self):
-        with self._lock:
-            return self._size.value == 0
-@dataclass
-class NodeState:
-    node_id: str
-    active: int
-    device_state: DeviceState
-    process_state: Dict[str, Any]
+
+         
 
 
 
@@ -462,171 +243,200 @@ class NodeState:
 # similar implementation to send/receive calling transceiver functions
 class SimulationTransceiver(AbstractTransceiver):
 
-    def __init__(self, active: multiprocessing.Value, parent_id: int = None):  # type: ignore
-        self._outgoing_channels = {}  # hashmap between node_id and Queue (channel)
-        self._incoming_channels = {}
+    
+
+    def __init__(self, active_value=0, parent_id: int = None, network=None):  # type: ignore
+        
+        self._incoming_queue: Optional[asyncio.Queue] = None
+        self._outgoing_channels : Dict[int, asyncio.Queue] = {}
         #self.parent = parent
         self.parent_id = parent_id
-        self._active_value = active.value if active else 2
-        self.active = None  # Will be initialized in new process  # type: ignore (can activate or deactivate device with special message)
-        self.logQ = deque()
+        #self._active_value = active.value if active else 2
+        self._active_value = active_value  # just a simple value not a synchronized object. 
+        self.network = network
+        self.logQ = asyncio.Queue()
+
         print(f"DEBUG: Creating transceiver for device {parent_id}")
-        print(f"DEBUG: Outgoing channels: {list(self._outgoing_channels.keys())}")
-        print(f"DEBUG: Incoming channels: {list(self._incoming_channels.keys())}")
+        print(f"DEBUG: Ougoing channels: {self._outgoing_channels}")
+        print(f"DEBUG: Incoming channels: {self._incoming_queue}")
 
     @property
     def outgoing_channels(self):
         return self._outgoing_channels
+        
 
     @property
     def incoming_channels(self):
-        return self._incoming_channels
+        return self._incoming_queue
 
-    def __getstate__(self):
-        return {
-            'parent_id': self.parent_id,
-            'active_value': self._active_value,
-            'outgoing_channels': self._outgoing_channels,
-            'incoming_channels': self._incoming_channels
-        }
+   
 
-    def __setstate__(self, state):
-        self._outgoing_channels = state['outgoing_channels']
-        self._incoming_channels = state['incoming_channels']
-        self.parent_id = state['parent_id']
-        self._active_value = state['active_value']
-        self.active = multiprocessing.Value('i', self._active_value)
-        self.logQ = deque()
+    async def _async_log(self, data:str):
+        await self.logQ.put(data)
 
     def log(self, data: str):
         """ Method for protocol to load aux data into transceiver """
-        self.logQ.appendleft(data)
+        value = self._async_log(data)
 
     def deactivate(self):
-        self.active.value = 0
+        self._active_value = 0
         
 
     def reactivate(self):
-        self.active.value = 1
+        self._active_value = 1
+        
 
     def stay_active(self):
-        self.active.value = 2
+        self._active_value = 2
 
     def active_status(self):
-        return self.active.value
+        return self._active_value
 
-    def set_outgoing_channel(self, node_id, queue: ChannelQueue):
-        self.outgoing_channels[node_id] = queue
-        print(f"DEBUG: Outgoing channel set for node {self.parent_id} to {node_id}")
+    def set_outgoing_channel(self, node_id, queue: asyncio.Queue):
+        #self.outgoing_channels[node_id] = queue
+        #print(f"DEBUG: Outgoing channel set for node {self.parent_id} to {node_id}")
+        pass
 
-    def set_incoming_channel(self, node_id, queue: ChannelQueue):
-        self.incoming_channels[node_id] = queue
+    def set_incoming_channel(self, node_id, queue: asyncio.Queue):
+        #self.incoming_channels[node_id] = queue
         print(f"DEBUG: Incoming channel set for node {self.parent_id} to {node_id}")
 
+    # Synchronous wrapper method matching the base class signature
+    def send(self, msg: int) -> None:
+        """
+        Sends a message to all outgoing channels.
 
-    def send(self, msg: int):  # send to all channels
-        # if msg // int(1e10) == 2:
-        #     print(msg)
-        #     print(self.outgoing_channels.keys())
+        This method is synchronous to comply with the AbstractTransceiver interface
+        but uses asyncio internally to handle asynchronous sending.
+        """
+        print(f"DEBUG: Device {self.parent_id} attempting synchronous send")
         try:
-            data = self.logQ.pop()
-            if data:
-                try:
-                    asyncio.run(self.notify_server(f"{data},{self.parent_id}"))
-                except OSError: 
-                    pass
-        except IndexError:  # empty logQ
-            pass
-        print(f"DEBUG: Sending message to {self.outgoing_channels.keys()}")
+            # Get the current event loop if one exists
+            loop = asyncio.get_event_loop()
+            # Run the async logic in current loop
+            loop.run_until_complete(self.async_send(msg))
+        except RuntimeError:
+            # If no loop exists, create one temporarily
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self.async_send(msg))
+            finally:
+                loop.close()
 
-        for id, queue in self.outgoing_channels.items():
-            if queue is not None:
-                queue.put(msg)
-                print(f"DEBUG: Message sent to {id}")
-                # print("msg", msg, "put in device", id)
-        # no need to wait for this task to finish before returning to protocol
+    async def async_send(self, msg: int) -> None:
+        """Asynchronous send operation."""
+        # This is the logic previously in _async_send
+        send_tasks = []
+        if self.network:
+            # Option 2: Send directly using stored outgoing refs
+            for target_node_id, queue_ref in self._outgoing_channels.items():
+                send_tasks.append(queue_ref.put(msg))
+            if send_tasks:
+                await asyncio.gather(*send_tasks)
+            else:
+                print(f"WARN: Node {self.parent_id} has no outgoing channel refs to send to.")
+        else:
+            print(f"WARN: Transceiver {self.parent_id} has no network reference.")
+
         try:
-            asyncio.run(self.notify_server(f"SENT,{self.parent_id}"))
-        except OSError:
+            await self.notify_server(f"SENT,{self.parent_id}")
+        except asyncio.TimeoutError:
             pass
-    
-    def receive(self, timeout: float) -> int | None:  # get from all queues
-        print(f"DEBUG: Device {self.parent_id} attempting to receive with timeout={timeout}")
+        except Exception as e:
+            print(f"DEBUG: Error notifying server after send for {self.parent_id}: {e}")
 
-        if self.active_status() == 0:
-            print("returning DEACTIVATE")
-            return Message.DEACTIVATE  # indicator for protocol
-        if self.active_status() == 1:  # can change to Enum
+   
+
+    async def async_receive(self, timeout: float) -> Optional[int]:
+        """Asynchronous part of the receive logic using asyncio.wait."""
+        print(f"DEBUG: Async receive logic started for {self.parent_id} with timeout={timeout}")
+        if not self._incoming_queue:
+            print(f'DEBUG: No incoming queue to receive from for {self.parent_id}.')
+            if timeout > 0:
+                await asyncio.sleep(timeout)
+            return None
+
+
+        try:
+            # <<< FIX >>> Wait on the single queue's get() method
+            msg = await asyncio.wait_for(self._incoming_queue.get(), timeout=timeout if timeout > 0 else None)
+            # Mark task as done for the queue
+            self._incoming_queue.task_done()
+
+            # print(f"DEBUG: Device {self.parent_id} Received message {str(msg)}") # Can be noisy
+            try:
+                # Notify server (if running)
+                await self.notify_server(f"RCVD,{self.parent_id}")
+            except OSError:
+                 # print(f"DEBUG: OSError notifying server for {self.parent_id}") # Can be noisy
+                 pass
+            except Exception as e:
+                 print(f"DEBUG: Error notifying server for {self.parent_id}: {e}")
+            return msg
+
+        except asyncio.TimeoutError:
+            # print(f'DEBUG: No messages received within timeout for {self.parent_id}') # Can be noisy
+            return None
+        except asyncio.CancelledError:
+            print(f"DEBUG: Receive task was cancelled for {self.parent_id}")
+            return None
+        except Exception as e:
+            print(f"DEBUG: Unexpected error in async receive logic for {self.parent_id}: {e}")
+            return None
+
+
+    # Synchronous wrapper method matching the base class signature Optional[int]
+    def receive(self, timeout: float) -> Optional[int]:
+        """
+        Receives a message from any incoming channel.
+
+        This method is synchronous to comply with the AbstractTransceiver interface
+        but uses asyncio internally to handle multiple asynchronous queues.
+        """
+        print(f"DEBUG: Device {self.parent_id} attempting synchronous receive with timeout={timeout}")
+
+        # Check device active status first
+        active_status = self.active_status()
+        if active_status == 0:
+            print(f"DEBUG: Device {self.parent_id} is inactive, returning DEACTIVATE")
+            return Message.DEACTIVATE
+        if active_status == 1:
+            print(f"DEBUG: Device {self.parent_id} was activating, now staying active, returning ACTIVATE")
             self.stay_active()
             return Message.ACTIVATE
-        # print(self.incoming_channels.keys())
-        end_time = time.time() + timeout #changing from per-queue timeout to overall wall timeout.
-        # Capture state before consuming message for checkpoints
-                        
-                            
+
+        # Run the asynchronous receiving logic using asyncio.run()
+        # This creates a new event loop for this specific call.
+        result = None
         try:
-            # First try to get messages without blocking
-            for device_id, queue in self._incoming_channels.items():
-                try:
-                    msg = queue.get_nowait()
-                    print(f"DEBUG:{self.parent_id} device received this message {msg} from device {device_id}")
-                    return msg
-                except q.Empty:
-                    continue
-            
-            # If no immediate messages, wait for the timeout period
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                for device_id, queue in self._incoming_channels.items():
-                    if hasattr(self.parent_id, 'checkpoint_mgr'):  #TODO: use actual node object
-                            print(f"DEBUG: Capturing pre-receive state for queue {id}")
-                            self.parent_id.checkpoint_mgr.create_checkpoint(
-                                f"pre_receive_{id}",
-                                {str(self.parent_id): self.parent_id}
-                            )
-                    try:
-                        # Try each queue with a small timeout
-                        msg = queue.get(timeout=0.1)
-                        print(f"DEBUG:Device {self.parent_id} Received message {str(msg)} from device {device_id}")
-                        try:
-                            asyncio.run(self.notify_server(f"RCVD,{self.parent_id}"))
-                        except OSError:
-                            pass
-                        return msg
-                    except q.Empty:
-                        continue
-                time.sleep(0.01)  # Small sleep to prevent busy waiting
-            
-            print('No messages received')
-            return None
-            
-        except Exception as e:
-            print(f"DEBUG: Error in receive: {e}")
-            return None
+            # Get the current event loop if one exists
+            loop = asyncio.get_event_loop()
+            # Run the async logic in current loop
+            return loop.run_until_complete(self.async_receive(timeout))
+        except RuntimeError:
+            # If no loop exists, create one temporarily
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(self.async_receive(timeout))
+            finally:
+                loop.close()
+
 
     def clear(self):
-        for queue in self.outgoing_channels.values():
-            while not queue.is_empty():
+        # Need to clear asyncio.Queue carefully
+        for queue in self.incoming_channels.values(): # type: ignore
+            while not queue.empty():
                 try:
                     queue.get_nowait()
-                except q.Empty:
-                    pass
-        for queue in self.incoming_channels.values():
-            while not queue.is_empty():
-                try:
-                    queue.get_nowait()
-                except q.Empty:
-                    pass
+                    queue.task_done() # Mark task as done if using JoinableQueue, though asyncio.Queue doesn't strictly need it here
+                except asyncio.QueueEmpty:
+                    break # Queue is empty
+                except Exception as e:
+                    print(f"Error clearing queue item for {self.parent_id}: {e}")
 
-    async def notify_state_change(self, old_state, new_state):
-        """Log state transitions for visualization"""
-        message = {
-            'device_id': self.parent_id,
-            'old_state': old_state,
-            'new_state': new_state,
-            'timestamp': time.time()
-        }
-        await self.notify_server(f"STATE_CHANGE,{json.dumps(message)}")
+   
 
     async def handle_tiebreaker(self, other_id):
         """Log tiebreaker events for visualization"""

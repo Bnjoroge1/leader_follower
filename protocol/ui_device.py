@@ -13,19 +13,21 @@ class UIDevice(ThisDevice):
     Special device that only listens to the network and serves as a UI backend.
     It doesn't send messages to other devices, but forwards the data to the UI frontend.
     """
-    def __init__(self, id, transceiver, update_queue:Queue):
+    def __init__(self, id, update_queue:asyncio.Queue, transceiver=None):
         super().__init__(id, transceiver)
         self.connected_clients = set()
         self.leader_id = 0  # Initialize with 0 instead of None
         self._ws_server_running = False
         
         self.is_ui_device = True
-        self.is_leader = False
-        self.device_list.add_device(id=self.id, task_index=0, thisDeviceId=self.id)
+        self.is_leader = False #ui is follower
+        #self.device_list.add_device(id=self.id, task_index=0, thisDeviceId=self.id)
         self.csvWriter = None
-        self.transceiver = transceiver
+       
         self.update_queue = update_queue
         self.latest_device_list_cache: List[Dict] = [] 
+        print(f"UIDevice {self.id} initialized with asyncio.Queue.")
+
 
 
     def log_status(self, status: str):
@@ -34,35 +36,44 @@ class UIDevice(ThisDevice):
         pass # No logging for UI device
     
         
-    def device_main(self):
+    async def device_main(self):
         """Main loop for the UI Device. Listens passively and updates UI."""
-        print(f"--- UI Device Process {self.id} Entered device_main ---") # <-- ADD THIS LINE
-
+        print(f"--- UI Device  {self.id} Entered device_main ---") 
 
         print("UI Device: Main loop started. Passively listening...")
         while True:
             try:
-                # Listen directly using the transceiver with a short timeout
-                received_msg_int = self.transceiver.receive(timeout=1.0)
+                if self.transceiver: # Check if transceiver exists
+                     received_msg_int = await self.transceiver.async_receive(timeout=1.0)
+                else:
+                     print(f"WARN: UI Device {self.id} has no transceiver, cannot receive.")
+                     await asyncio.sleep(1.0) # Prevent busy loop if no transceiver
+                     received_msg_int = None
+
+
+
                 print(f"UI Device: Received message: {received_msg_int}")
                 if received_msg_int is not None:
                     # Process the raw message
-                    self._process_received_message(received_msg_int)
+                    await self._process_received_message(received_msg_int)
                 else:
-                    # Optional: Handle timeout (e.g., check connection status)
+                    
                     # print("UI Device: No message received in the last second.")
                     pass
 
                 # Small sleep to prevent high CPU usage if receive returns immediately
-                time.sleep(0.05)
-
+                await asyncio.sleep(0.05)
+            
+            except asyncio.CancelledError:
+                print(f"UI Device {self.id} main task cancelled.")
+                raise 
             except Exception as e:
                 print(f"Error in UI Device main loop: {e}")
                 import traceback
                 traceback.print_exc()
-                time.sleep(1) # Avoid rapid error loops
+                await asyncio.sleep(1) # Avoid rapid error loops                               
 
-    def _process_received_message(self, msg_int: int):
+    async def _process_received_message(self, msg_int: int):
         """Processes a raw message received from the network."""
         list_changed = False
         leader_changed = False
@@ -149,7 +160,7 @@ class UIDevice(ThisDevice):
                     # Add new device
                     # Determine initial task (use payload if D_LIST, else 0)
                     initial_task = task_to_set if task_to_set != -1 else 0
-                    self.device_list.add_device(id=device_id_to_process, task_index=initial_task, thisDeviceId=self.id)
+                    await self.device_list.add_device(id=device_id_to_process, task_index=initial_task, thisDeviceId=self.id)
                     print(f"UI Added device {device_id_to_process} (Task: {initial_task}) based on Action {action}")
                     list_changed = True
                 elif task_to_set != -1:
@@ -165,7 +176,7 @@ class UIDevice(ThisDevice):
             # --- Broadcast Updates ---
             print(f"DEBUG: UI device preparng to queue message log")
             # Broadcast message log regardless
-            self.send_update("message_log", {
+            await self.send_update("message_log", {
                 "type": "receive", # Indicate it was received by UI device
                 "action": action, "leader_id": leader_id, "follower_id": follower_id,
                 "payload": payload, "raw": msg_int, "device_id": self.id
@@ -173,7 +184,7 @@ class UIDevice(ThisDevice):
 
             # Broadcast leader update if changed
             if leader_changed:
-                self.send_update("status_change", {
+                await self.send_update("status_change", {
                     "is_leader": False, # UI is never leader
                     "leader_id": str(self.leader_id) # Send as string
                 })
@@ -185,7 +196,7 @@ class UIDevice(ThisDevice):
                 print(f"UI Device: List changed. Broadcasting update.")
                 formatted_list = self.format_device_list()
                 print(f"UI Device: Sending formatted list: {formatted_list}")
-                self.send_update("device_list", formatted_list)
+                await self.send_update("device_list", formatted_list)
 
         except ValueError:
             print(f"UI Device: Error parsing received message {msg_int}")
@@ -209,11 +220,11 @@ class UIDevice(ThisDevice):
                 import traceback
                 traceback.print_exc()
 
-    def send_update(self, update_type, data):
+    async def send_update(self, update_type, data):
         """Puts the update onto the shared queue instead of using threadsafe calls."""
         try:
             # Put the update type and data onto the queue
-            self.update_queue.put((update_type, data))
+            await self.update_queue.put((update_type, data))
             # print(f"UI Device: Queued update - Type: {update_type}") # Can be noisy
         except Exception as e:
             # Handle potential queue errors (e.g., if queue is closed unexpectedly)
@@ -298,197 +309,204 @@ class UIDevice(ThisDevice):
                 if websocket in self.connected_clients:
                     self.connected_clients.remove(websocket)
 
-    def update_leader(self, new_leader_id):
-        """Update leader ID and notify all WebSocket clients"""
-        self.leader_id = new_leader_id
-        self.send_update('leader_update', {
-            "leader_id": new_leader_id
-        })
+   
 
 
-    def broadcast_device_list_update(self):
+    async def broadcast_device_list_update(self):
         """Send state update to all connected WebSocket clients"""
         if not hasattr(self, 'device_list') or not self.device_list:
             return
 
-        self.send_update("device_list", {
+        await self.send_update("device_list", {
             "leader_id": self.leader_id if self.leader_id is not None else "none",
             "device_list": self.format_device_list()
         })
 
     # --- Ensure Overrides Prevent Network Participation ---
-def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
-    """Override send to prevent network transmission and log to UI."""
-    msg = Message(action, payload, leader_id, follower_id).msg
-    # Log that we *would* send, but don't call self.transceiver.send()
-    print(f"UI Device {self.id}: Would send Action={action}, L={leader_id}, F={follower_id}, P={payload}")
-    # Broadcast to UI clients instead
-    self.send_update("message_log", {
-        "type": "would_send", # Indicate it wasn't actually sent on network
-        "action": action, "payload": payload, "leader_id": leader_id,
-        "follower_id": follower_id, "device_id": self.id, "raw": msg
-    })
+    def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
+        """Override send to prevent network transmission and log to UI."""
+        msg = Message(action, payload, leader_id, follower_id).msg
+        # Log that we *would* send, but don't call self.transceiver.send()
+        print(f"UI Device {self.id}: Would send Action={action}, L={leader_id}, F={follower_id}, P={payload}")
+        # Broadcast to UI clients instead by scheduling the async send_update
+        update_data = {
+            "type": "would_send", # Indicate it wasn't actually sent on network
+            "action": action, "payload": payload, "leader_id": leader_id,
+            "follower_id": follower_id, "device_id": self.id, "raw": msg
+        }
+        try:
+            # Get the running loop and schedule the task
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.send_update("message_log", update_data))
+        except RuntimeError:
+            print("ERROR: No running event loop to schedule UI update in send()")
 
-def _perform_leader_election(self):
-    print(f"UI Device {self.id}: Skipping leader election.")
-    return 0 # Never elects self
+    async def _perform_leader_election(self):
+        print(f"UI Device {self.id}: Skipping leader election.")
+        return 0 # Never elects self
 
-def broadcast_candidacy(self):
-    print(f"UI Device {self.id}: Skipping candidacy broadcast.")
-    pass # Do nothing
+    async def broadcast_candidacy(self):
+        print(f"UI Device {self.id}: Skipping candidacy broadcast.")
+        pass # Do nothing
 
-def make_leader(self):
-     print(f"UI Device {self.id}: Cannot become leader.")
-     self.leader = False # Ensure always follower
-     self.leader_id = 0 # Reset leader ID if somehow called
+    async def make_leader(self):
+        print(f"UI Device {self.id}: Cannot become leader.")
+        self.leader = False # Ensure always follower
+        self.leader_id = 0 # Reset leader ID if somehow called
 
-def make_follower(self, determined_leader_id: int = 0):
-     print(f"UI Device {self.id}: Ensuring follower state (Heard leader: {determined_leader_id}).")
-     self.leader = False
-     # Update internal leader_id if a valid one is provided
-     if determined_leader_id != 0 and self.leader_id != determined_leader_id:
-          self.leader_id = determined_leader_id
-          self.send_update("status_change", {"is_leader": False, "leader_id": str(self.leader_id)})
-     # Don't send NEW_FOLLOWER message to network
+    async def make_follower(self, determined_leader_id: int = 0): # Keep sync
+         print(f"UI Device {self.id}: Ensuring follower state (Heard leader: {determined_leader_id}).")
+         self.leader = False
+         # Update internal leader_id if a valid one is provided
+         if determined_leader_id != 0 and self.leader_id != determined_leader_id:
+              self.leader_id = determined_leader_id
+              update_data = {"is_leader": False, "leader_id": str(self.leader_id)}
+              try:
+                  # Get the running loop and schedule the task
+                  loop = asyncio.get_running_loop()
+                  loop.create_task(self.send_update("status_change", update_data))
+              except RuntimeError:
+                  print("ERROR: No running event loop to schedule UI update in make_follower()")
+         # Don't send NEW_FOLLOWER message to network
 
-    
+        
 
-    # # purely for testing without robots
-    # def device_main_mocked(self):
-    #     """Override device_main to avoid requiring real messages"""
-    #     # Notify connected clients we're online
-    #     self.send_update("status", {"status": "online"})
+        # # purely for testing without robots
+        # def device_main_mocked(self):
+        #     """Override device_main to avoid requiring real messages"""
+        #     # Notify connected clients we're online
+        #     self.send_update("status", {"status": "online"})
 
-    #     # Set UI device to always be a follower
-    #     self.leader = None
-    #     self.device_role = "ui"
+        #     # Set UI device to always be a follower
+        #     self.leader = None
+        #     self.device_role = "ui"
 
-    #     # Create five mock devices for testing - initially device 1001 is the leader
-    #     mock_devices = [
-    #         {"id": 1001, "task": 1, "leader": True, "missed": 0, "role": "leader"},   # Position 1
-    #         {"id": 1002, "task": 2, "leader": False, "missed": 0, "role": "follower"},  # Position 2
-    #         {"id": 1003, "task": 3, "leader": False, "missed": 0, "role": "follower"},  # Position 3
-    #         {"id": 1004, "task": 4, "leader": False, "missed": 0, "role": "follower"},  # Position 4
-    #         {"id": 1005, "task": 5, "leader": False, "missed": 0, "role": "follower"},  # Position 5
-    #     ]
+        #     # Create five mock devices for testing - initially device 1001 is the leader
+        #     mock_devices = [
+        #         {"id": 1001, "task": 1, "leader": True, "missed": 0, "role": "leader"},   # Position 1
+        #         {"id": 1002, "task": 2, "leader": False, "missed": 0, "role": "follower"},  # Position 2
+        #         {"id": 1003, "task": 3, "leader": False, "missed": 0, "role": "follower"},  # Position 3
+        #         {"id": 1004, "task": 4, "leader": False, "missed": 0, "role": "follower"},  # Position 4
+        #         {"id": 1005, "task": 5, "leader": False, "missed": 0, "role": "follower"},  # Position 5
+        #     ]
 
-    #     ui_device = {"id": self.id, "task": None, "leader": None, "missed": 0, "role": "ui"}
+        #     ui_device = {"id": self.id, "task": None, "leader": None, "missed": 0, "role": "ui"}
 
-    #     # Set the initial leader ID
-    #     current_leader_idx = 0
-    #     self.leader_id = mock_devices[current_leader_idx]["id"]
+        #     # Set the initial leader ID
+        #     current_leader_idx = 0
+        #     self.leader_id = mock_devices[current_leader_idx]["id"]
 
-    #     # For simulating device activities
-    #     positions = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4}  # Maps position to device index
+        #     # For simulating device activities
+        #     positions = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4}  # Maps position to device index
 
-    #     # Just keep running - the WebSocket thread handles UI communication
-    #     counter = 0
-    #     try:
-    #         while True:
-    #             # Every 10 seconds, switch leader to another device (never UI device)
-    #             if counter % 10 == 0 and counter > 0:
-    #                 # Make current leader a follower
-    #                 mock_devices[current_leader_idx]["leader"] = False
+        #     # Just keep running - the WebSocket thread handles UI communication
+        #     counter = 0
+        #     try:
+        #         while True:
+        #             # Every 10 seconds, switch leader to another device (never UI device)
+        #             if counter % 10 == 0 and counter > 0:
+        #                 # Make current leader a follower
+        #                 mock_devices[current_leader_idx]["leader"] = False
 
-    #                 # Pick a new leader (cycling through devices 0-4)
-    #                 current_leader_idx = (current_leader_idx + 1) % 5
-    #                 mock_devices[current_leader_idx]["leader"] = True
-    #                 self.leader_id = mock_devices[current_leader_idx]["id"]
+        #                 # Pick a new leader (cycling through devices 0-4)
+        #                 current_leader_idx = (current_leader_idx + 1) % 5
+        #                 mock_devices[current_leader_idx]["leader"] = True
+        #                 self.leader_id = mock_devices[current_leader_idx]["id"]
 
-    #                 # Broadcast leadership change
-    #                 self.send_update("status_change", {
-    #                     "is_leader": False,  # UI device is always follower
-    #                     "leader_id": self.leader_id
-    #                 })
-    #                 print(f"New leader: Device {self.leader_id}")
+        #                 # Broadcast leadership change
+        #                 self.send_update("status_change", {
+        #                     "is_leader": False,  # UI device is always follower
+        #                     "leader_id": self.leader_id
+        #                 })
+        #                 print(f"New leader: Device {self.leader_id}")
 
-    #                 # Simulate leader sending attendance request
-    #                 self.send_update("message_log", {
-    #                     "type": "send",
-    #                     "action": 1,  # ATTENDANCE
-    #                     "payload": counter,
-    #                     "leader_id": self.leader_id,
-    #                     "follower_id": 0  # Broadcast to all
-    #                 })
+        #                 # Simulate leader sending attendance request
+        #                 self.send_update("message_log", {
+        #                     "type": "send",
+        #                     "action": 1,  # ATTENDANCE
+        #                     "payload": counter,
+        #                     "leader_id": self.leader_id,
+        #                     "follower_id": 0  # Broadcast to all
+        #                 })
 
-    #             # Every 15 seconds, move a random device to a new position
-    #             if counter % 15 == 0 and counter > 0:
-    #                 # Pick a random device to move
-    #                 device_idx = counter % 5
-    #                 old_task = mock_devices[device_idx]["task"]
+        #             # Every 15 seconds, move a random device to a new position
+        #             if counter % 15 == 0 and counter > 0:
+        #                 # Pick a random device to move
+        #                 device_idx = counter % 5
+        #                 old_task = mock_devices[device_idx]["task"]
 
-    #                 # Find an empty position or swap with another device
-    #                 new_task = (old_task % 5) + 1
+        #                 # Find an empty position or swap with another device
+        #                 new_task = (old_task % 5) + 1
 
-    #                 # Update position mapping
-    #                 if new_task in positions:
-    #                     other_device_idx = positions[new_task]
-    #                     mock_devices[other_device_idx]["task"] = old_task
-    #                     positions[old_task] = other_device_idx
+        #                 # Update position mapping
+        #                 if new_task in positions:
+        #                     other_device_idx = positions[new_task]
+        #                     mock_devices[other_device_idx]["task"] = old_task
+        #                     positions[old_task] = other_device_idx
 
-    #                 # Set new task for moved device
-    #                 mock_devices[device_idx]["task"] = new_task
-    #                 positions[new_task] = device_idx
+        #                 # Set new task for moved device
+        #                 mock_devices[device_idx]["task"] = new_task
+        #                 positions[new_task] = device_idx
 
-    #                 # Broadcast task assignment
-    #                 self.send_update("message_log", {
-    #                     "type": "send",
-    #                     "action": 3,  # ASSIGN_TASK
-    #                     "payload": new_task,
-    #                     "leader_id": self.leader_id,
-    #                     "follower_id": mock_devices[device_idx]["id"]
-    #                 })
-    #                 print(f"Device {mock_devices[device_idx]['id']} moved to position {new_task}")
+        #                 # Broadcast task assignment
+        #                 self.send_update("message_log", {
+        #                     "type": "send",
+        #                     "action": 3,  # ASSIGN_TASK
+        #                     "payload": new_task,
+        #                     "leader_id": self.leader_id,
+        #                     "follower_id": mock_devices[device_idx]["id"]
+        #                 })
+        #                 print(f"Device {mock_devices[device_idx]['id']} moved to position {new_task}")
 
-    #             # Every 8 seconds, simulate a heartbeat/ping
-    #             if counter % 8 == 0:
-    #                 # Leader pings a random follower
-    #                 target_idx = (counter // 8) % 5
-    #                 if target_idx != current_leader_idx:  # Don't ping self
-    #                     self.send_update("message_log", {
-    #                         "type": "send",
-    #                         "action": 5,  # PING
-    #                         "payload": 0,
-    #                         "leader_id": self.leader_id,
-    #                         "follower_id": mock_devices[target_idx]["id"]
-    #                     })
+        #             # Every 8 seconds, simulate a heartbeat/ping
+        #             if counter % 8 == 0:
+        #                 # Leader pings a random follower
+        #                 target_idx = (counter // 8) % 5
+        #                 if target_idx != current_leader_idx:  # Don't ping self
+        #                     self.send_update("message_log", {
+        #                         "type": "send",
+        #                         "action": 5,  # PING
+        #                         "payload": 0,
+        #                         "leader_id": self.leader_id,
+        #                         "follower_id": mock_devices[target_idx]["id"]
+        #                     })
 
-    #                     # Simulate follower response
-    #                     self.send_update("received_message", {
-    #                         "action": 6,  # PONG
-    #                         "leader_id": self.leader_id,
-    #                         "follower_id": mock_devices[target_idx]["id"],
-    #                         "payload": 0,
-    #                         "raw": 6000000000000
-    #                     })
+        #                     # Simulate follower response
+        #                     self.send_update("received_message", {
+        #                         "action": 6,  # PONG
+        #                         "leader_id": self.leader_id,
+        #                         "follower_id": mock_devices[target_idx]["id"],
+        #                         "payload": 0,
+        #                         "raw": 6000000000000
+        #                     })
 
-    #             # Every 17 seconds, simulate a device going inactive/active
-    #             if counter % 17 == 0 and counter > 0:
-    #                 inactive_idx = counter % 5
-    #                 if inactive_idx != current_leader_idx:  # Don't make leader inactive
-    #                     # Toggle missed count (0 = active, >0 = inactive)
-    #                     mock_devices[inactive_idx]["missed"] = 0 if mock_devices[inactive_idx]["missed"] > 0 else 2
-    #                     status = "inactive" if mock_devices[inactive_idx]["missed"] > 0 else "active"
-    #                     print(f"Device {mock_devices[inactive_idx]['id']} is now {status}")
+        #             # Every 17 seconds, simulate a device going inactive/active
+        #             if counter % 17 == 0 and counter > 0:
+        #                 inactive_idx = counter % 5
+        #                 if inactive_idx != current_leader_idx:  # Don't make leader inactive
+        #                     # Toggle missed count (0 = active, >0 = inactive)
+        #                     mock_devices[inactive_idx]["missed"] = 0 if mock_devices[inactive_idx]["missed"] > 0 else 2
+        #                     status = "inactive" if mock_devices[inactive_idx]["missed"] > 0 else "active"
+        #                     print(f"Device {mock_devices[inactive_idx]['id']} is now {status}")
 
-    #             # Every 5 seconds, broadcast updated device list
-    #             if counter % 5 == 0:
-    #                 self.send_update("device_list", mock_devices)
-    #                 print("Device list updated")
+        #             # Every 5 seconds, broadcast updated device list
+        #             if counter % 5 == 0:
+        #                 self.send_update("device_list", mock_devices)
+        #                 print("Device list updated")
 
-    #             # Occasionally simulate arbitrary message exchange
-    #             if counter % 23 == 0 and counter > 0:
-    #                 # Random action type for variety
-    #                 action_type = (counter % 7) + 1
-    #                 self.send_update("received_message", {
-    #                     "action": action_type,
-    #                     "leader_id": self.leader_id,
-    #                     "follower_id": mock_devices[counter % 5]["id"],
-    #                     "payload": counter,
-    #                     "raw": int(f"{action_type}00{self.leader_id}0{mock_devices[counter % 5]['id']}{counter}")
-    #                 })
+        #             # Occasionally simulate arbitrary message exchange
+        #             if counter % 23 == 0 and counter > 0:
+        #                 # Random action type for variety
+        #                 action_type = (counter % 7) + 1
+        #                 self.send_update("received_message", {
+        #                     "action": action_type,
+        #                     "leader_id": self.leader_id,
+        #                     "follower_id": mock_devices[counter % 5]["id"],
+        #                     "payload": counter,
+        #                     "raw": int(f"{action_type}00{self.leader_id}0{mock_devices[counter % 5]['id']}{counter}")
+        #                 })
 
-    #             counter += 1
-    #             time.sleep(1)
-    #     except KeyboardInterrupt:
-    #         print("UI Device shutting down")
+        #             counter += 1
+        #             time.sleep(1)
+        #     except KeyboardInterrupt:
+        #         print("UI Device shutting down")

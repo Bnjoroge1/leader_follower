@@ -1,4 +1,5 @@
 from abc import abstractmethod, ABCMeta
+from git import Optional
 import websockets
 import multiprocessing
 import device_classes as dc
@@ -16,12 +17,13 @@ class AbstractNode(metaclass=ABCMeta):
         else:
             self.process = multiprocessing.Process(target=target_func)
 
-    def start(self):
+    async def start(self):
         self.process.start()
     
     @abstractmethod
     def stop(self):
         self.process.terminate()
+   
 
     @abstractmethod
     def join(self):
@@ -41,15 +43,39 @@ class AbstractTransceiver(metaclass=ABCMeta):
     @abstractmethod
     def send(self, msg):
         pass
-
     @abstractmethod
-    def receive(self, timeout):
+    async def async_send(self, msg: int) -> None:
+        """Asynchronous send operation."""
         pass
+
+    """ @abstractmethod
+    def receive(self, timeout) -> Optional[int]:
+        pass """
+    @abstractmethod
+    async def async_receive(self, timeout: float) -> Optional[int]:
+         """Asynchronously receive a message."""
+         pass
 
     @abstractmethod
     def clear(self):
         pass
 
     @abstractmethod
-    def log(self, data: str):
-        pass
+    def log(self, data: str) -> None:
+         pass
+
+    @abstractmethod
+    def active_status(self) -> int:
+         pass
+
+    @abstractmethod
+    def deactivate(self) -> None:
+         pass
+
+    @abstractmethod
+    def reactivate(self) -> None:
+         pass
+
+    @abstractmethod
+    def stay_active(self) -> None:
+         pass
