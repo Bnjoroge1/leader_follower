@@ -359,7 +359,6 @@ class SimulationTransceiver(AbstractTransceiver):
 
 
         try:
-            # <<< FIX >>> Wait on the single queue's get() method
             msg = await asyncio.wait_for(self._incoming_queue.get(), timeout=timeout if timeout > 0 else None)
             # Mark task as done for the queue
             self._incoming_queue.task_done()
