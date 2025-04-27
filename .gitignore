@@ -5,6 +5,9 @@ protocol/zigbee2mqtt-data/log/
 .vscode
 *.log
 *.json
+*.csv
+*.txt
+
 protocol/tla/states*
 
 venv/
