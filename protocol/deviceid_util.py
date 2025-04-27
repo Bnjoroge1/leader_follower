@@ -10,9 +10,9 @@ def get_mac_address():
         # Try platform-specific methods to get MAC address
         import platform
         
-        if platform.system() == "Windows":
+    if platform.system() == "Windows":
             import subprocess
-            output = subprocess.check_output("getmac /fo csv /nh").decode().strip()
+            # output = subprocess.check_output("getmac /fo csv /nh").decode().strip()
             mac = output.split(',')[0].strip('"')
             return mac
         elif platform.system() == "Darwin" or platform.system() == "Linux":

@@ -1,5 +1,6 @@
 from dataclasses import asdict, dataclass
 import json
+from re import L
 import time
 import device_classes as dc
 import multiprocessing
@@ -94,6 +95,7 @@ class SimulationNode(AbstractNode):
     async def _async_stop(self):
         """Internal async implementation to stop the node's task"""
         if self._main_task and not self._main_task.done():
+                # usually stop should be called from an async context
             print(f"DEBUG: Stopping task for node {self.node_id}")
             self._main_task.cancel()
             try:
@@ -111,28 +113,29 @@ class SimulationNode(AbstractNode):
         try:
             # Get existing loop or create new one
             try:
-                loop = asyncio.get_event_loop()
+                import channel_driver
+                #get the main event loop
+                event_loop = channel_driver.main_event_loop
+                if not event_loop:
+                    print(f"ERROR: Main event loop not accessible for stop to work.")
+                    return
+                    
             except RuntimeError:
                 # Only create a new loop if absolutely necessary,
-                # usually stop should be called from an async context
                 # or the main thread managing the loop.
-                print(f"WARNING: Creating temporary event loop to stop node {self.node_id}. This might indicate an issue.")
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                #we shouldnt be getting here. 
+                print(f"WARNING: Cant get event loop for main to stop the node")
+                
+                return
 
             # Run async stop operation
-            if loop.is_running():
-                 # If the loop is running, schedule the stop and wait briefly.
-                 # Avoid blocking the loop with run_until_complete if called from within it.
-                 # This is a simplification; robust handling might need futures.
-                 asyncio.ensure_future(self._async_stop(), loop=loop)
-                 # Note: This doesn't guarantee completion before returning.
-                 # A more complex mechanism (like passing a future/event)
-                 # would be needed for guaranteed synchronous completion from within the loop.
-                 print(f"DEBUG: Scheduled async stop for node {self.node_id} in running loop.")
+            if self._main_task and not self._main_task.done():
+                event_loop.call_soon_threadsafe(self._main_task.cancel)
+                print(f"DEBUG: cancelleaton requested for node {self.node_id}")
+                self._main_task = None
+                self.thisDevice.active = False  #helps
             else:
-                 loop.run_until_complete(self._async_stop())
-                 print(f"DEBUG: Completed async stop for node {self.node_id} in dedicated loop run.")
+                 print(f"Main device is not running{self.node_id}")
 
         except Exception as e:
             print(f"Error in sync stop wrapper for node {self.node_id}: {e}")
@@ -274,9 +277,9 @@ class SimulationTransceiver(AbstractTransceiver):
     async def _async_log(self, data:str):
         await self.logQ.put(data)
 
-    def log(self, data: str):
+    async def log(self, data: str):
         """ Method for protocol to load aux data into transceiver """
-        value = self._async_log(data)
+        value = await self._async_log(data)
 
     def deactivate(self):
         self._active_value = 0
@@ -326,7 +329,6 @@ class SimulationTransceiver(AbstractTransceiver):
 
     async def async_send(self, msg: int) -> None:
         """Asynchronous send operation."""
-        # This is the logic previously in _async_send
         send_tasks = []
         if self.network:
             # Option 2: Send directly using stored outgoing refs
@@ -339,12 +341,7 @@ class SimulationTransceiver(AbstractTransceiver):
         else:
             print(f"WARN: Transceiver {self.parent_id} has no network reference.")
 
-        try:
-            await self.notify_server(f"SENT,{self.parent_id}")
-        except asyncio.TimeoutError:
-            pass
-        except Exception as e:
-            print(f"DEBUG: Error notifying server after send for {self.parent_id}: {e}")
+       
 
    
 
@@ -445,7 +442,7 @@ class SimulationTransceiver(AbstractTransceiver):
             'type': 'TIEBREAKER',
             'timestamp': time.time()
         }
-        await self.notify_server(f"TIEBREAKER,{json.dumps(message)}")
+        
     # websocket client to connect to server.js and interact with injections
     async def websocket_client(self):
         uri = "ws://localhost:8765"  # server.js websocket server

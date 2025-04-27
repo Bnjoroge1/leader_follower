@@ -1,27 +1,20 @@
-'''
-Modified device_classes for test_harness
-'''
 
 from dataclasses import asdict
 import os
-import queue
-from queue import Queue
 import time
 import uuid
 from message_classes import Message, Action
 #from zigbee_network import ZigbeeTransceiver
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 from pathlib import Path
 import csv
 import json
-import subprocess
-from threading import Lock
 from device_state import DeviceState, DeviceStateStore
 import random
 from multiprocessing import Queue as MPQueue
 import asyncio
 from abstract_network import AbstractTransceiver
-# zigpy imports
+# zigpy imports      
 #import asyncio
 #from zigpy.zcl.clusters.general import OnOff
 #from zigpy.types import EUI64
@@ -55,7 +48,7 @@ class Device:
         
         
         self.leader: bool = False  # initialized as follower
-        self.received: int # holds most recent message payload
+        self.received: int | None # holds most recent message payload
         self.missed: int = 0  # number of missed check-ins, used by current leader
         self.in_election: bool = False
         self.task: int = 0  # task identifier, 0 denotes reserve
@@ -73,7 +66,7 @@ class Device:
         """
         return self.leader
 
-    def get_received(self) -> int:
+    def get_received(self) -> int | None:
         """
         :return: Device's most recently received message.
         """
@@ -183,7 +176,7 @@ class ThisDevice(Device):
 
 
 
-    def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
+    async def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
         """
         Generates message with given parameters and sends to entire channel through transceiver.
         :param action: action
@@ -193,11 +186,16 @@ class ThisDevice(Device):
         :param duration: sending duration in seconds
         """
         msg = Message(action, payload, leader_id, follower_id).msg
-
+        if not self.active:
+            print(f"DEBUG: Device {self.id} is inactive, cant send")
+            return
         # single-send with assumed perfect channel
         # users take responsibility of implementing duration send where needed
-        self.transceiver.send(msg)  # transceiver only deals with integers
-        self.log_message(msg, 'SEND')
+        if self.transceiver:
+            await self.transceiver.async_send(msg)  # transceiver only deals with integers
+            self.log_message(msg, 'SEND')
+        else:
+            print(f"WARN: Device {self.id} has no transceiver to send to.")
 
     async def receive(self, duration: float, action_value: int = -1) -> bool:
         """
@@ -256,7 +254,13 @@ class ThisDevice(Device):
                     # print(f"DEBUG: Device {self.id} received raw message: {received_msg_int}") # Can be noisy
                     # Store raw message temporarily for parsing
                     temp_received = received_msg_int
+                    self.received = received_msg_int
+
                     try:
+                        print(f"""Received Leader:{self.received_leader_id()}
+                                Received action: {self.received_action()}
+                                Received follower: {self.received_follower_id()}
+""")
                         received_leader = self.received_leader_id()
                         received_action = self.received_action()
                         received_follower = self.received_follower_id()
@@ -320,7 +324,7 @@ class ThisDevice(Device):
 
         # Loop finished because total duration expired without finding a matching message
         # print(f"DEBUG: Device {self.id} receive finished, no matching message found. Returning False.") # Can be noisy
-        self.received = None # Ensure received is None if loop times out
+        #self.received = None # Ensure received is None if loop times out
         return False
 
     def received_action(self) -> int:
@@ -395,16 +399,28 @@ class ThisDevice(Device):
         Sending and receiving attendance sequence for leader. Updates and
         broadcasts device list if new device is heard.
         """
+        if not self.active:
+            print(f"Leader {self.id} not active. Cant send attendance")
+            return 
+
         print("Leader sending attendance")
         for _ in range(5):
+            if not self.active:
+                print(f"leader{self.id} not active. Cant send")
+                return
 
             self.log_status("SENDING ATTENDANCE")
             msg = Message(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0).msg
             await self.transceiver.async_send(msg)
             print(f"sent attendance as leader. my device id is{self.leader_id}")
-
+        if not self.active:
+            return
+        
         # prevents deadlock
         while await self.receive(duration=0.1, action_value=Action.ATT_RESPONSE.value):
+            if not self.active:
+                print(f"leader{self.id} became inactive while listening")
+                return
             print("Leader heard attendance response from", self.received_follower_id())
             self.log_status("HEARD ATT_RESP FROM " + str(self.received_follower_id()))
             if self.received_follower_id() not in self.device_list.get_ids():
@@ -414,7 +430,10 @@ class ThisDevice(Device):
                 task = unused_tasks[0] if unused_tasks else 0
                 print("Leader picked up device", self.received_follower_id())
                 self.log_status("PICKED UP DEVICE " + str(self.received_follower_id()))
-                await self.device_list.add_device(id=self.received_follower_id(),task_index=0, thisDeviceId=self.id)  # has not assigned task yet
+                await self.device_list.add_device(id=self.received_follower_id(),task_index=0, 
+                thisDeviceId=self.id)  # has not assigned task yet
+
+
     def get_state(self) -> DeviceState:
         """Return serializable state of the device"""
         device_state  = DeviceState(
@@ -457,9 +476,15 @@ class ThisDevice(Device):
         device_list = self.device_list.get_device_list()
         #create a copy of the device list
         device_list = dict(device_list)
+        if not self.active:
+            return
         # leader should listen for check-in response before moving on to ensure scalability
         for id, device in device_list.items():
+            if not self.active:
+                return
+                  
 
+                    
             if id == self.id:
                 continue
 
@@ -512,9 +537,9 @@ class ThisDevice(Device):
         lowest_id_seen = self.id
 
         # Broadcast candidacy multiple times initially
-        for _ in range(3):
-            await self.broadcast_candidacy()
-            await asyncio.sleep(random.uniform(0.1, 0.3)) # Space out broadcasts
+        
+        await self.broadcast_candidacy()
+        await asyncio.sleep(random.uniform(0.1, 0.3)) # Space out broadcasts
 
         print(f"Device {self.id} listening during election window ({election_duration}s)")
         self.log_status("ELECTION_LISTENING")
@@ -522,7 +547,7 @@ class ThisDevice(Device):
         election_end = time.time() + election_duration
         while time.time() < election_end:
             # Listen for short intervals within the election window
-            if await self.receive(duration=0.5): # Listen for 0.5s
+            if await self.receive(duration=2): # Listen for 0.5s
                 # Check if the received message is a candidacy broadcast
                 if self.received_action() == Action.CANDIDACY.value:
                     other_id = self.received_leader_id()
@@ -545,7 +570,7 @@ class ThisDevice(Device):
         self.log_status(f"ELECTION_COMPLETE_LOWEST_ID_{lowest_id_seen}")
         return lowest_id_seen
 
-    def leader_drop_disconnected_devices(self):
+    async def leader_drop_disconnected_devices(self):
         """
         Leader checks for any disconnected devices. If found, updates
         device list and broadcasts delete message to all followers.
@@ -563,7 +588,7 @@ class ThisDevice(Device):
                 # sends a message for each disconnected device
                 print("Leader sending DELETE message")
                 self.log_status("SENDING DELETE")
-                self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
+                await self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
                 # broadcasts to entire channel, does not need a response confirmation
     async def follower_rejoin_after_dropping_off(self):
         #detect if this device has been dropped off. check for messages within TAKEOVER DURATION, and not reeceiveing check in requests. 
@@ -1292,7 +1317,7 @@ class ThisDevice(Device):
                              # Break inner inactive loop, outer loop will handle role
                              break # Exit inactive loop
                     await asyncio.sleep(1) # Sleep if no activation message
-                
+    
 
     async def broadcast_candidacy(self):
         """
@@ -1478,6 +1503,7 @@ class DeviceList:
         """
         return self.devices[max(self.devices.keys())] if len(self.devices) > 0 else None
     
-    def clear(self):
+    def clear(self): 
         self.devices = {}
-
+ 
+ 
