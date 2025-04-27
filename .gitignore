@@ -2,11 +2,14 @@ __pycache__/
 .DS_Store
 output/
 protocol/zigbee2mqtt-data/log/
-.vscode/
+.vscode
 *.log
 *.json
 protocol/tla/states*
-protocol/checkpoints/
+
 venv/
 
 .venv/
+/Users/bnjoroge/Documents/leader_follower/OneDrive - Johns Hopkins  #not sure why it's tracked will figure output
+node_modules
+checkpoints

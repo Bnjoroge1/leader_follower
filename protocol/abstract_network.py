@@ -5,7 +5,8 @@ import multiprocessing
 import device_classes as dc
 
 class AbstractNode(metaclass=ABCMeta):
-
+    def __init__(self) -> None:
+        self.transceiver = None
     def setup(self, node_id, target_func = None, target_args = None, active: multiprocessing.Value = None):  # type: ignore
         self.node_id = node_id
         self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)  # replace with MAC or IEEE
@@ -61,7 +62,7 @@ class AbstractTransceiver(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def log(self, data: str) -> None:
+    async def log(self, data: str) -> None:
          pass
 
     @abstractmethod

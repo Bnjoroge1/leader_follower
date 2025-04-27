@@ -30,7 +30,7 @@ OUTPUT_DIR = PROTOCOL_DIR / "output"
 global_ui_update_queue:Any =  asyncio.Queue
 
 
-def listener_configure():
+def listener_configure(): 
     #configure root logger
     root = logging.getLogger()
     log_path = OUTPUT_DIR / "simulation.log"
@@ -78,7 +78,7 @@ async def handle_stop_device(request):
             global global_ui_update_queue
             if global_ui_update_queue:
                 if node_to_stop.thisDevice.leader:
-                    log_data = {"level": "WARN", "message": f"Leader node: {device_id} stopped. Triggerring leader election."}     
+                    log_data = {"level": "WARN", "message": f"Leader node: {device_id} stopped. Triggering leader election."}     
                 log_data = {"level": "WARN", "message": f"API Node: {device_id} stopping"}
                 await global_ui_update_queue.put(("log_event", log_data))  
 
@@ -93,8 +93,10 @@ async def handle_stop_device(request):
                     await loop.run_in_executor(None, node_to_stop.stop)
                     # Update UI device list with active=false for this device
 
+
                 if 'ui_device' in globals() and isinstance(globals()['ui_device'], UIDevice):
                     # Get current device list
+                    print(f"Updating the device{node_to_stop.node_id}active to be false. ")
                     current_list = globals()['ui_device'].latest_device_list_cache
                     for device in current_list:
                         if device['id'] == device_id:
@@ -107,7 +109,7 @@ async def handle_stop_device(request):
                 return web.Response(text=f"Node {device_id} stopping.")
             else:
                  # If no stop method, maybe set active flag? Less realistic for full stop.
-                 if hasattr(node_to_stop, 'active'): node_to_stop._active_value = 0 # Assuming 0 means stopped/inactive
+                 if hasattr(node_to_stop, 'active'): node_to_stop._active_value = 0 
                  return web.Response(text=f"Node {device_id} marked inactive (no stop method).")
         else:
             return web.Response(status=404, text=f"Node {device_id} not found")
@@ -227,6 +229,7 @@ def parse_args():
                        nargs='*',
                        default=[],
                        help='Enable trace points. Examples: -t BECOMING_FOLLOWER HANDLING_DLIST')
+    parser.add_argument('-d', "--devices", default=4, help="Set the number of devics to spin up")
     parser.add_argument('-c', '--checkpoint-dir',
                        default='checkpoints',
                        help='Directory to store checkpoints')
@@ -286,7 +289,8 @@ async def main():
     """
 
     args = parse_args()
-
+    global main_event_loop 
+    main_event_loop = asyncio.get_running_loop()
     # --- Initialize Checkpoint Manager ---
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True) # Ensure output dir exists
     checkpoint_dir = OUTPUT_DIR / args.checkpoint_dir
@@ -296,8 +300,11 @@ async def main():
 
 
     # startup
-    num_devices = 4  #max tested is 1000
+    if args.devices:
 
+        num_devices = int(args.devices)  #max tested is 1000
+    else:
+        num_devices = 4
 
     network = Network()
     nodes = []
@@ -389,7 +396,7 @@ async def main():
     simulation_nodes_map.clear()
     for n in all_nodes:
         if hasattr(n, 'thisDevice') and hasattr(n.thisDevice, 'id'):
-            simulation_nodes_map[n.node_id] = n
+            simulation_nodes_map[n.thisDevice.id] = n
             print(f"Mapping dynamic device ID {n.thisDevice.id} to simulaation node: {getattr(n, 'node_id')}")
         else:
             print(f"WARN: Could not map node (missing node_id attribute): {n}")
@@ -494,12 +501,20 @@ async def main():
 
 
 if __name__ == "__main__":
-    start_time = time.time()
-    asyncio.run(main())
-    end_time = time.time()
-    duration = end_time - start_time
-    minutes = int(duration // 60)
-    remaining_seconds = duration % 60
-    seconds = int(remaining_seconds)
-    milliseconds = int((remaining_seconds - seconds) * 1000)
-    print(f"Total time taken: {minutes:02d}:{seconds:02d}:{milliseconds:03d}")
+    try:
+        start_time = time.time()
+        asyncio.run(main())
+        end_time = time.time()
+        duration = end_time - start_time
+        minutes = int(duration // 60)
+        remaining_seconds = duration % 60
+        seconds = int(remaining_seconds)
+        milliseconds = int((remaining_seconds - seconds) * 1000)
+        print(f"Total time taken: {minutes:02d}:{seconds:02d}:{milliseconds:03d}")
+    except KeyboardInterrupt as e:
+        #catch error
+        print("Keyboard interrupt received. Exiting...")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        import traceback
+        traceback.print_exc()
