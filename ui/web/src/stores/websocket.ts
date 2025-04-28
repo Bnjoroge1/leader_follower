@@ -67,13 +67,73 @@ export function processWebSocketMessage(message: WebSocketMessage) {
       break;
 
     case 'message_log':
-      console.log('Processing message_log:', message.data); // Log the received data
+      console.log('Processing message_log:', message.data);
+      
       // Handle both 'receive' and 'would_send' types from the nested data
       if (message.data && (message.data.type === 'receive' || message.data.type === 'would_send' || message.data.type === 'log_event')) {
-         // Pass the entire data object to addMessage
-         addMessage(message.data);
+        // Add message to log history
+        addMessage(message.data);
+        
+        // NEW CODE: Process device status updates from message_log events
+        if (message.data.type === 'receive') {
+          const { action, leader_id, follower_id } = message.data
+          
+          // Check for D_LIST messages (action 3) which indicate device list updates
+          if (action === 3) {
+            console.log('D_LIST detected, updating leader status:', { leader_id, follower_id });
+            
+            // Update device list with new leader info
+            const currentList = deviceList.get();
+            const updatedList = currentList.map(device => ({
+              ...device,
+              // Update leader status based on the message
+              leader: device.id === leader_id
+            }));
+            
+            console.log('Updating device list with new leader status:', updatedList);
+            deviceList.set(updatedList);
+          }
+          
+          // Check for DEACTIVATE messages (if your protocol uses a specific action code for this)
+          // For example, if action 8 is DEACTIVATE:
+          if (action === 8) {
+            console.log('DEACTIVATE message detected, marking device as inactive:', follower_id);
+            
+            const currentList = deviceList.get();
+            const updatedList = currentList.map(device => 
+              device.id === follower_id
+                ? { ...device, active: false, missed: 999 } // Mark as inactive
+                : device
+            );
+            
+            console.log('Updating device list with inactive status:', updatedList);
+            deviceList.set(updatedList);
+          }
+        }
+        
+        // Check for device stopping messages in log events
+        if (message.data.type === 'log_event' && 
+            message.data.level === 'WARN' && 
+            message.data.message?.includes('stopping')) {
+          // Extract device ID from message like "API Node: 5017 stopping"
+          const match = message.data.message.match(/Node[:\s]+(\d+)\s+stopping/i);
+          if (match && match[1]) {
+            const deviceId = parseInt(match[1], 10);
+            console.log(`Detected device ${deviceId} stopping, marking as inactive`);
+            
+            const currentList = deviceList.get();
+            const updatedList = currentList.map(device => 
+              device.id === deviceId
+                ? { ...device, active: false, missed: 999 } // Mark as inactive
+                : device
+            );
+            
+            console.log('Updating device list with inactive status:', updatedList);
+            deviceList.set(updatedList);
+          }
+        }
       } else {
-         console.warn('Received message_log with unexpected data type:', message.data?.type);
+        console.warn('Received message_log with unexpected data type:', message.data?.type);
       }
       break;
 

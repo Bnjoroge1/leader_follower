@@ -4,7 +4,6 @@ import queue
 import time
 from typing import Any
 
-from blinker import ANY
 from simulation_network import SimulationNode, NetworkVisualizer, Network, SimulationTransceiver
 import multiprocessing
 import itertools
@@ -74,43 +73,33 @@ async def handle_stop_device(request):
             print(f"API: Stopping node {device_id}")
 
             #log the data to the UI
-            # add to the queue first
             global global_ui_update_queue
             if global_ui_update_queue:
-                if node_to_stop.thisDevice.leader:
+                if hasattr(node_to_stop, 'thisDevice') and hasattr(node_to_stop.thisDevice, 'leader') and node_to_stop.thisDevice.leader:
                     log_data = {"level": "WARN", "message": f"Leader node: {device_id} stopped. Triggering leader election."}     
+                    await global_ui_update_queue.put(("log_event", log_data))
                 log_data = {"level": "WARN", "message": f"API Node: {device_id} stopping"}
                 await global_ui_update_queue.put(("log_event", log_data))  
 
+            # First set the active state to inactive (0) using handle_set_active_state
+            # This ensures UI is properly updated
+            await handle_set_active_state(request, 0)
 
+            # Then attempt to completely stop the node process if it has a stop method
             if hasattr(node_to_stop, 'stop') and callable(node_to_stop.stop):
-                # Check if stop is async
-                if asyncio.iscoroutinefunction(node_to_stop.stop):
-                     await node_to_stop.stop()
-                else:
-                    # If stop is sync, run in executor to avoid blocking
-                    loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(None, node_to_stop.stop)
-                    # Update UI device list with active=false for this device
+                try:
+                    # Check if stop is async
+                    if asyncio.iscoroutinefunction(node_to_stop.stop):
+                        await node_to_stop.stop()
+                    else:
+                        # If stop is sync, run in executor to avoid blocking
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(None, node_to_stop.stop)
+                except Exception as stop_error:
+                    print(f"Error stopping node {device_id}: {stop_error}")
+                    # Even if stop fails, we've already marked it inactive in the UI
 
-
-                if 'ui_device' in globals() and isinstance(globals()['ui_device'], UIDevice):
-                    # Get current device list
-                    print(f"Updating the device{node_to_stop.node_id}active to be false. ")
-                    current_list = globals()['ui_device'].latest_device_list_cache
-                    for device in current_list:
-                        if device['id'] == device_id:
-                                device['active'] = False  # Mark as inactive
-                        
-                    # Force a device list update
-                    globals()['ui_device'].latest_device_list_cache = current_list
-                    if global_ui_update_queue:
-                        await global_ui_update_queue.put(("device_list", current_list))
-                return web.Response(text=f"Node {device_id} stopping.")
-            else:
-                 # If no stop method, maybe set active flag? Less realistic for full stop.
-                 if hasattr(node_to_stop, 'active'): node_to_stop._active_value = 0 
-                 return web.Response(text=f"Node {device_id} marked inactive (no stop method).")
+            return web.Response(text=f"Node {device_id} stopped.")
         else:
             return web.Response(status=404, text=f"Node {device_id} not found")
     except ValueError:
@@ -185,24 +174,64 @@ async def handle_set_active_state(request, target_active_state: int):
                  if hasattr(node_to_modify, 'deactivate') and callable(node_to_modify.deactivate):
                      node_to_modify.deactivate() # Assuming deactivate is sync
                  else: print(f"WARN: Node {device_id} has no deactivate method.")
-            elif target_active_state == 1: # Reactivate (if needed)
-                 if hasattr(node_to_modify, 'reactivate') and callable(node_to_modify.reactivate):
-                     node_to_modify.reactivate() # Assuming reactivate is sync
-                 else: print(f"WARN: Node {device_id} has no reactivate method.")
-            elif target_active_state == 2: # Stay Active (or ensure active)
-                 if hasattr(node_to_modify, 'stay_active') and callable(node_to_modify.stay_active):
-                     node_to_modify.stay_active() # Assuming stay_active is sync
-                 else: print(f"WARN: Node {device_id} has no stay_active method.")
+                 
+                 # IMPORTANT: Update the thisDevice's active status directly
+                 if hasattr(node_to_modify, 'thisDevice'):
+                     node_to_modify.thisDevice.active = False
+                     print(f"Set device {device_id} active status to False directly")
+                     
+                 # Force UI to recognize this device as inactive (crucial change)
+                 if 'ui_device' in globals() and isinstance(globals()['ui_device'], UIDevice):
+                     ui_device = globals()['ui_device']
+                     print(f"Notifying UI device about deactivation of device {device_id}")
+                     
+                     # Find the device in the UI device's list and mark it as inactive
+                     existing_device = ui_device.device_list.find_device(device_id)
+                     if existing_device:
+                         # Set missed count above threshold to mark as inactive
+                         from device_classes import MISSED_THRESHOLD
+                         existing_device.set_missed(MISSED_THRESHOLD + 1)
+                         print(f"UI device: Set missed count to {existing_device.get_missed()} for device {device_id}")
+                         
+                         # If it was the leader, update leader ID
+                         if device_id == ui_device.leader_id:
+                             ui_device.leader_id = 0
+                             print(f"UI device: Reset leader_id since device {device_id} was the leader")
+                             asyncio.create_task(ui_device.send_update("status_change", {
+                                 "is_leader": False,
+                                 "leader_id": "0" 
+                             }))
+                         
+                         # Send updated device list to UI frontend
+                         formatted_list = ui_device.format_device_list()
+                         asyncio.create_task(ui_device.send_update("device_list", formatted_list))
+                         print(f"UI device: Sent updated device list with {device_id} marked inactive")
+                 
+            elif target_active_state == 1 or target_active_state == 2: # Reactivate or Stay Active
+                 # Handle activation methods
+                 if target_active_state == 1:
+                     if hasattr(node_to_modify, 'reactivate') and callable(node_to_modify.reactivate):
+                         node_to_modify.reactivate()
+                     else: print(f"WARN: Node {device_id} has no reactivate method.")
+                 else:  # target_active_state == 2
+                     if hasattr(node_to_modify, 'stay_active') and callable(node_to_modify.stay_active):
+                         node_to_modify.stay_active()
+                     else: print(f"WARN: Node {device_id} has no stay_active method.")
+                 
+                 # Update device status
+                 if hasattr(node_to_modify, 'thisDevice'):
+                     node_to_modify.thisDevice.active = True
             else:
                  print(f"WARN: Unknown target active state {target_active_state} for node {device_id}")
 
-            #log data
-            if global_ui_update_queue:
+            # Set the active value on the node
+            node_to_modify._active_value = target_active_state
+            
+            # For deactivation, log a stopping message
+            if target_active_state == 0 and global_ui_update_queue:
                  log_data = {"level": "WARN", "message": f"API: Node {device_id} stopping."}
                  await global_ui_update_queue.put(("log_event", log_data))
 
-            node_to_modify._active_value = target_active_state
-            state_str = "active" if target_active_state == 2 else "inactive"
             return web.Response(text=f"Node {device_id} set to {state_str}.")
         elif not node_to_modify:
             return web.Response(status=404, text=f"Node {device_id} not found")
