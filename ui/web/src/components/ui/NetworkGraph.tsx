@@ -1,23 +1,24 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
 // Assuming DeviceInfo structure based on errors and context
-import { DeviceInfo } from '../../types/websocket' // { id: number; is_leader: boolean; leader_id: number | null; ... }
+import { DeviceInfo } from '../../types/websocket'
 
 interface GraphNode {
-  id: string; // Force graph needs string IDs
-  val: number; // size
+  id: string;
+  val: number;
   color: string;
-  device: DeviceInfo; // Keep original device info
-  x?: number; // ForceGraph adds these
-  y?: number; // ForceGraph adds these
+  device: DeviceInfo;
+  x?: number;
+  y?: number;
+  fx?: number; // Fixed x position
+  fy?: number; // Fixed y position
 }
 
 interface GraphLink {
-    source: string; // Force graph needs string IDs
-    target: string; // Force graph needs string IDs
-    color: string;
+  source: string;
+  target: string;
+  color: string;
 }
-
 
 interface GraphData {
   nodes: GraphNode[];
@@ -26,7 +27,6 @@ interface GraphData {
 
 interface NetworkGraphProps {
   devices: DeviceInfo[];
-  // Prop name changed in App.tsx, ensure it matches here
   onDeviceSelect: (device: DeviceInfo | null) => void;
   width?: number;
   height?: number;
@@ -35,87 +35,150 @@ interface NetworkGraphProps {
 export function NetworkGraph({
   devices,
   onDeviceSelect,
-  width = 800, // Default width
-  height = 600 // Default height
+  width = 800,
+  height = 600
 }: NetworkGraphProps) {
   const [highlightNodes, setHighlightNodes] = useState<Set<GraphNode>>(new Set())
   const [highlightLinks, setHighlightLinks] = useState<Set<GraphLink>>(new Set())
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
+
+  // Store fixed node positions across renders
+  const nodePositionsRef = useRef<Map<string, { x: number, y: number }>>(new Map())
+
+  // Track if initial layout is complete
+  const [initialLayoutComplete, setInitialLayoutComplete] = useState(false)
+
+  // Reference to the ForceGraph instance
+  const graphRef = useRef<any>(null)
 
   const graphData = useMemo(() => {
     const data: GraphData = {
       nodes: [],
       links: []
     }
-    const nodeMap = new Map<string, GraphNode>(); // Helper to find nodes by ID quickly
+    const nodeMap = new Map<string, GraphNode>();
 
-    // Create nodes
+    // Create nodes 
     devices.forEach(device => {
-      const nodeId = String(device.id); // Use string ID for graph
+      const nodeId = String(device.id);
+      let nodeColor = '#3b82f6'; // Default blue (follower)
+
+      if (device.active === false) {
+        nodeColor = '#ef4444'; // Red for inactive devices
+      } else if (device.leader) {
+        nodeColor = '#22c55e'; // Green for active leader
+      }
+
+      // Get saved position for this node if it exists
+      const savedPosition = nodePositionsRef.current.get(nodeId);
+
       const node: GraphNode = {
         id: nodeId,
-        // Use is_leader for size/color
-        val: device.leader ? 20 : 10, // Leaders are bigger
-        color: device.leader ? '#22c55e' : '#3b82f6', // green for leaders, blue for followers
-        device: device // Store original device object
+        val: device.leader ? 20 : 10,
+        color: nodeColor,
+        device: device,
+        // Apply fixed positions if we have saved coordinates and initial layout is done
+        ...(initialLayoutComplete && savedPosition && {
+          // Both set position and fix position
+          x: savedPosition.x,
+          y: savedPosition.y,
+          fx: savedPosition.x, // Fixed x - critical to prevent movement
+          fy: savedPosition.y  // Fixed y - critical to prevent movement
+        })
       };
+
       data.nodes.push(node);
       nodeMap.set(nodeId, node);
     });
 
-    // Create links (follower to leader)
+    // Create links
     devices.forEach(device => {
-      // Ensure it's a follower and has a leader_id assigned
-      if (!device.leader && device.leaderr !== null && device.leader_id !== undefined) {
-         const sourceId = String(device.id);
-         const targetId = String(device.leader); // Use leader_id as target
+      if (!device.leader && device.leader_id !== null && device.leader_id !== undefined) {
+        const sourceId = String(device.id);
+        const targetId = String(device.leader_id);
 
-         // Ensure the target leader node exists in the current list
-         if (nodeMap.has(targetId)) {
-            data.links.push({
-              source: sourceId,
-              target: targetId,
-              color: '#94a3b8' // slate-400
-            });
-         } else {
-            console.warn(`Leader node ${targetId} not found for follower ${sourceId}`);
-         }
+        if (nodeMap.has(targetId)) {
+          data.links.push({
+            source: sourceId,
+            target: targetId,
+            color: '#94a3b8'
+          });
+        }
       }
     });
 
-
     return data
-  }, [devices])
+  }, [devices, initialLayoutComplete])
+
+  // Function to save current node positions
+  const saveNodePositions = useCallback(() => {
+    if (!graphRef.current) return;
+
+    try {
+      // Get the current graph data from the force graph
+      const currentData = graphRef.current.graphData();
+      if (currentData && currentData.nodes) {
+        // Save positions for all nodes
+        currentData.nodes.forEach((node: GraphNode) => {
+          if (node.x !== undefined && node.y !== undefined) {
+            nodePositionsRef.current.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+
+        // Once positions are saved, mark layout as complete if not already
+        if (!initialLayoutComplete) {
+          console.log("Initial layout complete - fixing node positions");
+          setInitialLayoutComplete(true);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving node positions:", error);
+    }
+  }, [initialLayoutComplete]);
+
+  // Engine stop handler - fix positions when simulation stops
+  const handleEngineStop = useCallback(() => {
+    saveNodePositions();
+  }, [saveNodePositions]);
+
+  // Apply fixed positions after drag
+  const handleNodeDragEnd = useCallback((node: GraphNode) => {
+    if (node.x !== undefined && node.y !== undefined) {
+      // Update the position in our ref
+      nodePositionsRef.current.set(node.id, { x: node.x, y: node.y });
+
+      // Fix the node's position directly
+      node.fx = node.x;
+      node.fy = node.y;
+    }
+  }, []);
 
   const handleNodeClick = useCallback((node: GraphNode | null) => {
     setSelectedNode(node);
-    // Pass the original DeviceInfo object back
     onDeviceSelect(node ? node.device : null);
   }, [onDeviceSelect]);
 
-
-  // Type the node parameter explicitly
   const handleNodeHover = useCallback((node: GraphNode | null) => {
     const newHighlightNodes = new Set<GraphNode>();
     const newHighlightLinks = new Set<GraphLink>();
 
     if (node) {
-        newHighlightNodes.add(node);
-        // Add incoming and outgoing links
-        graphData.links.forEach(link => {
-            if (link.source === node.id || link.target === node.id) {
-                newHighlightLinks.add(link);
-            }
-        });
+      newHighlightNodes.add(node);
+      graphData.links.forEach(link => {
+        if (link.source === node.id || link.target === node.id) {
+          newHighlightLinks.add(link);
+        }
+      });
     }
     setHighlightNodes(newHighlightNodes);
     setHighlightLinks(newHighlightLinks);
 
-  }, [graphData.links]); // Dependency on graphData.links
+  }, [graphData.links]);
 
   return (
-    <div className="border rounded-lg bg-white shadow-sm overflow-hidden"> {/* Added overflow-hidden */}
+    <div className="border rounded-lg bg-white shadow-sm overflow-hidden">
       <ForceGraph2D
+        ref={graphRef}
         graphData={graphData}
         nodeRelSize={6}
         width={width}
@@ -123,49 +186,62 @@ export function NetworkGraph({
         backgroundColor="#ffffff"
         linkDirectionalParticles={2}
         linkDirectionalParticleSpeed={0.005}
-        // Type node parameter explicitly
         nodeCanvasObject={(node: GraphNode, ctx, globalScale) => {
           const label = `Device ${node.id}`
-          // Adjust font size based on node value and scale
-          const fontSize = Math.max(1, (node.val / 2) / globalScale * 3); // Adjust multiplier as needed
-          ctx.font = `${fontSize}px Inter`; // Use a common font stack
+          const fontSize = Math.max(1, (node.val / 2) / globalScale * 3);
+          ctx.font = `${fontSize}px Inter`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
           // Draw circle
-          ctx.fillStyle = node.color; // Use node's assigned color
+          ctx.fillStyle = node.color;
           ctx.beginPath();
-          // Use node.x and node.y provided by the engine
           ctx.arc(node.x!, node.y!, node.val / 2, 0, 2 * Math.PI, false);
           ctx.fill();
 
-           // Highlight border if node is highlighted or selected
-           if (highlightNodes.has(node) || selectedNode === node) {
-             ctx.strokeStyle = highlightNodes.has(node) ? '#f59e0b' : '#dc2626'; // Amber for hover, Red for selected
-             ctx.lineWidth = 2 / globalScale; // Make border consistent size
-             ctx.stroke();
-           }
-
+          // Highlight border if node is highlighted or selected
+          if (highlightNodes.has(node) || selectedNode === node) {
+            ctx.strokeStyle = highlightNodes.has(node) ? '#f59e0b' : '#dc2626';
+            ctx.lineWidth = 2 / globalScale;
+            ctx.stroke();
+          }
 
           // Draw label below the node
-          ctx.fillStyle = '#334155'; // Darker text (slate-700)
-          // Position label below the circle
+          ctx.fillStyle = '#334155';
           ctx.fillText(label, node.x!, node.y! + (node.val / 2) + (fontSize / 2));
         }}
         onNodeClick={handleNodeClick}
         onNodeHover={handleNodeHover}
-        // Type link parameter explicitly
-        linkColor={(link: GraphLink) => highlightLinks.has(link) ? '#f59e0b' : link.color} // Amber highlight
+        onNodeDragEnd={handleNodeDragEnd}
+        linkColor={(link: GraphLink) => highlightLinks.has(link) ? '#f59e0b' : link.color}
         linkWidth={(link: GraphLink) => highlightLinks.has(link) ? 2 : 1}
-        // Disable node coloring here if handled in nodeCanvasObject
-        // nodeColor={(node: GraphNode) => ... } // Remove or adjust if using nodeCanvasObject for color
 
-        cooldownTicks={100} // Let simulation settle
-        d3VelocityDecay={0.3} // Faster decay for less movement
-        // Consider adding forces for better layout if needed
-        // d3Force={'link', d3.forceLink(graphData.links).id((d: any) => d.id).distance(50)}
-        // d3Force={'charge', d3.forceManyBody().strength(-100)}
-        // d3Force={'center', d3.forceCenter()}
+        // Engine configuration - critical for stability
+        cooldownTicks={50} // Let simulation settle initially
+        cooldownTime={3000} // Max time for initial layout
+        onEngineStop={handleEngineStop} // Save positions on cooldown
+        d3VelocityDecay={0.6} // Higher decay means faster stabilization
+
+        // Force configuration to improve initial layout
+        d3Force={(forceName, force) => {
+          if (forceName === 'charge') {
+            // Stronger repulsion for better spacing
+            force.strength(-300);
+          }
+          if (forceName === 'link') {
+            // Longer links for better separation
+            force.distance(60);
+          }
+          if (forceName === 'center') {
+            // Better centering
+            force.strength(0.1);
+          }
+        }}
+
+        // Don't warm up, let the simulation run once for positioning
+        warmupTicks={0}
+        enableNodeDrag={true}
+        enableZoomPanInteraction={true}
       />
     </div>
   )

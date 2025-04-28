@@ -4,7 +4,7 @@ import asyncio
 import threading
 from multiprocessing import Queue
 import websockets 
-from device_classes import Device, ThisDevice
+from device_classes import Device, ThisDevice, MISSED_THRESHOLD
 from message_classes import Message, Action
 from typing import Dict, List
 
@@ -142,11 +142,29 @@ class UIDevice(ThisDevice):
                 device_id_to_process = follower_id
                 task_to_set = payload # Payload is the task
             elif action == Action.DELETE.value: # Leader removing device
-                if follower_id != 0 and self.device_list.remove_device(id=follower_id):
-                    print(f"UI Removed device {follower_id}")
-                    list_changed = True
+                # Check if the device being deleted is the current leader
+                if follower_id != 0:
+                    if follower_id == self.leader_id:
+                        print(f"UI Detected DELETE for current leader {self.leader_id}. Resetting leader ID.")
+                        self.leader_id = 0 # Reset leader ID as the leader is gone
+                        leader_changed = True # Trigger a status update
+                        
+                    # Attempt to remove the device from the list
+                    if self.device_list.remove_device(id=follower_id):
+                        print(f"UI Removed device {follower_id}")
+                        list_changed = True
+                    else:
+                        print(f"UI INFO: DELETE received for {follower_id}, but it wasn't in the list.")
                 device_id_to_process = 0 # Don't process further after removal
 
+            elif action == Action.DEACTIVATE.value:  # Device being deactivated
+                deactivated_id = follower_id
+                print(f"UI detected device {deactivated_id} being deactivated")
+                
+                # If it exists in our device list, mark it as inactive
+                if deactivated_id != 0:
+                    # Use our new method which ensures immediate UI update
+                    await self.mark_device_inactive(deactivated_id)
 
             # Add or update the device if identified
             if device_id_to_process != 0 and device_id_to_process != self.id: # Ignore self
@@ -250,12 +268,37 @@ class UIDevice(ThisDevice):
             print(f"Sending initial state: {initial_state}")
             await websocket.send(json.dumps(initial_state))
 
-            # Also send a separate device list update
-            #await self.broadcast_update("device_list", device_list)
-
             async for message in websocket:
                 print(f"Received message from client: {message}")
-                # We could handle commands from UI here
+                # Handle commands from UI
+                try:
+                    data = json.loads(message)
+                    if "command" in data:
+                        if data["command"] == "deactivate" and "device_id" in data:
+                            try:
+                                device_id = int(data["device_id"])
+                                await self.mark_device_inactive(device_id)
+                                # Confirm to client
+                                await websocket.send(json.dumps({
+                                    "type": "command_response",
+                                    "command": "deactivate",
+                                    "device_id": device_id,
+                                    "success": True
+                                }))
+                            except Exception as e:
+                                print(f"Error processing deactivate command: {e}")
+                                await websocket.send(json.dumps({
+                                    "type": "command_response", 
+                                    "command": "deactivate",
+                                    "error": str(e),
+                                    "success": False
+                                }))
+                except json.JSONDecodeError:
+                    print(f"Invalid JSON from client: {message}")
+                except Exception as e:
+                    print(f"Error handling client message: {e}")
+                    import traceback
+                    traceback.print_exc()
 
         except websockets.exceptions.ConnectionClosed as e:
             print(f"Client connection closed: {e}")
@@ -264,27 +307,39 @@ class UIDevice(ThisDevice):
             print(f"Client disconnected: {client_address[0]}:{client_address[1]}")
 
     def format_device_list(self) -> List[Dict]:
-        """Format device list for JSON serialization"""
+        """Format device list for JSON serialization with active status"""
         result = []
         try:
-            print(f"ui gets device list: {self.device_list.get_device_list()}")
             current_leader = self.leader_id
-            print(f"ui gets device list: {self.device_list.get_device_list().items()}")
+            print(f"UI formatting device list with {len(self.device_list.get_device_list())} devices, leader={current_leader}")
+            
             for device_id, device in self.device_list.get_device_list().items():
                 if isinstance(device, Device):
-                    print(f"ui gets device: {device}")
+                    # Consider a device active if its missed count is below threshold
+                    missed = device.get_missed()
+                    is_active = missed <= MISSED_THRESHOLD
+                    
+                    # Debug log for each device's active status
+                    print(f"Device {device_id}: missed={missed}, threshold={MISSED_THRESHOLD}, active={is_active}")
+                    
                     result.append({
-                    "id": device_id,
-                    "task": device.get_task(),
-                    "leader": device_id == current_leader,
-                    "missed": device.get_missed()
+                        "id": device_id,
+                        "task": device.get_task(),
+                        "leader": device_id == current_leader,
+                        "missed": missed,
+                        "active": is_active  # Add active status based on missed count
                     })
                 else:
-                    print(f"ui is not an instance of ThisDevice")
+                    print(f"Object {device_id} is not an instance of Device: {type(device)}")
             print(f"Formatted device list: {result}")
+            
+            # Cache the formatted list for new connections
+            self.latest_device_list_cache = result
+            
         except Exception as e:
             print(f"Error formatting device list: {e}")
-            # If we can't get the real device list, create a mock one for testing
+            import traceback
+            traceback.print_exc()
             result = []
         return result
     async def broadcast_update(self, device_list_update, data):
@@ -323,7 +378,7 @@ class UIDevice(ThisDevice):
         })
 
     # --- Ensure Overrides Prevent Network Participation ---
-    def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
+    async def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
         """Override send to prevent network transmission and log to UI."""
         msg = Message(action, payload, leader_id, follower_id).msg
         # Log that we *would* send, but don't call self.transceiver.send()
@@ -510,3 +565,40 @@ class UIDevice(ThisDevice):
         #             time.sleep(1)
         #     except KeyboardInterrupt:
         #         print("UI Device shutting down")
+
+    async def mark_device_inactive(self, device_id: int):
+        """Directly mark a device as inactive and notify UI clients"""
+        print(f"UI Device {self.id}: Marking device {device_id} as inactive")
+        
+        list_changed = False
+        leader_changed = False
+        
+        # Find the device in our list
+        existing_device = self.device_list.find_device(device_id)
+        if existing_device:
+            if isinstance(existing_device, Device):
+                # Set missed count above threshold to mark as inactive
+                existing_device.set_missed(MISSED_THRESHOLD + 1)
+                print(f"UI marked device {device_id} as inactive (missed: {existing_device.get_missed()})")
+                list_changed = True
+                
+                # If it was the leader, update leader ID
+                if device_id == self.leader_id:
+                    print(f"UI detected leader {self.leader_id} was deactivated")
+                    self.leader_id = 0
+                    leader_changed = True
+
+        # Send updates to UI clients
+        if leader_changed:
+            await self.send_update("status_change", {
+                "is_leader": False,  # UI is never leader
+                "leader_id": str(self.leader_id)  # Send as string
+            })
+        
+        if list_changed:
+            # Prepare and send updated device list
+            formatted_list = self.format_device_list()
+            await self.send_update("device_list", formatted_list)
+            print(f"UI sent updated device list with {device_id} marked inactive")
+            
+        return list_changed

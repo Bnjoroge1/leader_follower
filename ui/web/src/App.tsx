@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react"; // Add useMemo back
+import React, { useState, useMemo } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { Header } from "./components/ui/Header";
 import { DeviceStatus } from "./components/ui/DeviceStatus";
@@ -6,24 +6,24 @@ import { MessageLog } from "./components/ui/MessageLog";
 import { SimulationControls } from "./components/ui/SimulationControls";
 import { NetworkGraph } from "./components/ui/NetworkGraph";
 import { DeviceInfo } from "./types/websocket";
-import { Input } from "./components/ui/input"; // Import the new Input component
+import { Input } from "./components/ui/input";
+import { GraphLegend } from "./components/ui/GraphLegend"; // Import the legend component
 
 function App() {
   const { connection, device, devices, messages } = useWebSocket();
   const [selectedDevice, setSelectedDevice] = useState<DeviceInfo | null>(null);
-  const [searchTerm, setSearchTerm] = useState(""); // State for the search term
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // Filter devices based on search term (case-insensitive ID search)
   const filteredDevices = useMemo(() => {
+    // ... filtering logic ...
     if (!searchTerm) {
-      return devices; // Return all devices if search term is empty
+      return devices;
     }
     return devices.filter((d) =>
-      String(d.id).toLowerCase().includes(searchTerm.toLowerCase()) // Convert id to string for searching
+      String(d.id).toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [devices, searchTerm]);
 
-  // Handler for selecting a device (receives the full DeviceInfo from NetworkGraph)
   const handleNodeClick = (nodeDevice: DeviceInfo | null) => {
     setSelectedDevice(nodeDevice);
   };
@@ -39,8 +39,10 @@ function App() {
           <div className="xl:col-span-1 space-y-6">
             <DeviceStatus device={device} />
             <SimulationControls />
+            <GraphLegend /> {/* Add the legend here */}
             {/* Search Input */}
             <div className="p-4 bg-white rounded-lg shadow-sm">
+              {/* ... search input label and Input component ... */}
               <label htmlFor="deviceSearch" className="block text-sm font-medium text-gray-700 mb-1">
                 Search Device ID
               </label>
@@ -49,18 +51,17 @@ function App() {
                 type="text"
                 placeholder="Enter device ID..."
                 value={searchTerm}
-                // Add type for event parameter 'e'
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                className="w-full" // Add any additional styling classes if needed
+                className="w-full"
               />
             </div>
             {/* Selected Device Info */}
             {selectedDevice && (
               <div className="p-4 bg-white rounded-lg shadow-sm">
+                {/* ... selected device details ... */}
                 <h3 className="text-lg font-medium mb-2">
                   Selected: Device {selectedDevice.id}
                 </h3>
-                {/* Use .leader based on DeviceInfo type */}
                 <p>Status: {selectedDevice.leader ? 'Leader' : 'Follower'}</p>
                 <p>Active: {selectedDevice.active ? 'Yes' : 'No'}</p>
                 <p>Missed Pings: {selectedDevice.missed}</p>
@@ -73,12 +74,13 @@ function App() {
           {/* Right column - Network Graph */}
           <div className="xl:col-span-2">
             <NetworkGraph
-              devices={filteredDevices} // Pass the filtered list to the graph
+              devices={filteredDevices}
               onDeviceSelect={handleNodeClick}
             />
           </div>
         </div>
       </main>
+    
     </div>
   );
 }

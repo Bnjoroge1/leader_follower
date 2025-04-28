@@ -1,4 +1,3 @@
-
 from dataclasses import asdict
 import os
 import time
@@ -251,6 +250,24 @@ class ThisDevice(Device):
                 )
 
                 if received_msg_int is not None:
+                    # Skip all message processing except ACTIVATE when inactive
+                    if not self.active:
+                        temp_received = received_msg_int
+                        try:
+                            # Parse just enough to check if this is a relevant ACTIVATE message
+                            received_action = temp_received // int(1e10)
+                            received_follower = temp_received % int(1e4)
+                            
+                            # Only process this message if it's an activation targeted at this device
+                            if received_action == Action.ACTIVATE.value and received_follower == self.id:
+                                self.received = temp_received
+                                return True
+                            else:
+                                # Silently ignore all other messages when inactive
+                                continue
+                        except Exception as e:
+                            print(f"Error parsing message while inactive: {e}")
+                            continue
                     # print(f"DEBUG: Device {self.id} received raw message: {received_msg_int}") # Can be noisy
                     # Store raw message temporarily for parsing
                     temp_received = received_msg_int
@@ -825,15 +842,24 @@ class ThisDevice(Device):
         elif other_leader_id > self.leader_id:
             print(f"Device {self.id}: Heard leader {other_leader_id} has higher ID than current leader {self.leader_id}. Ignoring.")
             self.log_status(f"TIEBREAK_IGNORE_HIGHER_ID_{other_leader_id}")
-            # My current leader (with the lower ID) is correct.
-            # The device with ID `other_leader_id` is responsible for detecting `self.leader_id`
-            # (when my leader sends a message) and stepping down itself.
-            # This device takes no action based on hearing a higher ID leader.
-            # Optional: If I am the leader, maybe send an ATTENDANCE message to assert my leadership?
-            # if self.leader:
-            #    print(f"Device {self.id}: Re-asserting leadership after hearing higher ID {other_leader_id}")
-            #    self.leader_send_attendance() # Be careful not to spam
-            pass
+            
+            # Re-assert leadership if I am the leader with a lower ID
+            if self.leader:
+                print(f"Device {self.id}: Re-asserting leadership after hearing higher ID {other_leader_id}")
+                self.log_status(f"TIEBREAK_REASSERTING_LEADERSHIP")
+                # Add a small delay to avoid message collision
+                await asyncio.sleep(random.uniform(0.1, 0.3))
+                try:
+                    await self.leader_send_attendance()
+                    # Additionally, directly force the other leader to recognize you
+                    await self.send(
+                        action=Action.LEADERSHIP_TAKEOVER.value,
+                        payload=0,
+                        leader_id=self.id,
+                        follower_id=other_leader_id
+                    )
+                except Exception as e:
+                    print(f"Error asserting leadership: {e}")
 
     def log_message(self, msg: int, direction: str):
         #self.csvWriter.writerow([str(time.time()), 'MSG ' + direction, str(msg)])
@@ -1054,7 +1080,7 @@ class ThisDevice(Device):
             
     #         while await self.receive(10):
     #             if self.received_action() == 4:
-    #                 self.send(1, 0, self.received_leader_id(), self.id)
+    #                 self.send(4, 0, self.received_leader_id(), self.id)
     
     # def test_check_in_att_response_from_wrong_follower(self):
     #     with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
@@ -1335,8 +1361,6 @@ class ThisDevice(Device):
         
         self.log_status("BROADCAST CANDIDACY")
 
-
-
 class DeviceList:
     """ Container for lightweight Device objects, held by ThisDevice. """
     #self.task_assignments = [1, 2, 3, 4] #1: leader defaulted to quadrant 1; 2-4: followers and their respective quadrant #s
@@ -1505,5 +1529,4 @@ class DeviceList:
     
     def clear(self): 
         self.devices = {}
- 
- 
+
