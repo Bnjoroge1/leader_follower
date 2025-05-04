@@ -1,8 +1,8 @@
-from multiprocessing import Queue
 from pathlib import Path
 import queue
 import time
 from typing import Any
+from multiprocessing import Queue
 
 from simulation_network import SimulationNode, NetworkVisualizer, Network, SimulationTransceiver
 import multiprocessing
@@ -13,7 +13,6 @@ import argparse
 from checkpoint_manager import CheckpointManager
 from ui_device import UIDevice
 import logging
-
 
 
 from aiohttp import web
@@ -311,6 +310,21 @@ async def process_ui_updates(ui_device: UIDevice, update_queue: asyncio.Queue):
             # Avoid busy-looping on persistent errors
             await asyncio.sleep(1)
 
+def add_route_with_cors(app, cors): 
+        # --- Add routes and apply CORS ---
+    # Wrap each route registration with CORS configuration
+    resource_stop = cors.add(app.router.add_resource('/simulate/stop/{device_id}'))
+    cors.add(resource_stop.add_route("POST", handle_stop_device))
+
+    resource_start = cors.add(app.router.add_resource('/simulate/start/{device_id}'))
+    cors.add(resource_start.add_route("POST", handle_start_device))
+
+    resource_activate = cors.add(app.router.add_resource('/simulate/activate/{device_id}'))
+    cors.add(resource_activate.add_route("POST", handle_activate_device))
+
+    resource_deactivate = cors.add(app.router.add_resource('/simulate/deactivate/{device_id}'))
+    cors.add(resource_deactivate.add_route("POST", handle_deactivate_device))
+
 async def main():
     """
     Main driver for protocol simulation.
@@ -343,11 +357,11 @@ async def main():
 
         new_node = SimulationNode(i+1, active_value=shared_active, checkpoint_mgr=checkpoint_mgr)  # can we move active to lower level like size?
         nodes.append(new_node)
-        #init_tasks.append(new_node.node_id, new_node)  # prepare async initialization tasks
+        
         network.add_node(new_node.node_id, new_node)
-    #update device list
+   
 
-    #adding UI device
+    
     # --- Create UIDevice Node and Instance Correctly ---
     ui_device_id = num_devices + 1
     print(f"Creating UI device with ID {ui_device_id}")
@@ -390,6 +404,7 @@ async def main():
     partition_b = {3,4}
     def _is_same_partition(node_id1, node_id2 ):
         return (node_id1 in partition_a and node_id2 in partition_a) or (node_id1 in partition_b and node_id2 in partition_b)
+    
     for i in range(len(nodes)):
             for j in range(i+1, len(nodes)):
 
@@ -407,14 +422,7 @@ async def main():
                     print(f"DEBUG: Created channel between {firstNode.node_id} and {secondNode.node_id} in same partition")
                 network.create_channel(firstNode.node_id, secondNode.node_id)
 
-    # Create channels between regular devices
-    # for i in range(len(nodes)):
-    #     for j in range(i+1, len(nodes)):
-    #         firstNode = nodes[i]
-    #         secondNode = nodes[j]
-    #         print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
-    #         network.create_channel(firstNode.node_id, secondNode.node_id)
-
+ 
     # Connect the UI device node to all other regular device nodes
     print(f"Connecting UI node {ui_device_id} to other nodes")
     for node in nodes:
@@ -453,8 +461,8 @@ async def main():
     
 
         # --- Setup HTTP Server ---
-    http_app = web.Application()
-    cors = aiohttp_cors.setup(http_app, defaults={
+    app = web.Application()
+    cors = aiohttp_cors.setup(app, defaults={
     "http://localhost:5173": aiohttp_cors.ResourceOptions(
             allow_credentials=True,
             expose_headers="*",
@@ -462,20 +470,9 @@ async def main():
             allow_methods="*", # Allow all standard methods including POST
         ),
     })
-        # --- Add routes and apply CORS ---
-    # Wrap each route registration with CORS configuration
-    resource_stop = cors.add(http_app.router.add_resource('/simulate/stop/{device_id}'))
-    cors.add(resource_stop.add_route("POST", handle_stop_device))
-
-    resource_start = cors.add(http_app.router.add_resource('/simulate/start/{device_id}'))
-    cors.add(resource_start.add_route("POST", handle_start_device))
-
-    resource_activate = cors.add(http_app.router.add_resource('/simulate/activate/{device_id}'))
-    cors.add(resource_activate.add_route("POST", handle_activate_device))
-
-    resource_deactivate = cors.add(http_app.router.add_resource('/simulate/deactivate/{device_id}'))
-    cors.add(resource_deactivate.add_route("POST", handle_deactivate_device))
-    http_runner = web.AppRunner(http_app)
+    #add routes with cors
+    add_route_with_cors(app, cors=cors)
+    http_runner = web.AppRunner(app)
     await http_runner.setup()
     # Choose a different port for the HTTP API, e.g., 8080
     http_site = web.TCPSite(http_runner, '0.0.0.0', 8080)
@@ -493,8 +490,8 @@ async def main():
         if hasattr(node, '_main_task') and node._main_task:
              node_main_tasks.append(node._main_task)
         else:
-             
              print(f"WARN: Node {node.node_id} did not expose a main task after start.")
+             
     #MUST await the async start method for the UI node too
     await ui_node.start()
     if hasattr(ui_node, '_main_task') and ui_node._main_task:
@@ -547,3 +544,4 @@ if __name__ == "__main__":
         print(f"An unexpected error occurred: {e}")
         import traceback
         traceback.print_exc()
+ 

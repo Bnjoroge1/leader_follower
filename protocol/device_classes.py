@@ -1140,33 +1140,27 @@ class ThisDevice(Device):
 
 
     # TODO: print log to individual files
-    async def device_main(self):
-        """
-        Main looping protocol for ThisDevice.
-        """
-        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
-            # format is TIME, TYPE (STATUS, SENT, RECEIVED), CONTENT (<MSG>, <STATUS UPDATE>)
-            self.csvWriter = csv.writer(self.file, dialect='excel')
-            self.log_status("DEVICE_MAIN STARTED.")
-            # --- Leader Election ---
-            # Perform election if eligible (e.g., not explicitly told to be follower)
-            # For simplicity, assume eligible unless known_leaders has entries preventing it.
+    async def election_logic(self):
             if not self.known_leaders: # Check if we know we shouldn't be leader
                 elected_leader_id = await self._perform_leader_election()
 
                 # Become leader or follower based on election result
                 if elected_leader_id == self.id:
                     print(f"Device {self.id} becoming leader (result of election)")
-                    await self.make_leader() # Sets self.leader=True, logs, sends NEW_LEADER
+                    await self.make_leader() 
                     self.leader_id = self.id
+                    
+
                     # Ensure self is in device list
                     if not self.device_list.find_device(self.id):
                          # Use get_task() if available, else default 0
                          task = self.get_task() if hasattr(self, 'get_task') else 0
                          await self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
+                    
                     print("--------Leader---------")
                     await asyncio.sleep(1) # Allow followers to process election outcome
                     await self.leader_send_attendance() # Announce leadership
+    
                 else:
                     print(f"Device {self.id} becoming follower of {elected_leader_id} (result of election)")
                     await self.make_follower() # Sets self.leader=False, logs, sends NEW_FOLLOWER
@@ -1187,6 +1181,20 @@ class ThisDevice(Device):
                      print(f"Device {self.id} could not identify leader after starting as follower.")
                      self.log_status("ERROR_NO_LEADER_FOUND_AS_FOLLOWER")
                      # Consider what to do here - maybe re-attempt election later?
+    async def device_main(self):
+        """
+        Main looping protocol for ThisDevice.
+        """
+        with self.outPath.open("w", encoding="utf-8", newline='') as self.file:
+            # format is TIME, TYPE (STATUS, SENT, RECEIVED), CONTENT (<MSG>, <STATUS UPDATE>)
+            self.csvWriter = csv.writer(self.file, dialect='excel')
+            self.log_status("DEVICE_MAIN STARTED.")
+            
+            # --- Leader Election ---
+            # Perform election if eligible (e.g., not explicitly told to be follower)
+            # For simplicity, assume eligible unless known_leaders has entries preventing it.
+            await self.election_logic()
+            
 
             # --- Main Operation Loop ---
             last_attendance_time = 0
@@ -1198,7 +1206,7 @@ class ThisDevice(Device):
                     current_time = time.time()
                     if self.get_leader():
                         # --- Leader Logic ---
-                        if hasattr(self.transceiver, 'log'): self.transceiver.log("LEADER")
+                        if hasattr(self.transceiver, 'log'): await self.transceiver.log("LEADER")
                         self.log_status("LEADER_LOOP")
 
                         # Send regular attendance
@@ -1242,7 +1250,7 @@ class ThisDevice(Device):
 
                     else: # Not leader
                         # --- Follower Logic ---
-                        if hasattr(self.transceiver, 'log'): self.transceiver.log("FOLLOWER")
+                        if hasattr(self.transceiver, 'log'): await self.transceiver.log("FOLLOWER")
                         self.log_status("FOLLOWER_LOOP")
 
                         # Listen for messages from the leader
@@ -1342,6 +1350,9 @@ class ThisDevice(Device):
                              await self.make_follower()
                              # Break inner inactive loop, outer loop will handle role
                              break # Exit inactive loop
+                        else:
+                            #devices should only process activate messages
+                            print(f"Device {self.id} ignored message: {self.received_action}. Only listens for activate")
                     await asyncio.sleep(1) # Sleep if no activation message
     
 
