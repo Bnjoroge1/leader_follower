@@ -3,8 +3,7 @@ import json
 from re import L
 import time
 import device_classes as dc
-import multiprocessing
-from multiprocessing import Queue
+
 import queue as q
 from queue import Empty
 from typing import Any, Dict, Optional, Set

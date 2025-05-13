@@ -1,11 +1,9 @@
-from multiprocessing import Queue
 from pathlib import Path
 import queue
 import time
 from typing import Any
 
 from simulation_network import SimulationNode, NetworkVisualizer, Network, SimulationTransceiver
-import multiprocessing
 import itertools
 import asyncio
 from copy import copy
@@ -38,27 +36,27 @@ def listener_configure():
     fh.setFormatter(formatter)
     root.addHandler(fh)
     root.setLevel(logging.DEBUG)
-def listener_process(log_queue: multiprocessing.Queue, configurer):
-    """Runs in a separate process to listen for log records."""
-    configurer()
-    listener = logging.handlers.QueueListener(log_queue, logging.getLogger(), respect_handler_level=True)
-    listener.start()
-    try:
-        # Keep listener running until sentinel (None) is received
-        while True:
-            record = log_queue.get()
-            if record is None: # Sentinel value to stop
-                break
-            # QueueListener handles the record processing internally now
-            # logger = logging.getLogger(record.name)
-            # logger.handle(record) # No longer needed with QueueListener
-    except Exception as e:
-        print(f"Logging listener error: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        listener.stop()
-        print("Logging listener stopped.")         
+# def listener_process(log_queue: multiprocessing.Queue, configurer):
+#     """Runs in a separate process to listen for log records."""
+#     configurer()
+#     listener = logging.handlers.QueueListener(log_queue, logging.getLogger(), respect_handler_level=True)
+#     listener.start()
+#     try:
+#         # Keep listener running until sentinel (None) is received
+#         while True:
+#             record = log_queue.get()
+#             if record is None: # Sentinel value to stop
+#                 break
+#             # QueueListener handles the record processing internally now
+#             # logger = logging.getLogger(record.name)
+#             # logger.handle(record) # No longer needed with QueueListener
+#     except Exception as e:
+#         print(f"Logging listener error: {e}")
+#         import traceback
+#         traceback.print_exc()
+#     finally:
+#         listener.stop()
+#         print("Logging listener stopped.")         
 
 
 # --- Define HTTP Handlers ---

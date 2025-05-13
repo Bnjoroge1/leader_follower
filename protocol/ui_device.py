@@ -2,7 +2,6 @@ import time
 import json
 import asyncio
 import threading
-from multiprocessing import Queue
 import websockets 
 from device_classes import Device, ThisDevice, MISSED_THRESHOLD
 from message_classes import Message, Action

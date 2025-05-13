@@ -1,7 +1,9 @@
 from dataclasses import asdict
 import os
+import queue
 import time
 import uuid
+from asyncio import Queue
 from message_classes import Message, Action
 #from zigbee_network import ZigbeeTransceiver
 from typing import Dict, List, Optional, Set
@@ -10,7 +12,6 @@ import csv
 import json
 from device_state import DeviceState, DeviceStateStore
 import random
-from multiprocessing import Queue as MPQueue
 import asyncio
 from abstract_network import AbstractTransceiver
 # zigpy imports      
@@ -147,7 +148,7 @@ class ThisDevice(Device):
         self.active = True
         self.is_ui_device = False
         self.known_leaders = set()  #keep track of all leaders with lower IDs.
-        self.ui_update_queue = MPQueue()
+        self.ui_update_queue = Queue()
        
         #persistent id
         self.device_uuid = self._get_or_create_uuid()
@@ -545,7 +546,7 @@ class ThisDevice(Device):
         global global_ui_update_queue
         if hasattr(self, 'ui_update_queue') and self.ui_update_queue:
             log_data = {"level": "INFO", "message": f"Device {self.id} starting election after leader timeout."}
-            self.ui_update_queue.put(("log_event", log_data))
+            await self.ui_update_queue.put(("log_event", log_data))
         # Add a small random delay before broadcasting to reduce collisions
         await asyncio.sleep(random.uniform(0.1, 0.5))
         received_candidacies = {self.id} # Track IDs seen, including self
