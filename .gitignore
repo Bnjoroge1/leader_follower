@@ -7,7 +7,7 @@ protocol/zigbee2mqtt-data/log/
 *.json
 *.csv
 *.txt
-
+.python_version
 protocol/tla/states*
 
 venv/
@@ -16,3 +16,5 @@ venv/
 /Users/bnjoroge/Documents/leader_follower/OneDrive - Johns Hopkins  #not sure why it's tracked will figure output
 node_modules
 checkpoints
+# Poetry cache
+/Users/techstore/Library/Caches/pypoetry/
