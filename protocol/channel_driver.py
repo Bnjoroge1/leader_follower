@@ -265,7 +265,9 @@ def parse_args():
     parser.add_argument('-l', '--list-checkpoints',
                        action='store_true',
                        help='List available checkpoints')
+    parser.add_argument('--simulation', help="running as simulaiona cross VMs")
     parser.add_argument('--partition_sim', action='store_true', help='Run a partitioned simulation')
+    parser.add_argument('--node_id', default="Provide Node id if simulaion. Only using for vms.")
     return parser.parse_args()
 
 async def process_ui_updates(ui_device: UIDevice, update_queue: asyncio.Queue):
@@ -539,8 +541,8 @@ if __name__ == "__main__":
         milliseconds = int((remaining_seconds - seconds) * 1000)
         print(f"Total time taken: {minutes:02d}:{seconds:02d}:{milliseconds:03d}")
     except KeyboardInterrupt as e:
-        #catch error
         print("Keyboard interrupt received. Exiting...")
+        #catch error
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         import traceback
