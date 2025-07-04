@@ -477,10 +477,11 @@ async def main():
     cors.add(resource_deactivate.add_route("POST", handle_deactivate_device))
     http_runner = web.AppRunner(http_app)
     await http_runner.setup()
+    http_port = 8081
     # Choose a different port for the HTTP API, e.g., 8080
-    http_site = web.TCPSite(http_runner, '0.0.0.0', 8080)
+    http_site = web.TCPSite(http_runner, '0.0.0.0', http_port)
     await http_site.start()
-    print("HTTP Simulation Control Server started on port 8080")
+    print("HTTP Simulation Control Server started on port {http_port}")
 
      # --- Start Node Main Tasks ---
     node_main_tasks = []
