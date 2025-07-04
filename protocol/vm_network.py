@@ -22,7 +22,7 @@ class VMNetworkTransceiver(AbstractTransceiver):
           self.addresss_map =  address_map
           self.channel = socket.socket(socket.AF_INET,socket.SOCK_DGRAM ) #initializing a socket conenction that will be used to send messages. 
           self.channel.bind(ip_addr, port)  #binding port to socket
-          print(f"Transceiver {self.node_id}. Listening on {ip_addr}")
+          print(f"Initialized transceiver {self.node_id}. Listening on {ip_addr}")
 
 
      
