@@ -33,13 +33,7 @@ class AbstractNode(metaclass=ABCMeta):
 
 class AbstractTransceiver(metaclass=ABCMeta):
 
-    @abstractmethod
-    def set_outgoing_channel(self, node_id, queue):
-        pass
-
-    @abstractmethod
-    def set_incoming_channel(self, node_id, queue):
-        pass
+    
 
     @abstractmethod
     def send(self, msg):
@@ -49,34 +43,29 @@ class AbstractTransceiver(metaclass=ABCMeta):
         """Asynchronous send operation."""
         pass
 
-    """ @abstractmethod
+    @abstractmethod
     def receive(self, timeout) -> Optional[int]:
-        pass """
+        pass 
     @abstractmethod
     async def async_receive(self, timeout: float) -> Optional[int]:
          """Asynchronously receive a message."""
          pass
 
-    @abstractmethod
+    
     def clear(self):
         pass
 
-    @abstractmethod
     async def log(self, data: str) -> None:
          pass
 
-    @abstractmethod
-    def active_status(self) -> int:
+    def active_status(self) -> None:
          pass
 
-    @abstractmethod
     def deactivate(self) -> None:
          pass
 
-    @abstractmethod
     def reactivate(self) -> None:
          pass
 
-    @abstractmethod
     def stay_active(self) -> None:
          pass

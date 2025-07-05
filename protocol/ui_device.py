@@ -98,8 +98,7 @@ class UIDevice(ThisDevice):
                 print(f"UI device heard candidacy from device {candidate_id}")
                 # If no leader is known OR this candidate has a lower ID than the current known leader,
                 # update our internal leader_id. This tracks the *potential* winner.
-                if candidate_id != 0 and (current_leader == 0 or candidate_id < current_leader):
-                    potential_new_leader = candidate_id
+                print(f"Ui device is still processing candidates. Seen candidate: {candidate_id} so far")
 
             elif action == Action.ATTENDANCE.value:
                 # Heard an attendance message from an established leader.

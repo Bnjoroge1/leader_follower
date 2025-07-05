@@ -267,7 +267,7 @@ def parse_args():
                        help='List available checkpoints')
     parser.add_argument('--simulation', help="running as simulaiona cross VMs")
     parser.add_argument('--partition_sim', action='store_true', help='Run a partitioned simulation')
-    parser.add_argument('--node_id', default="Provide Node id if simulaion. Only using for vms.")
+    parser.add_argument('--node_id', help="Provide Node id if simulaion. Only using for vms.")
     return parser.parse_args()
 
 async def process_ui_updates(ui_device: UIDevice, update_queue: asyncio.Queue):
@@ -297,7 +297,7 @@ async def process_ui_updates(ui_device: UIDevice, update_queue: asyncio.Queue):
                  print(f"Main Process: Processing message_log from UIDevice: {data}")
                  # The data should already be in the correct format (MessageLogData)
                  # Broadcast directly as 'message_log' type
-                 print(f"DEBUG: Main Process broadcasting UIDevice log as message_log: {data}") # <-- ADD DEBUG
+                 print(f"DEBUG: Main Process broadcasting UIDevice log as message_log: {data}") 
                  await ui_device.broadcast_update("message_log", data)
             # Mark the task as done for the asyncio.Queue
             update_queue.task_done()
@@ -386,26 +386,7 @@ async def main():
     print(f"UI node {ui_device_id} configured successfully")
     # --- End Corrected UIDevice Creation ---
 
-    partition_a = {1,2}
-    partition_b = {3,4}
-    def _is_same_partition(node_id1, node_id2 ):
-        return (node_id1 in partition_a and node_id2 in partition_a) or (node_id1 in partition_b and node_id2 in partition_b)
-    for i in range(len(nodes)):
-            for j in range(i+1, len(nodes)):
-
-                firstNode = nodes[i]
-                secondNode = nodes[j]
-                if args.partition_sim:
-                    firstNode = nodes[i]
-                    secondNode = nodes[j]
-                    if not _is_same_partition(firstNode.node_id, secondNode.node_id):
-                        continue
-                    print("CHANNEL SETUP", firstNode.node_id, secondNode.node_id)
-                    network.create_channel(firstNode.node_id, secondNode.node_id)
-                    print(f"DEBUG: First node channels: {firstNode.transceiver.incoming_channels.keys()}")
-                    print(f"DEBUG: Second node channels: {secondNode.transceiver.incoming_channels.keys()}")
-                    print(f"DEBUG: Created channel between {firstNode.node_id} and {secondNode.node_id} in same partition")
-                network.create_channel(firstNode.node_id, secondNode.node_id)
+   
 
     # Create channels between regular devices
     # for i in range(len(nodes)):
@@ -477,7 +458,7 @@ async def main():
     cors.add(resource_deactivate.add_route("POST", handle_deactivate_device))
     http_runner = web.AppRunner(http_app)
     await http_runner.setup()
-    http_port = 8081
+    http_port = 8080
     # Choose a different port for the HTTP API, e.g., 8080
     http_site = web.TCPSite(http_runner, '0.0.0.0', http_port)
     await http_site.start()

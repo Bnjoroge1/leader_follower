@@ -6,14 +6,13 @@ import uuid
 from asyncio import Queue
 from message_classes import Message, Action
 #from zigbee_network import ZigbeeTransceiver
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, TYPE_CHECKING
 from pathlib import Path
 import csv
 import json
 from device_state import DeviceState, DeviceStateStore
 import random
 import asyncio
-from abstract_network import AbstractTransceiver
 # zigpy imports      
 #import asyncio
 #from zigpy.zcl.clusters.general import OnOff
@@ -34,7 +33,8 @@ D_LIST_DURATION: float = 2
 DELETE_DURATION: float = 2
 TAKEOVER_DURATION: float = 15
 
-
+if TYPE_CHECKING:
+    from abstract_network import AbstractTransceiver
 
 class Device:
     """ Lightweight device object for storing in a DeviceList. """
@@ -125,8 +125,7 @@ class Device:
 class ThisDevice(Device):
     """ Object for main protocol to use, subclass of Device. """
 
-    def __init__(self, id, transceiver):  # inclusive bounds
-
+    def __init__(self, id, transceiver: 'Optional[AbstractTransceiver]'): 
         """
         Constructor (default/non-default) for ThisDevice, creates additional fields.
         :param id: identifier for ThisDevice, either pre-specified or randomly generated.
@@ -141,7 +140,7 @@ class ThisDevice(Device):
         self.leader_started_operating: float | None = None
         self.task_folder_idx: int | None = None  # multiple operations can be preloaded
         self.received: int | None = None  # will be an int representation of message
-        self.transceiver: Optional[AbstractTransceiver] = transceiver  # plugin object for sending and receiving messages
+        self.transceiver: 'Optional[AbstractTransceiver]' = transceiver  # plugin object for sending and receiving messages
         self.numHeardDLIST: int = 0
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         self.outPath = OUTPUT_DIR / ("device_log_" + str(self.id) + ".csv")
@@ -562,8 +561,9 @@ class ThisDevice(Device):
         print(f"Device {self.id} listening during election window ({election_duration}s)")
         self.log_status("ELECTION_LISTENING")
 
-        election_end = time.time() + election_duration
-        while time.time() < election_end:
+        start_time = time.time()
+        
+        while (time.time() - start_time) < election_duration:
             # Listen for short intervals within the election window
             if await self.receive(duration=2): # Listen for 0.5s
                 # Check if the received message is a candidacy broadcast
