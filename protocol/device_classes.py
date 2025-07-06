@@ -494,7 +494,7 @@ class ThisDevice(Device):
             # FIX: Broadcast this D_LIST entry to all other followers
             for destination_id in other_device_ids:
                 # Call the transceiver directly with destination and message
-                await self.transceiver.async_send(destination_id, msg.msg)
+                self.transceiver.async_send(destination_id, msg.msg)
 
     # TODO: maybe handle leader collisions/tiebreakers here
     async def leader_perform_check_in(self):
@@ -526,7 +526,7 @@ class ThisDevice(Device):
             checkin_msg = Message(
                 action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id
             )
-            await self.transceiver.async_send(id, checkin_msg.msg)
+            self.transceiver.async_send(id, checkin_msg.msg)
             # device hangs in send() until finished sending
             end_time = time.time() + RESPONSE_ALLOWANCE
             # accounts for leader receiving another device's check-in response (which should never happen)
@@ -678,7 +678,7 @@ class ThisDevice(Device):
             follower_id=self.id,
             
         )
-        await self.transceiver.async_send(msg.msg)
+        self.transceiver.async_send(msg.msg)
         #wait for response with certain timeout
         rejoin_time = time.time() + 5.0
         while time.time() < rejoin_time:
@@ -754,7 +754,7 @@ class ThisDevice(Device):
         msg = Message(
         action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id
         )
-        await self.transceiver.async_send(msg.msg)
+        self.transceiver.async_send(msg.msg)
 
     async def follower_respond_check_in(self):
         """
