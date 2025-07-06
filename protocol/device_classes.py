@@ -1385,7 +1385,7 @@ class ThisDevice(Device):
             # Do not use asyncio.gather.
             print(f"Leader {self.id} sending attendance to {len(other_device_ids)} followers.")
             for destination_id in other_device_ids:
-                await self.transceiver.async_send(destination_id, msg_to_send)
+                 self.transceiver.async_send(destination_id, msg_to_send)
         
         
         self.log_status("BROADCAST CANDIDACY")
