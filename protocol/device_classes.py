@@ -501,7 +501,7 @@ class ThisDevice(Device):
             # FIX: Broadcast this D_LIST entry to all other followers
             for destination_id in other_device_ids:
                 # Call the transceiver directly with destination and message
-                await self.transceiver.async_send(destination_id, msg)
+                await self.transceiver.async_send(destination_id, msg.msg)
 
     # TODO: maybe handle leader collisions/tiebreakers here
     async def leader_perform_check_in(self):
