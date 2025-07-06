@@ -1358,7 +1358,24 @@ class ThisDevice(Device):
             leader_id=self.id,              # Using own ID to announce candidacy
             follower_id=0,                  # No follower during election
         )
-        await self.transceiver.async_send(candidacy_msg.msg)
+        # 2. Get a list of all other device IDs to send to.
+        other_device_ids = [dev_id for dev_id in self.device_list.get_ids() if dev_id != self.id]
+
+        if not other_device_ids:
+            print(f"Device {self.id} knows of no other devices to broadcast to.")
+            return
+
+        # 3. Create a list of send tasks to run concurrently.
+        broadcast_tasks = []
+        for destination_id in other_device_ids:
+            # FIX: The call to async_send MUST include BOTH arguments:
+            # the destination_id AND the message payload (candidacy_msg.msg).
+            task = self.transceiver.async_send(destination_id, candidacy_msg.msg)
+            broadcast_tasks.append(task)
+        
+        # 4. Execute all send tasks concurrently.
+        if broadcast_tasks:
+            await asyncio.gather(*broadcast_tasks)
         
         self.log_status("BROADCAST CANDIDACY")
 
