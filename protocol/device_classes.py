@@ -889,7 +889,29 @@ class ThisDevice(Device):
     async def make_follower(self):
         await super().make_follower()
         rcvd_leader_id = self.received_leader_id() if self.received else 0
-        asyncio.create_task(self.send(action=Action.NEW_FOLLOWER.value, payload=0, leader_id=rcvd_leader_id, follower_id=self.id)) #type:ignore
+        new_follower_msg = Message(
+            action=Action.NEW_FOLLOWER.value, 
+            payload=0, 
+            leader_id=rcvd_leader_id, 
+            follower_id=self.id
+        )
+        
+        # Send to all other devices
+        other_device_ids = [dev_id for dev_id in self.device_list.get_ids() if dev_id != self.id]
+        for destination_id in other_device_ids:
+            # Check if we're in VM mode (VMNetworkTransceiver) or simulation mode
+            if hasattr(self.transceiver, 'async_send'):
+                # For VM mode - async_send is a regular function
+                self.transceiver.async_send(destination_id, new_follower_msg.msg)
+            else:
+                # For simulation mode - use the send helper
+                await self.send(
+                    action=Action.NEW_FOLLOWER.value, 
+                    payload=0, 
+                    leader_id=rcvd_leader_id, 
+                    follower_id=self.id
+                )
+                break  # send() broadcasts to all, so only call once
         self.log_status("BECOMING FOLLOWER")
     def update_leader(self, new_leader_id):
         pass
