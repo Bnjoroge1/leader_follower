@@ -421,14 +421,28 @@ class ThisDevice(Device):
             return 
 
         print("Leader sending attendance")
-        for _ in range(5):
-            if not self.active:
-                print(f"leader{self.id} not active. Cant send")
-                return
+        
 
-            self.log_status("SENDING ATTENDANCE")
-            msg = Message(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0).msg
-            await self.transceiver.async_send(msg)
+        self.log_status("SENDING ATTENDANCE")
+        # 1. Create the message payload once.
+        msg_to_send = Message(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0).msg
+        
+        # 2. Get all other device IDs from the list.
+        other_device_ids = [dev_id for dev_id in self.device_list.get_ids() if dev_id != self.id]
+
+        if not other_device_ids:
+            print(f"Leader {self.id} has no followers to send attendance to.")
+        else:
+            # 3. Create a list of send tasks to run concurrently.
+            send_tasks = []
+            for destination_id in other_device_ids:
+                # Create a task to send the message to each follower.
+                task = self.transceiver.async_send(destination_id, msg_to_send)
+                send_tasks.append(task)
+            
+            # 4. Execute all send tasks concurrently.
+            if send_tasks:
+                await asyncio.gather(*send_tasks)
             print(f"sent attendance as leader. my device id is{self.leader_id}")
         if not self.active:
             return
