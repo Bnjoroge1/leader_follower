@@ -901,10 +901,14 @@ class ThisDevice(Device):
        
         if hasattr(self, 'is_ui_device') and self.is_ui_device:
             self.update_leader(self.id)
-        msg = Message(
+        print(f"Device {self.id} broadcasting NEW_LEADER message.")
+        leader_msg = Message(
             action=Action.NEW_LEADER.value, payload=0, leader_id=self.id, follower_id=0
-        )
-        await self.transceiver.async_send(msg.msg)
+        ).msg
+
+        other_device_ids = [dev_id for dev_id in self.device_list.get_ids() if dev_id != self.id]
+        for destination_id in other_device_ids:
+            self.transceiver.async_send(destination_id, leader_msg)
         self.log_status("BECOMING LEADER")
         try:
             await self.leader_send_attendance()
@@ -1366,30 +1370,18 @@ class ThisDevice(Device):
         Uses the device's own ID as leader_id to announce candidacy.
         """
         print(f"Device {self.id} broadcasting candidacy")
-        candidacy_msg = Message(
-            action=Action.CANDIDACY.value,  # Using attendance action for candidacy
-            payload=0,                       # No payload needed for candidacy
-            leader_id=self.id,              # Using own ID to announce candidacy
-            follower_id=0,                  # No follower during election
-        )
-        # 2. Get a list of all other device IDs to send to.
+        msg_to_send = Message(action=Action.ATTENDANCE.value, payload=0, leader_id=self.id, follower_id=0).msg
         other_device_ids = [dev_id for dev_id in self.device_list.get_ids() if dev_id != self.id]
 
         if not other_device_ids:
-            print(f"Device {self.id} knows of no other devices to broadcast to.")
-            return
-
-        # 3. Create a list of send tasks to run concurrently.
-        broadcast_tasks = []
-        for destination_id in other_device_ids:
-            # FIX: The call to async_send MUST include BOTH arguments:
-            # the destination_id AND the message payload (candidacy_msg.msg).
-            task = self.transceiver.async_send(destination_id, candidacy_msg.msg)
-            broadcast_tasks.append(task)
+            print(f"Leader {self.id} has no followers to send attendance to.")
+        else:
+            # FIX: Since async_send is not a coroutine, just call it in a simple loop.
+            # Do not use asyncio.gather.
+            print(f"Leader {self.id} sending attendance to {len(other_device_ids)} followers.")
+            for destination_id in other_device_ids:
+                self.transceiver.async_send(destination_id, msg_to_send)
         
-        # 4. Execute all send tasks concurrently.
-        if broadcast_tasks:
-            await asyncio.gather(*broadcast_tasks)
         
         self.log_status("BROADCAST CANDIDACY")
 
