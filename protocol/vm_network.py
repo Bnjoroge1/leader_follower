@@ -42,7 +42,7 @@ class VMNetworkTransceiver(AbstractTransceiver):
      def receive(self):
           pass
 
-     def async_send(self, destination_id:int,  msg: int) -> None:
+     async def async_send(self, destination_id:int,  msg: int) -> None:
           if not self.transport:
                print(f"ERROR: Transceiver for {self.node_id} cannot send.")
                return
