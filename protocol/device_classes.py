@@ -1259,7 +1259,7 @@ class ThisDevice(Device):
                         # Drop disconnected devices
                         try:
                             # print(f"Leader {self.id} checking for disconnected") # Can be noisy
-                            self.leader_drop_disconnected_devices()
+                            await self.leader_drop_disconnected_devices()
                         except Exception as e:
                             print(f"Error dropping devices: {e}")
                             self.log_status(f"ERROR_LEADER_DROP_{e}")
