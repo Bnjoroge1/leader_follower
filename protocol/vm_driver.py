@@ -51,8 +51,8 @@ async def main():
     
     
     
-     # 6. Start the node's main logic
-     await current_node.start()
+    # 6. Start the node's main logic
+    await current_node.start()
 
 if __name__ == "__main__":
     print("Starting VM Node Driver...")
