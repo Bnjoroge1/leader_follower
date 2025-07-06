@@ -46,7 +46,7 @@ class VMNetworkTransceiver(AbstractTransceiver):
           if not self.transport:
                print(f"ERROR: Transceiver for {self.node_id} cannot send.")
                return
-          full_address = self.addresss_map.get_address_from_node(destination_id)
+          full_address = self.address_map.get_address_from_node(destination_id)
           if not full_address:
                print(f"Error: No address found for node{self.node_id}")        
           message_bytes = msg.to_bytes(6, byteorder="big")
