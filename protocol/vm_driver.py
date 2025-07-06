@@ -20,8 +20,10 @@ async def main():
     # 3. Correctly populate the address map
     address_map = VMNetworkAddressMap()
     nodes_config = config_data.get("nodes", {})
+    node_ids = []
     for node_id_str, address_str in nodes_config.items():
         node_id_int = int(node_id_str)
+        node_ids.append(node_id_int)
         ip, port_str = address_str.split(':')
         port_int = int(port_str)
         address_map.set_address_from_node(node_id_int, (ip, port_int))
@@ -46,9 +48,16 @@ async def main():
         port=my_port,
         address_map=address_map  # Pass the complete map!
     )
-
-    # 6. Start the node's main logic
-    await current_node.start()
+     print("Priming device list with all known nodes from config...")
+     for node_id in node_ids:
+        # We use add_device to create a placeholder Device object for each participant.
+        # Task index can be 0 as it's unassigned.
+        await current_node.thisDevice.device_list.add_device(id=node_id, task_index=0, thisDeviceId=current_node.thisDevice.id)
+    
+     print("Initial Device List:")
+     print(current_node.thisDevice.device_list)
+     # 6. Start the node's main logic
+     await current_node.start()
 
 if __name__ == "__main__":
     print("Starting VM Node Driver...")
