@@ -48,11 +48,11 @@ async def main():
         port=my_port,
         address_map=address_map  # Pass the complete map!
     )
-     print("Priming device list with all known nodes from config...")
-     for node_id in node_ids:
-        # We use add_device to create a placeholder Device object for each participant.
-        # Task index can be 0 as it's unassigned.
-        await current_node.thisDevice.device_list.add_device(id=node_id, task_index=0, thisDeviceId=current_node.thisDevice.id)
+    print("Priming device list with all known nodes from config...")
+    for node_id in node_ids:
+    # We use add_device to create a placeholder Device object for each participant.
+    # Task index can be 0 as it's unassigned.
+     await current_node.thisDevice.device_list.add_device(id=node_id, task_index=0, thisDeviceId=current_node.thisDevice.id)
     
      print("Initial Device List:")
      print(current_node.thisDevice.device_list)
