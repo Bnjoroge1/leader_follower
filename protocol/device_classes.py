@@ -913,7 +913,7 @@ class ThisDevice(Device):
 
         other_device_ids = [dev_id for dev_id in self.device_list.get_ids() if dev_id != self.id]
         for destination_id in other_device_ids:
-            await self.transceiver.async_send(destination_id, leader_msg)
+             self.transceiver.async_send(destination_id, leader_msg)
         self.log_status("BECOMING LEADER")
         try:
             await self.leader_send_attendance()
