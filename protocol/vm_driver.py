@@ -48,7 +48,19 @@ async def main():
         port=my_port,
         address_map=address_map  # Pass the complete map!
     )
-    
+     # 6. Prime the device list with potential nodes for discovery
+    print("Priming device list with potential nodes for discovery...")
+    for node_id in node_ids:
+        if node_id != args.node_id:  # Don't add ourselves
+            # Add the node to the device list as a potential participant
+            await current_node.thisDevice.device_list.add_device(
+                id=node_id, 
+                task_index=0, 
+                thisDeviceId=current_node.thisDevice.id
+            )
+
+    print("Initial Device List (potential nodes):")
+    print(current_node.thisDevice.device_list)
     
     
     # 6. Start the node's main logic
