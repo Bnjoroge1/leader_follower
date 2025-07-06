@@ -617,9 +617,7 @@ class ThisDevice(Device):
         for id, device in self.device_list.get_device_list().copy().items():  # prevents modifying during iteration
             if device.get_missed() > MISSED_THRESHOLD:
                 #save file state
-                device_state = self.get_state()
-                device_storage = DeviceStateStore()
-                device_storage.save_device_state(device_id=id, state_dict=asdict(device_state))
+                
 
 
                 
