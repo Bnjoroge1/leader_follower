@@ -526,7 +526,7 @@ class ThisDevice(Device):
             checkin_msg = Message(
                 action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id
             )
-            self.transceiver.async_send(id, checkin_msg.msg)
+            await self.transceiver.async_send(id, checkin_msg.msg)
             # device hangs in send() until finished sending
             end_time = time.time() + RESPONSE_ALLOWANCE
             # accounts for leader receiving another device's check-in response (which should never happen)
