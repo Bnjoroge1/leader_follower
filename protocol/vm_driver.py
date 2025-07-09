@@ -1,5 +1,6 @@
 import asyncio
 import argparse
+import random
 from vm_network import VMNetworkAddressMap, VMNode
 import json
 
@@ -62,7 +63,8 @@ async def main():
     print("Initial Device List (potential nodes):")
     print(current_node.thisDevice.device_list)
     
-    
+    await asyncio.sleep(random.uniform(1.0, 3.0))  # Random delay to prevent simultaneous elections
+
     # 6. Start the node's main logic
     await current_node.start()
 

@@ -494,7 +494,7 @@ class ThisDevice(Device):
             # FIX: Broadcast this D_LIST entry to all other followers
             for destination_id in other_device_ids:
                 # Call the transceiver directly with destination and message
-                self.transceiver.async_send(destination_id, msg.msg)
+                await self.transceiver.async_send(destination_id, msg.msg)
 
     # TODO: maybe handle leader collisions/tiebreakers here
     async def leader_perform_check_in(self):
@@ -579,7 +579,7 @@ class ThisDevice(Device):
         
         while (time.time() - start_time) < election_duration:
             # Listen for short intervals within the election window
-            if await self.receive(duration=2): # Listen for 0.5s
+            if await self.receive(duration=3): # Listen for 0.5s
                 # Check if the received message is a candidacy broadcast
                 if self.received_action() == Action.CANDIDACY.value:
                     other_id = self.received_leader_id()
@@ -928,7 +928,7 @@ class ThisDevice(Device):
 
         other_device_ids = [dev_id for dev_id in self.device_list.get_ids() if dev_id != self.id]
         for destination_id in other_device_ids:
-             self.transceiver.async_send(destination_id, leader_msg)
+             await self.transceiver.async_send(destination_id, leader_msg)
         self.log_status("BECOMING LEADER")
         try:
             await self.leader_send_attendance()
