@@ -83,7 +83,7 @@ class VMNode():
           #self.hostname = hostname 
           self.address_map:VMNetworkAddressMap = address_map
           self.transceiver = VMNetworkTransceiver(node_id,address_map)
-          self.thisDevice = dc.ThisDevice(self.node_id)
+          self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
      
      async def start(self):
           print(f"VMNode {self.node_id} starting its device logic.")
