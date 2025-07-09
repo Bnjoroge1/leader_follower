@@ -564,7 +564,7 @@ class ThisDevice(Device):
         await asyncio.sleep(random.uniform(0.1, 0.5))
         received_candidacies = {self.id} # Track IDs seen, including self
 
-        election_duration = 10.0  # Election window duration in seconds
+        election_duration = 15.0  # Election window duration in seconds
         lowest_id_seen = self.id
 
         # Broadcast candidacy multiple times initially
@@ -579,18 +579,22 @@ class ThisDevice(Device):
         
         while (time.time() - start_time) < election_duration:
             # Listen for short intervals within the election window
-            if await self.receive(duration=3): # Listen for 0.5s
+            message_rcvd = await self.receive(duration=3)
+            if message_rcvd: # Listen for 0.5s
                 # Check if the received message is a candidacy broadcast
-                if self.received_action() == Action.CANDIDACY.value:
-                    other_id = self.received_leader_id()
-                    # Candidacy messages use the sender's ID in the leader_id field
-                    if other_id != 0: # Ignore if leader_id is 0 (not a valid candidacy)
+                action = self.received_action()
+                other_id = self.received_leader_id()
+                if other_id != 0: # Ignore if leader_id is 0 (not a valid candidacy)
                         print(f"Device {self.id} received candidacy from {other_id}")
                         self.log_status(f"HEARD_CANDIDACY_FROM_{other_id}")
-                        received_candidacies.add(other_id)
-                        if other_id < lowest_id_seen:
-                            lowest_id_seen = other_id
-                            self.log_status(f"NEW_LOWEST_ID_SEEN_{lowest_id_seen}")
+                if action == Action.CANDIDACY.value:
+                    # Candidacy messages use the sender's ID in the leader_id field
+                    received_candidacies.add(other_id)
+                elif action in [Action.NEW_LEADER.value, Action.ATTENDANCE.value]:
+                    received_candidacies.add(other_id)
+                if other_id < lowest_id_seen:
+                    lowest_id_seen = other_id
+                    self.log_status(f"NEW_LOWEST_ID_SEEN_{lowest_id_seen}")
             # No need to constantly rebroadcast if nothing is heard;
             # rely on initial broadcasts and others' broadcasts.
 
