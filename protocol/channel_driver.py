@@ -4,7 +4,6 @@ import queue
 import time
 from typing import Any
 
-from blinker import ANY
 from simulation_network import SimulationNode, NetworkVisualizer, Network, SimulationTransceiver
 import multiprocessing
 import itertools

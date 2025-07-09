@@ -797,7 +797,7 @@ class ThisDevice(Device):
                 # Optional: Send ATT_RESPONSE to the new leader? Might be handled by regular attendance.
 
         # Case 2: Heard leader has a HIGHER ID than my current leader
-        elif other_leader_id > self.leader_id:
+        else:
             print(f"Device {self.id}: Heard leader {other_leader_id} has higher ID than current leader {self.leader_id}. Ignoring.")
             self.log_status(f"TIEBREAK_IGNORE_HIGHER_ID_{other_leader_id}")
             # My current leader (with the lower ID) is correct.

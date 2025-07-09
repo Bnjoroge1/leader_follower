@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABCMeta
-from git import Optional
+from typing import Optional
 import websockets
 import multiprocessing
 import device_classes as dc
