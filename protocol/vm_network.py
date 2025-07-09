@@ -24,6 +24,7 @@ class VMNetworkUDP(asyncio.DatagramProtocol):
           self.transport = transport
           print("UDP endpoint ready and lisening")
      def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
+          print(f"received {bytes.decode("utf-8")}")
           self.receive_queue.put_nowait(data)
      def connection_lost(self, exc: Exception | None) -> None:
           self.transport.close()
@@ -55,6 +56,7 @@ class VMNetworkTransceiver(AbstractTransceiver):
           self.transport.sendto(message_bytes, full_address)
 
      async def async_receive(self, timeout: float) -> Optional[int]:
+          print("receivng stuff")
           if not self.receive_queue:
                print(f"Receive queue for {self.node_id} does no exist.")
 
