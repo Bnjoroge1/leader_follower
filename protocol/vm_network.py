@@ -25,8 +25,7 @@ class VMNetworkUDP(asyncio.DatagramProtocol):
           print("UDP endpoint ready and lisening")
      def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
           print(f"datagram received: {data}")
-          enc = data.decode(encoding="utf-8", errors="ignore")
-          print(f"received {enc}")
+          print(f"received {data.hex()}")
           self.receive_queue.put_nowait(data)
      def connection_lost(self, exc: Exception | None) -> None:
           self.transport.close()
@@ -45,7 +44,7 @@ class VMNetworkTransceiver(AbstractTransceiver):
      def receive(self):
           pass
 
-     def async_send(self, destination_id:int,  msg: int) -> None:
+     async def async_send(self, destination_id:int,  msg: int) -> None:
           if not self.transport:
                print(f"ERROR: Transceiver for {self.node_id} cannot send.")
                return
@@ -84,7 +83,7 @@ class VMNode():
           #self.hostname = hostname 
           self.address_map:VMNetworkAddressMap = address_map
           self.transceiver = VMNetworkTransceiver(node_id,address_map)
-          self.thisDevice = dc.ThisDevice(self.__hash__() % 10000, self.transceiver)
+          self.thisDevice = dc.ThisDevice(self.node_id)
      
      async def start(self):
           print(f"VMNode {self.node_id} starting its device logic.")
