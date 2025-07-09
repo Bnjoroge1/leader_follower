@@ -435,7 +435,7 @@ class ThisDevice(Device):
         else:
             print(f"Leader {self.id} sending attendance to {len(other_device_ids)} followers.")
             for destination_id in other_device_ids:
-                self.transceiver.async_send(destination_id, msg_to_send)
+                await self.transceiver.async_send(destination_id, msg_to_send)
             print(f"sent attendance as leader. my device id is{self.leader_id}")
         if not self.active:
             return
