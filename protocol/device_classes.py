@@ -902,7 +902,7 @@ class ThisDevice(Device):
             # Check if we're in VM mode (VMNetworkTransceiver) or simulation mode
             if hasattr(self.transceiver, 'async_send'):
                 # For VM mode - async_send is a regular function
-                self.transceiver.async_send(destination_id, new_follower_msg.msg)
+                await self.transceiver.async_send(destination_id, new_follower_msg.msg)
             else:
                 # For simulation mode - use the send helper
                 await self.send(
