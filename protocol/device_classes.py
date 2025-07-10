@@ -1241,7 +1241,7 @@ class ThisDevice(Device):
                     current_time = time.time()
                     if self.get_leader():
                         # --- Leader Logic ---
-                        if hasattr(self.transceiver, 'log'): self.transceiver.log("LEADER")
+                        if hasattr(self.transceiver, 'log'): await self.transceiver.log("LEADER")
                         self.log_status("LEADER_LOOP")
 
                         # Send regular attendance
@@ -1285,7 +1285,7 @@ class ThisDevice(Device):
 
                     else: # Not leader
                         # --- Follower Logic ---
-                        if hasattr(self.transceiver, 'log'): self.transceiver.log("FOLLOWER")
+                        if hasattr(self.transceiver, 'log'): await self.transceiver.log("FOLLOWER")
                         self.log_status("FOLLOWER_LOOP")
 
                         # Listen for messages from the leader
