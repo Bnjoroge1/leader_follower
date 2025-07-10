@@ -870,7 +870,7 @@ class ThisDevice(Device):
                     await self.leader_send_attendance()
                     # Additionally, directly force the other leader to recognize you
                     await self.send(
-                        action=Action.LEADERSHIP_TAKEOVER.value,
+                        action=Action.NEW_LEADER.value,
                         payload=0,
                         leader_id=self.id,
                         follower_id=other_leader_id

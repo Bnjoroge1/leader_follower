@@ -50,7 +50,7 @@ class Action(Enum):
     NEW_FOLLOWER = 12
     ACTIVATE = 13
     DEACTIVATE = 14
-
+    #LEADERSHIP_TAKEOVER = 15
     #new actions for rejoining
     REJOIN_REQUEST  = 10
     REJOIN_RESPONSE = 11
