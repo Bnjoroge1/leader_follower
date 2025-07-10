@@ -869,12 +869,16 @@ class ThisDevice(Device):
                 try:
                     await self.leader_send_attendance()
                     # Additionally, directly force the other leader to recognize you
-                    await self.send(
-                        action=Action.NEW_LEADER.value,
-                        payload=0,
-                        leader_id=self.id,
-                        follower_id=other_leader_id
-                    )
+                    leader_msg = Message(
+                    action=Action.NEW_LEADER.value,
+                    payload=0,
+                    leader_id=self.id,
+                    follower_id=other_leader_id
+                    ).msg
+                
+                    # Send NEW_LEADER message directly to the other leader
+                    await self.transceiver.async_send(msg=leader_msg, destination_id=other_leader_id)
+
                 except Exception as e:
                     print(f"Error asserting leadership: {e}")
 
