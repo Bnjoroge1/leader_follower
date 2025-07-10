@@ -627,8 +627,8 @@ class ThisDevice(Device):
                 # sends a message for each disconnected device
                 print("Leader sending DELETE message")
                 self.log_status("SENDING DELETE")
-                
-                await self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
+                delete_msg = Message(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id).msg
+                await self.transceiver.async_send(destination_id=id, msg=delete_msg)
                 # broadcasts to entire channel, does not need a response confirmation
     async def follower_rejoin_after_dropping_off(self):
         #detect if this device has been dropped off. check for messages within TAKEOVER DURATION, and not reeceiveing check in requests. 
