@@ -581,18 +581,21 @@ class ThisDevice(Device):
             # Listen for short intervals within the election window
             message_rcvd = await self.receive(duration=3)
             if message_rcvd: # Listen for 0.5s
-                if other_id == 0:
-                    print(f"Ignoring device {self.id} with invalid leader id 0")
+                
                 # Check if the received message is a candidacy broadcast
                 action = self.received_action()
                 other_id = self.received_leader_id()
+                if other_id == 0:
+                    print(f"Ignoring device {self.id} with invalid leader id 0")
                 if other_id != 0: # Ignore if leader_id is 0 (not a valid candidacy)
-                        print(f"Device {self.id} received candidacy from {other_id}")
-                        self.log_status(f"HEARD_CANDIDACY_FROM_{other_id}")
+                    print(f"Device {self.id} received candidacy from {other_id}")
+                    self.log_status(f"HEARD_CANDIDACY_FROM_{other_id}")
                 if action == Action.CANDIDACY.value:
                     # Candidacy messages use the sender's ID in the leader_id field
+                    print(f"Adding {self.id} candidate to my received candidates")
                     received_candidacies.add(other_id)
                 elif action in [Action.NEW_LEADER.value, Action.ATTENDANCE.value]:
+                    print(f"Adding new candidate i have seen {self.id}")
                     received_candidacies.add(other_id)
                 if other_id < lowest_id_seen:
                     lowest_id_seen = other_id
@@ -624,7 +627,7 @@ class ThisDevice(Device):
                 # sends a message for each disconnected device
                 print("Leader sending DELETE message")
                 self.log_status("SENDING DELETE")
-                DRNF
+                
                 await self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
                 # broadcasts to entire channel, does not need a response confirmation
     async def follower_rejoin_after_dropping_off(self):
