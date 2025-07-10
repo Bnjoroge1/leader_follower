@@ -1362,7 +1362,7 @@ class ThisDevice(Device):
                                 self.follower_drop_disconnected()
                             case Action.D_LIST.value:
                                 print(f"Follower {self.id} received D_LIST for {self.received_follower_id()}")
-                                self.follower_handle_dlist() if self.get_leader() == False else None# Handles multiple D_LIST msg 
+                                await self.follower_handle_dlist() if self.get_leader() == False else None# Handles multiple D_LIST msg 
                             case Action.NEW_FOLLOWER.value:
                                 print(f"Follower {self.id} received NEW_FOLLOWER for {self.received_follower_id()}")
                                 #add follower to device list if not already in device list
