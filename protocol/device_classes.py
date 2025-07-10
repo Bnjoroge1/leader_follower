@@ -495,7 +495,7 @@ class ThisDevice(Device):
             for destination_id in other_device_ids:
                 # Call the transceiver directly with destination and message
                 await self.transceiver.async_send(destination_id, msg.msg)
-
+ 
     # TODO: maybe handle leader collisions/tiebreakers here
     async def leader_perform_check_in(self):
         """
@@ -581,6 +581,8 @@ class ThisDevice(Device):
             # Listen for short intervals within the election window
             message_rcvd = await self.receive(duration=3)
             if message_rcvd: # Listen for 0.5s
+                if other_id == 0:
+                    print(f"Ignoring device {self.id} with invalid leader id 0")
                 # Check if the received message is a candidacy broadcast
                 action = self.received_action()
                 other_id = self.received_leader_id()
@@ -622,6 +624,7 @@ class ThisDevice(Device):
                 # sends a message for each disconnected device
                 print("Leader sending DELETE message")
                 self.log_status("SENDING DELETE")
+                DRNF
                 await self.send(action=Action.DELETE.value, payload=0, leader_id=self.id, follower_id=id, duration=DELETE_DURATION)
                 # broadcasts to entire channel, does not need a response confirmation
     async def follower_rejoin_after_dropping_off(self):
@@ -877,7 +880,7 @@ class ThisDevice(Device):
                     ).msg
                 
                     # Send NEW_LEADER message directly to the other leader
-                    await self.transceiver.async_send(msg=leader_msg, destination_id=other_leader_id)
+                    await self.transceiver.async_send(destination_id=other_leader_id, msg=leader_msg)
 
                 except Exception as e:
                     print(f"Error asserting leadership: {e}")
