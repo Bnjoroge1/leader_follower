@@ -766,7 +766,7 @@ class ThisDevice(Device):
         """
         print("Follower responding to check-in")
         self.log_status("RESPONDING TO CHECKIN")
-        await self.transceiver.async_send(Message(action=Action.CHECK_IN_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id).msg)
+        await self.transceiver.async_send(msg = Message(action=Action.CHECK_IN_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id).msg)
         # sending and receiving is along different channels for Transceiver, so this should not be a problem
     
     async def follower_handle_dlist(self):
