@@ -708,7 +708,7 @@ class ThisDevice(Device):
             follower_id=self.id,
             
         )
-        self.transceiver.async_send(msg.msg)
+        await self.transceiver.async_send(self.leader_id, msg.msg)
         #wait for response with certain timeout
         rejoin_time = time.time() + 5.0
         while time.time() < rejoin_time:
@@ -784,7 +784,7 @@ class ThisDevice(Device):
         msg = Message(
         action=Action.ATT_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id
         )
-        self.transceiver.async_send(msg.msg)
+        await self.transceiver.async_send(self.leader_id, msg.msg)
 
     async def follower_respond_check_in(self):
         """
@@ -949,7 +949,7 @@ class ThisDevice(Device):
                 await self.transceiver.async_send(destination_id, new_follower_msg.msg)
             else:
                 # For simulation mode - use the send helper
-                await self.send(
+                await self.async_send(
                     action=Action.NEW_FOLLOWER.value, 
                     payload=0, 
                     leader_id=rcvd_leader_id, 

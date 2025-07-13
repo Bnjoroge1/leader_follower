@@ -39,7 +39,7 @@ class AbstractTransceiver(metaclass=ABCMeta):
     def send(self, msg):
         pass
     @abstractmethod
-    async def async_send(self, msg: int) -> None:
+    async def async_send(self, msg: int, destination_id: Optional[int] = None) -> None:
         """Asynchronous send operation."""
         pass
 
