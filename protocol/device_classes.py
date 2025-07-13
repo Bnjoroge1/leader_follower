@@ -795,7 +795,7 @@ class ThisDevice(Device):
         seq_num = self.received_payload()
         leader_id = self.received_leader_id()
 
-        print(f"Follower {self.id} respondong to checking msg: {self.seq_num} from leader {self.leader_id} ")
+        print(f"Follower {self.id} respondong to checking msg: {seq_num} from leader {self.leader_id} ")
         await asyncio.sleep(random.uniform(0.1, 0.3))
 
         self.log_status("RESPONDING TO CHECKIN")
