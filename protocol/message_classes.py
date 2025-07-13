@@ -1,5 +1,5 @@
 from enum import Enum
-
+from typing import Optional
 
 class Message:
     """ Object carrying action, payload, option. """
@@ -19,6 +19,7 @@ class Message:
         self.leader_id = leader_id
         self.follower_id = follower_id
         self.msg = int((action * 1e10) + (payload * 1e8) + (leader_id * 1e4) + (follower_id))
+        
 
     def __str__(self) -> str:
         """
@@ -30,6 +31,7 @@ class Message:
             f"Payload: {self.payload}",
             f"Leader Address: {hex(self.leader_id)}",
             f"Follower Address: {hex(self.follower_id)}",
+            f"Sequence Nu"
         ]
         return "\n\t".join(out)
 

@@ -505,47 +505,67 @@ class ThisDevice(Device):
         """
         #Take snapshot of device list in a thread-safe manner first
         device_list = self.device_list.get_device_list()
+        expected_followers = {follower_id for follower_id in self.device_list.get_ids() if follower_id != id}
+        if not expected_followers:
+            return
         #create a copy of the device list
         device_list = dict(device_list)
         if not self.active:
             return
         # leader should listen for check-in response before moving on to ensure scalability
-        for id, device in device_list.items():
+        for follower_id in expected_followers:
             if not self.active:
                 return
                   
 
-                    
-            if id == self.id:
-                continue
-
-            got_response: bool = False
             # sending check-in to individual device
-            print("Leader sending check-in to", id)
-            self.log_status("SENDING CHECKIN TO " + str(id))
+            print("Leader sending check-in to", follower_id)
+            self.log_status("SENDING CHECKIN TO " + str(follower_id))
+            self.check_in_sequence = (getattr(self, 'check_in_sequence', 0) + 1) % 10000
+ 
             checkin_msg = Message(
-                action=Action.CHECK_IN.value, payload=0, leader_id=self.id, follower_id=id
+                action=Action.CHECK_IN.value, payload=self.check_in_sequence, leader_id=self.id, follower_id=follower_id
             )
-            await self.transceiver.async_send(id, checkin_msg.msg)
-            # device hangs in send() until finished sending
-            end_time = time.time() + RESPONSE_ALLOWANCE
-            # accounts for leader receiving another device's check-in response (which should never happen)
-            while time.time() < end_time:  # times should line up with receive duration
-                if await self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.CHECK_IN_RESPONSE.value):
-                    # if tiebreak occurred during receive and no longer leader, end check in
-                    if not self.get_leader():
-                        return
-                    
-                    if abs(self.received_follower_id() - id) < PRECISION_ALLOWANCE:  # received message is same as sent message
-                        # early exit if heard
-                        got_response = True
-                        print("Leader heard check-in response from", id)
+            try: 
+                await self.transceiver.async_send(follower_id, checkin_msg.msg)
+            except Exception as sending_error:
+                await self.log_status(f"{sending_error}")
+                print(f" Error: {sending_error} received.")
+
+        responded_followers = set()
+        collection_window = 5.0
+        start_time = time.time()
+        print(f"Leader {self.id} colelcting responses for {collection_window}")
+        end_time = time.time() + RESPONSE_ALLOWANCE
+        
+        while time.time() - start_time < collection_window:
+            remaining_time = collection_window - (time.time() - start_time) 
+            if remaining_time <= 0:
+                break
+
+            if await self.receive(duration=RESPONSE_ALLOWANCE, action_value=Action.CHECK_IN_RESPONSE.value):
+                # if tiebreak occurred during receive and no longer leader, end check in
+                if not self.get_leader():
+                    return
+                if self.received_payload() == self.check_in_sequence:
+                    follower_id = self.received_follower_id()
+                    if follower_id in expected_followers:
+                        responded_followers.add(follower_id)
+                        print(f"Leader heard check-in response from {id}")
                         self.log_status("HEARD CHECKIN RESPONSE FROM " + str(id))
-                        break
-            if got_response:
-                device.reset_missed()
-            else:
-                device.incr_missed()
+                    else:
+                        print(f"Leader received unexpected followerid: {follower_id}")
+        device_list = self.device_list.get_device_list()
+        for follower_id in expected_followers:
+            if follower_id in device_list:
+                device = device_list.get(follower_id)
+                if follower_id in responded_followers:
+                    device.reset_missed()
+                    print(f"Leader {self.id} confirmed {follower_id}")
+                else:
+                    device.incr_missed()
+                    print(f"Device{follower_id} missed checkin from leader: {self.id}. Marking as missed")
+        
     async def _perform_leader_election(self):
         """
         Performs the elader election by broadcasting candidacies and listening for others. currently, determines the device with the lowest ID. 
@@ -770,10 +790,20 @@ class ThisDevice(Device):
         """
         Called after follower has received check-in message. Responds with same message.
         """
-        print("Follower responding to check-in")
+        if not self.active:
+            return
+        seq_num = self.received_payload()
+        leader_id = self.received_leader_id()
+
+        print(f"Follower {self.id} respondong to checking msg: {self.seq_num} from leader {self.leader_id} ")
+        await asyncio.sleep(random.uniform(0.1, 0.3))
+
         self.log_status("RESPONDING TO CHECKIN")
-        await self.transceiver.async_send(msg = Message(action=Action.CHECK_IN_RESPONSE.value, payload=0, leader_id=self.leader_id, follower_id=self.id).msg, destination_id=self.leader_id)
-        # sending and receiving is along different channels for Transceiver, so this should not be a problem
+
+        follower_msg = Message(action=Action.CHECK_IN_RESPONSE.value, payload=seq_num, leader_id=self.leader_id, follower_id=self.id).msg
+
+        await self.transceiver.async_send(msg=follower_msg, destination_id=self.leader_id)
+        print(f"Follower {self.id} sent check-in response")
     
     async def follower_handle_dlist(self):
         """
