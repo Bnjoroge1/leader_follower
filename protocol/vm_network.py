@@ -111,19 +111,18 @@ class VMNode():
           #self.hostname = hostname 
           self.address_map:VMNetworkAddressMap = address_map
           self.transceiver = VMNetworkTransceiver(node_id,address_map)
+          # The transceiver needs a queue to put received messages into.
+          # We create it here and pass it to the transceiver.
+          self.transceiver.receive_queue = asyncio.Queue()
           self.thisDevice = dc.ThisDevice(self.node_id, self.transceiver)
      
      async def start(self):
           print(f"VMNode {self.node_id} starting its device logic.")
-          print('Starting UDP server')
-          loop = asyncio.get_running_loop()
-          transport, protocol = await loop.create_datagram_endpoint(
-          lambda:VMNetworkUDP(), 
-          local_addr=(self.ip_address, self.port)
-          )
-          self.transceiver.transport = transport
-          self.transceiver.receive_queue = protocol.receive_queue
           
+          # Delegate server startup to the transceiver, which knows how to do it correctly.
+          await self.transceiver.start_server(self.ip_address, self.port)
+          
+          # Now that the server is running, start the main device logic.
           await self.thisDevice.device_main()
 
      def __str__(self) -> str:
