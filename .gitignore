@@ -4,7 +4,7 @@ output/
 protocol/zigbee2mqtt-data/log/
 .vscode
 *.log
-*.json
+#.json
 *.csv
 *.txt
 .python_version
