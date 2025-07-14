@@ -15,10 +15,10 @@ class VMNetworkAddressMap():
      def set_address_from_node(self, node_id:int, ip_address:tuple):
           self.address_map[node_id] = ip_address
 class VMNetworkUDP(asyncio.DatagramProtocol):
-     def __init__(self) -> None:
+     def __init__(self, receive_queue: asyncio.Queue) -> None:
           super().__init__()
           self.transport = None
-          self.receive_queue = asyncio.Queue()    
+          self.receive_queue = receive_queue    
 
      def connection_made(self, transport: asyncio.DatagramTransport) -> None:
           self.transport = transport
@@ -32,13 +32,41 @@ class VMNetworkUDP(asyncio.DatagramProtocol):
 
 
 class VMNetworkTransceiver(AbstractTransceiver):
-     def __init__(self, node_id, address_map:VMNetworkAddressMap):
+     def __init__(self, node_id: int, address_map: VMNetworkAddressMap):
           self.address_map:VMNetworkAddressMap =  address_map
           self.node_id = node_id
 
           self.transport: Optional[asyncio.DatagramTransport] = None
           self.receive_queue: Optional[asyncio.Queue] = None
-          print(f"Initialzed empty transceiver for {self.node_id}")
+          self.protocol = None
+
+     async def start_server(self, ip_address: str, port: int):
+        """Starts the UDP server endpoint."""
+        print("Starting UDP server")
+        loop = asyncio.get_running_loop()
+        try:
+            # The key change is here: Use '0.0.0.0' to listen on all available interfaces.
+            # The `ip_address` from the config is for sending, not for binding the listener.
+            self.transport, self.protocol = await loop.create_datagram_endpoint(
+                lambda: VMNetworkUDP(self.receive_queue),
+                local_addr=('0.0.0.0', port)
+            )
+        except OSError as e:
+            print(f"FATAL: Could not start UDP server on port {port}. Error: {e}")
+            # This might happen if the port is already in use.
+            raise
+        except Exception as e:
+            print(f"An unexpected error occurred during server startup: {e}")
+            raise
+
+     async def stop_server(self):
+          if self.transport:
+               self.transport.close()
+               self.transport = None
+          if self.protocol:
+               await self.protocol.shutdown()
+               self.protocol = None
+
      def send(self, msg):
         pass
      def receive(self):
@@ -102,5 +130,5 @@ class VMNode():
          return f"Node with node id: {self.node_id} \
          HostName: , IP Address: {self.ip_address.split(':')[0]}" \
          ""
-               
-                    
+
+
