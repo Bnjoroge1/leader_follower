@@ -14,6 +14,10 @@ from device_state import DeviceState, DeviceStateStore
 import random
 import asyncio
 from abstract_network import AbstractTransceiver
+from metrics_collector import get_metrics_collector
+import psutil  # For system metrics
+from swim_protocol import SwimProtocol, SwimMessage, SwimMessageType
+from protocol_config import get_config_manager
 # zigpy imports      
 #import asyncio
 #from zigpy.zcl.clusters.general import OnOff
@@ -33,6 +37,14 @@ ATTENDANCE_DURATION: float = 1
 D_LIST_DURATION: float = 2
 DELETE_DURATION: float = 2
 TAKEOVER_DURATION: float = 15
+ATTENDANCE_INTERVAL:float = 10
+
+# Protocol configuration - now managed by config manager
+def get_failure_detection_protocol():
+    return get_config_manager().get_current_protocol()
+
+# For backward compatibility
+FAILURE_DETECTION_PROTOCOL = get_failure_detection_protocol()
 
 
 
@@ -153,8 +165,49 @@ class ThisDevice(Device):
         #persistent id
         self.device_uuid = self._get_or_create_uuid()
         self.last_heard_from_leader = time.time()
+        
+        # Initialize metrics collection
+        self.metrics_collector = get_metrics_collector()
+        self.metrics_collector.initialize_node_metrics(self.id, FAILURE_DETECTION_PROTOCOL)
+        self.message_counter = 0  # For generating unique message IDs
+        self.last_metrics_update = time.time()
+        
+        # Initialize SWIM protocol if configured
+        self.swim_protocol = None
+        if FAILURE_DETECTION_PROTOCOL == "swim":
+            self.swim_protocol = SwimProtocol(self.id, self.transceiver, self.metrics_collector)
         self.disconnected = False
 
+    def _generate_message_id(self) -> str:
+        """Generate unique message ID for tracking"""
+        self.message_counter += 1
+        return f"{self.id}_{self.message_counter}_{int(time.time() * 1000)}"
+
+    def _update_system_metrics(self):
+        """Update system-level metrics periodically"""
+        current_time = time.time()
+        if current_time - self.last_metrics_update > 1.0:  # Update every second
+            try:
+                cpu_percent = psutil.cpu_percent()
+                memory_info = psutil.virtual_memory()
+                queue_size = 0
+                if hasattr(self.transceiver, '_incoming_queue') and self.transceiver._incoming_queue:
+                    queue_size = self.transceiver._incoming_queue.qsize()
+                
+                self.metrics_collector.update_system_metrics(
+                    self.id, cpu_percent, memory_info.percent, queue_size, 1
+                )
+                
+                # Update protocol-specific metrics
+                self.metrics_collector.update_protocol_specific_metrics(
+                    self.id,
+                    heartbeat_interval=ATTENDANCE_INTERVAL if FAILURE_DETECTION_PROTOCOL == "heartbeat" else 0.0,
+                    ping_timeout=RESPONSE_ALLOWANCE
+                )
+                
+                self.last_metrics_update = current_time
+            except Exception as e:
+                print(f"Error updating system metrics for device {self.id}: {e}")
         
     def _get_or_create_uuid(self):
         """
@@ -192,6 +245,12 @@ class ThisDevice(Device):
         # single-send with assumed perfect channel
         # users take responsibility of implementing duration send where needed
         if self.transceiver:
+            # Track metrics
+            message_id = self._generate_message_id()
+            message_size = len(str(msg))  # Rough estimate of message size
+            self.metrics_collector.record_message_sent(self.id, message_id, message_size)
+            self._update_system_metrics()
+            
             await self.transceiver.async_send(msg)  # transceiver only deals with integers
             self.log_message(msg, 'SEND')
         else:
@@ -273,6 +332,12 @@ class ThisDevice(Device):
                     # Store raw message temporarily for parsing
                     temp_received = received_msg_int
                     self.received = received_msg_int
+                    
+                    # Track metrics for received message
+                    message_id = f"recv_{self.id}_{int(time.time() * 1000)}"
+                    message_size = len(str(received_msg_int))
+                    self.metrics_collector.record_message_received(self.id, message_id, message_size)
+                    self._update_system_metrics()
 
                     try:
                         print(f"""Received Leader:{self.received_leader_id()}
@@ -288,6 +353,16 @@ class ThisDevice(Device):
                             if received_leader != 0 and received_leader != self.leader_id:
                                 await self.handle_tiebreaker(received_leader)
                                 # State might have changed, but continue processing this message
+
+                        # --- Handle SWIM Messages ---
+                        if received_action == Action.SWIM_MESSAGE.value and self.swim_protocol:
+                            try:
+                                swim_msg = SwimMessage.from_payload(self.received_payload(), received_leader)
+                                await self.swim_protocol.handle_swim_message(swim_msg)
+                                if action_value == Action.SWIM_MESSAGE.value:
+                                    return True
+                            except Exception as e:
+                                print(f"Error handling SWIM message: {e}")
 
                         # --- Handle Activate/Deactivate ---
                         # These might change state but shouldn't necessarily stop the receive
@@ -531,8 +606,22 @@ class ThisDevice(Device):
                         break
             if got_response:
                 device.reset_missed()
+                # Record successful heartbeat (no failure detected)
+                self.metrics_collector.record_failure_detection(
+                    self.id, id, 0.0, False  # No failure detected
+                )
             else:
                 device.incr_missed()
+                # Record potential failure detection
+                detection_time = time.time() - (end_time - RESPONSE_ALLOWANCE)
+                is_actual_failure = device.missed >= MISSED_THRESHOLD
+                self.metrics_collector.record_failure_detection(
+                    self.id, id, detection_time, is_actual_failure
+                )
+                
+                if is_actual_failure:
+                    print(f"Device {id} marked as failed after {device.missed} missed check-ins")
+                    self.metrics_collector.record_node_failure(id)
     async def _perform_leader_election(self):
         """
         Performs the elader election by broadcasting candidacies and listening for others. currently, determines the device with the lowest ID. 
@@ -541,6 +630,7 @@ class ThisDevice(Device):
         """
         print(f"Device {self.id} starting leader election...")
         self.in_election = True
+        self._election_start_time = time.time()  # Track election start time for metrics
         self.log_status("STARTING ELECTION")
         # Log to UI if this is happening after timeout
         global global_ui_update_queue
@@ -883,8 +973,15 @@ class ThisDevice(Device):
         pass
 
     async def make_leader(self):
+        old_leader_id = getattr(self, 'leader_id', None)
+        election_start_time = getattr(self, '_election_start_time', time.time())
+        election_time = time.time() - election_start_time
+        
         await super().make_leader()
        
+        # Track leader change metrics
+        self.metrics_collector.record_leader_change(old_leader_id, self.id, election_time)
+        
         if hasattr(self, 'is_ui_device') and self.is_ui_device:
             self.update_leader(self.id)
         msg = Message(
@@ -1149,6 +1246,11 @@ class ThisDevice(Device):
             # format is TIME, TYPE (STATUS, SENT, RECEIVED), CONTENT (<MSG>, <STATUS UPDATE>)
             self.csvWriter = csv.writer(self.file, dialect='excel')
             self.log_status("DEVICE_MAIN STARTED.")
+            
+            # Start SWIM protocol if configured
+            if FAILURE_DETECTION_PROTOCOL == "swim" and self.swim_protocol:
+                await self.swim_protocol.start()
+                self.log_status("SWIM_PROTOCOL_STARTED")
             # --- Leader Election ---
             # Perform election if eligible (e.g., not explicitly told to be follower)
             # For simplicity, assume eligible unless known_leaders has entries preventing it.
@@ -1202,34 +1304,54 @@ class ThisDevice(Device):
                         if hasattr(self.transceiver, 'log'): self.transceiver.log("LEADER")
                         self.log_status("LEADER_LOOP")
 
-                        # Send regular attendance
-                        if current_time - last_attendance_time > ATTENDANCE_INTERVAL:
+                        if FAILURE_DETECTION_PROTOCOL == "heartbeat":
+                            # Traditional heartbeat-based failure detection
+                            # Send regular attendance
+                            if current_time - last_attendance_time > ATTENDANCE_INTERVAL:
+                                try:
+                                    print(f"Leader {self.id} sending attendance")
+                                    await self.leader_send_attendance()
+                                    last_attendance_time = current_time
+                                except Exception as e:
+                                    print(f"Error sending leader attendance: {e}")
+                                    self.log_status(f"ERROR_LEADER_ATTENDANCE_{e}")
+                            if not self.get_leader(): continue # Re-check leadership
+
+                            # Send device list periodically or on change
                             try:
-                                print(f"Leader {self.id} sending attendance")
-                                await self.leader_send_attendance()
-                                last_attendance_time = current_time
+                                # print(f"Leader {self.id} sending device list") # Can be noisy
+                                await self.leader_send_device_list()
                             except Exception as e:
-                                print(f"Error sending leader attendance: {e}")
-                                self.log_status(f"ERROR_LEADER_ATTENDANCE_{e}")
-                        if not self.get_leader(): continue # Re-check leadership
+                                print(f"Error sending device list: {e}")
+                                self.log_status(f"ERROR_LEADER_DLIST_{e}")
+                            if not self.get_leader(): continue # Re-check leadership
 
-                        # Send device list periodically or on change
-                        try:
-                            # print(f"Leader {self.id} sending device list") # Can be noisy
-                            await self.leader_send_device_list()
-                        except Exception as e:
-                            print(f"Error sending device list: {e}")
-                            self.log_status(f"ERROR_LEADER_DLIST_{e}")
-                        if not self.get_leader(): continue # Re-check leadership
-
-                        # Perform check-ins
-                        try:
-                            # print(f"Leader {self.id} performing check-in") # Can be noisy
-                            await self.leader_perform_check_in()
-                        except Exception as e:
-                            print(f"Error during check-in: {e}")
-                            self.log_status(f"ERROR_LEADER_CHECKIN_{e}")
-                        if not self.get_leader(): continue # Re-check leadership
+                            # Perform check-ins
+                            try:
+                                # print(f"Leader {self.id} performing check-in") # Can be noisy
+                                await self.leader_perform_check_in()
+                            except Exception as e:
+                                print(f"Error during check-in: {e}")
+                                self.log_status(f"ERROR_LEADER_CHECKIN_{e}")
+                            if not self.get_leader(): continue # Re-check leadership
+                        
+                        elif FAILURE_DETECTION_PROTOCOL == "swim":
+                            # SWIM protocol handles failure detection
+                            # Leader still needs to maintain device list and send attendance for coordination
+                            if current_time - last_attendance_time > ATTENDANCE_INTERVAL:
+                                try:
+                                    print(f"Leader {self.id} sending attendance (SWIM mode)")
+                                    await self.leader_send_attendance()
+                                    last_attendance_time = current_time
+                                except Exception as e:
+                                    print(f"Error sending leader attendance: {e}")
+                                    self.log_status(f"ERROR_LEADER_ATTENDANCE_{e}")
+                            
+                            # Add nodes to SWIM membership as they join
+                            if self.swim_protocol:
+                                for device_id in self.device_list.get_device_list().keys():
+                                    if device_id != self.id:
+                                        self.swim_protocol.add_node(device_id)
 
                         # Drop disconnected devices
                         try:
@@ -1246,44 +1368,65 @@ class ThisDevice(Device):
                         if hasattr(self.transceiver, 'log'): self.transceiver.log("FOLLOWER")
                         self.log_status("FOLLOWER_LOOP")
 
-                        # Listen for messages from the leader
-                        # Timeout slightly longer than leader's attendance interval
-                        if not await self.receive(duration=ATTENDANCE_INTERVAL + 3.0):
-                            print(f"Follower {self.id} timed out waiting for leader {self.leader_id}.")
-                            self.log_status("LEADER_TIMEOUT")
-                            # If timeout occurs, consider leader lost, attempt to become leader
-                            if self.id not in self.known_leaders:
-                                print(f"Follower {self.id} attempting takeover.")
-                                self.log_status("ATTEMPTING_TAKEOVER")
-                                # Break the inner loop to re-trigger election logic
-                                # Setting self.leader = True here might be premature
-                                self.known_leaders.clear() # Allow self to participate
-                                 # Explicitly perform leader election here
-                                elected_leader_id = await self._perform_leader_election()
+                        if FAILURE_DETECTION_PROTOCOL == "heartbeat":
+                            # Traditional heartbeat-based leader detection
+                            # Listen for messages from the leader
+                            # Timeout slightly longer than leader's attendance interval
+                            if not await self.receive(duration=ATTENDANCE_INTERVAL + 3.0):
+                                print(f"Follower {self.id} timed out waiting for leader {self.leader_id}.")
+                                self.log_status("LEADER_TIMEOUT")
+                                # If timeout occurs, consider leader lost, attempt to become leader
+                                if self.id not in self.known_leaders:
+                                    print(f"Follower {self.id} attempting takeover.")
+                                    self.log_status("ATTEMPTING_TAKEOVER")
+                                    # Break the inner loop to re-trigger election logic
+                                    # Setting self.leader = True here might be premature
+                                    self.known_leaders.clear() # Allow self to participate
+                                     # Explicitly perform leader election here
+                                    elected_leader_id = await self._perform_leader_election()
+                        
+                        elif FAILURE_DETECTION_PROTOCOL == "swim":
+                            # SWIM protocol handles failure detection
+                            # Follower still listens for leader messages but with longer timeout
+                            # since SWIM will detect leader failure independently
+                            if not await self.receive(duration=ATTENDANCE_INTERVAL + 10.0):
+                                # Check if SWIM protocol detected leader failure
+                                if (self.swim_protocol and 
+                                    self.leader_id in self.swim_protocol.membership and
+                                    not self.swim_protocol.membership[self.leader_id].is_alive()):
+                                    print(f"Follower {self.id} detected leader {self.leader_id} failure via SWIM")
+                                    self.log_status("SWIM_LEADER_FAILURE_DETECTED")
+                                    if self.id not in self.known_leaders:
+                                        print(f"Follower {self.id} attempting takeover after SWIM detection.")
+                                        self.log_status("ATTEMPTING_TAKEOVER_SWIM")
+                                        self.known_leaders.clear()
+                                        elected_leader_id = await self._perform_leader_election()
+                        
+                        else:
+                            # Fallback to basic receive
+                            await self.receive(duration=ATTENDANCE_INTERVAL + 3.0)
+                        
+                        # Common logic for handling election results (after timeout)
+                        if 'elected_leader_id' in locals():
+                            # Update role based on election results
+                            if elected_leader_id == self.id:
+                                print(f"Device {self.id} becoming leader after timeout")
+                                await self.make_leader()
+                                self.leader_id = self.id
                                 
-                                # Update role based on election results
-                                if elected_leader_id == self.id:
-                                    print(f"Device {self.id} becoming leader after timeout")
-                                    await self.make_leader()
-                                    self.leader_id = self.id
-                                    
-                                    # Ensure self is in device list with a task
-                                    if not self.device_list.find_device(self.id):
-                                        task = self.get_task() if hasattr(self, 'get_task') else 0
-                                        await self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
-                                    
-                                    # Announce leadership immediately
-                                    await asyncio.sleep(1)  # Allow others to process
-                                    await self.leader_send_attendance()
-                                else:
-                                    print(f"Device {self.id} becoming follower of {elected_leader_id} after timeout")
-                                    await self.make_follower()
-                                    self.leader_id = elected_leader_id
+                                # Ensure self is in device list with a task
+                                if not self.device_list.find_device(self.id):
+                                    task = self.get_task() if hasattr(self, 'get_task') else 0
+                                    await self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
                                 
+                                # Announce leadership immediately
+                                await asyncio.sleep(1)  # Allow others to process
+                                await self.leader_send_attendance()
                             else:
-                                print(f"Follower {self.id} ineligible for takeover.")
-                                self.log_status("LEADER_TIMEOUT_INELIGIBLE")
-                            continue # Continue follower loop if ineligible
+                                print(f"Device {self.id} becoming follower of {elected_leader_id} after timeout")
+                                await self.make_follower()
+                                self.leader_id = elected_leader_id
+                            continue # Continue follower loop after election
 
                         # Check if message is from the expected leader
                         # Handle case where leader_id might still be 0 if election failed

@@ -55,5 +55,8 @@ class Action(Enum):
     REJOIN_REQUEST  = 10
     REJOIN_RESPONSE = 11
     REJOIN_ANNOUNCE = 12
+    
+    # SWIM protocol messages
+    SWIM_MESSAGE = 15
      
 
