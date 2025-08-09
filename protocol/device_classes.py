@@ -1103,6 +1103,36 @@ class ThisDevice(Device):
         # Attempt to elect a new super leader
         await self._attempt_super_leader_election()
     
+    async def _handle_neighborhood_leader_failure(self):
+        """Handle the failure of the current neighborhood leader"""
+        print(f"Device {self.id} handling neighborhood leader {self.neighborhood_leader_id} failure")
+        
+        # Clear the current neighborhood leader
+        old_neighborhood_leader_id = self.neighborhood_leader_id
+        self.neighborhood_leader_id = None
+        
+        # Log the failure
+        self.log_status(f"NEIGHBORHOOD_LEADER_FAILURE_{old_neighborhood_leader_id}")
+        
+        # Wait a bit to let other devices in neighborhood detect the failure too
+        await asyncio.sleep(1.0 + (self.id % 3) * 0.5)  # Staggered delay based on ID
+        
+        # Trigger neighborhood leader election
+        print(f"Device {self.id} starting neighborhood leader election after leader failure")
+        elected_leader_id = await self._perform_leader_election("neighborhood")
+        
+        # Update neighborhood leadership based on election result
+        if elected_leader_id == self.id:
+            # We became the new neighborhood leader
+            self.neighborhood_leader_id = self.id
+            await self.promote_to_neighborhood_leader()
+            print(f"Device {self.id} became new neighborhood leader after failure")
+        else:
+            # Someone else became the neighborhood leader
+            self.neighborhood_leader_id = elected_leader_id
+            self.last_neighborhood_leader_contact = time.time()  # Reset contact time
+            print(f"Device {self.id} acknowledged new neighborhood leader {elected_leader_id} after failure")
+    
     async def _perform_hierarchical_leader_operations(self):
         """Perform periodic hierarchical operations for leaders"""
         current_time = time.time()
@@ -1980,6 +2010,30 @@ class ThisDevice(Device):
                             case _:
                                 print(f"Follower {self.id} received unknown action {action} from leader.")
                                 self.log_status(f"UNKNOWN_ACTION_{action}")
+                        
+                        # Update neighborhood leader contact time if message is from our neighborhood leader
+                        if (self.hierarchy_enabled and 
+                            self.neighborhood_leader_id and 
+                            received_leader == self.neighborhood_leader_id):
+                            self.last_neighborhood_leader_contact = current_time
+                        
+                        # Check for neighborhood leader failure (for non-neighborhood-leaders)
+                        if (self.hierarchy_enabled and 
+                            not self.is_neighborhood_leader() and 
+                            self.neighborhood_leader_id and 
+                            self.neighborhood_leader_id != self.id):
+                            
+                            # Initialize contact time if not set
+                            if not hasattr(self, 'last_neighborhood_leader_contact'):
+                                self.last_neighborhood_leader_contact = current_time
+                            
+                            # Check if we've lost contact with our neighborhood leader
+                            config_manager = get_config_manager()
+                            neighborhood_timeout = config_manager.config.council_heartbeat_interval * 3
+                            
+                            if (current_time - self.last_neighborhood_leader_contact > neighborhood_timeout):
+                                print(f"Device {self.id} detected neighborhood leader {self.neighborhood_leader_id} timeout")
+                                await self._handle_neighborhood_leader_failure()
 
                 # --- Inactive Device Loop ---
                 while not self.active:
