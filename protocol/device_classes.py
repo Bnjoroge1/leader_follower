@@ -18,6 +18,11 @@ from metrics_collector import get_metrics_collector
 import psutil  # For system metrics
 from swim_protocol import SwimProtocol, SwimMessage, SwimMessageType
 from protocol_config import get_config_manager
+from hierarchy_classes import (
+    NeighborhoodManager, CouncilManager, NeighborhoodRole,
+    encode_neighborhood_payload, decode_neighborhood_payload,
+    encode_council_payload, decode_council_payload
+)
 # zigpy imports      
 #import asyncio
 #from zigpy.zcl.clusters.general import OnOff
@@ -177,6 +182,37 @@ class ThisDevice(Device):
         if FAILURE_DETECTION_PROTOCOL == "swim":
             self.swim_protocol = SwimProtocol(self.id, self.transceiver, self.metrics_collector)
         self.disconnected = False
+        
+        # Initialize hierarchical neighborhood support
+        config_manager = get_config_manager()
+        self.hierarchy_enabled = config_manager.config.hierarchy_enabled
+        
+        if self.hierarchy_enabled:
+            self.neighborhood_manager = NeighborhoodManager(
+                strategy=config_manager.config.neighborhood_strategy,
+                target_size=config_manager.config.target_neighborhood_size
+            )
+            self.council_manager = CouncilManager(
+                heartbeat_timeout=config_manager.config.council_heartbeat_interval * 2
+            )
+            
+            # Compute and assign neighborhood
+            self.neighborhood_id = self.neighborhood_manager.assign_device_to_neighborhood(self.id)
+            self.role = NeighborhoodRole.DEVICE
+            self.neighborhood_leader_id = None
+            self.super_leader_id = None
+            
+            # Timing for periodic operations
+            self.last_council_summary = 0
+            self.last_council_heartbeat = 0
+            self.last_rebalance_check = 0
+            
+            print(f"Device {self.id} assigned to neighborhood {self.neighborhood_id}")
+        else:
+            self.neighborhood_manager = None
+            self.council_manager = None
+            self.neighborhood_id = 0  # Default neighborhood for flat mode
+            self.role = NeighborhoodRole.DEVICE
 
     def _generate_message_id(self) -> str:
         """Generate unique message ID for tracking"""
@@ -225,9 +261,273 @@ class ThisDevice(Device):
             json.dump({'device_uuid ': new_uuid}, f)
         return new_uuid
     
-
-
-
+    # Hierarchical neighborhood helper methods
+    
+    def is_neighborhood_leader(self) -> bool:
+        """Check if this device is a neighborhood leader"""
+        return self.hierarchy_enabled and self.role == NeighborhoodRole.NEIGHBORHOOD_LEADER
+    
+    def is_super_leader(self) -> bool:
+        """Check if this device is the super leader"""
+        return self.hierarchy_enabled and self.role == NeighborhoodRole.SUPER_LEADER
+    
+    def get_neighborhood_devices(self) -> List[int]:
+        """Get devices in this device's neighborhood"""
+        if not self.hierarchy_enabled or not self.neighborhood_manager:
+            return list(self.device_list.get_device_list().keys())
+        
+        return self.neighborhood_manager.get_neighborhood_devices(self.neighborhood_id)
+    
+    def should_process_message_for_neighborhood(self, action: int, payload: int = 0) -> bool:
+        """Check if message should be processed based on neighborhood scoping"""
+        if not self.hierarchy_enabled:
+            return True  # Process all messages in flat mode
+        
+        # Messages that are always processed regardless of neighborhood
+        global_messages = {
+            Action.ACTIVATE.value,
+            Action.DEACTIVATE.value,
+            Action.SWIM_MESSAGE.value,
+            Action.CROSS_NEIGHBORHOOD_ROUTE.value,
+            Action.COUNCIL_JOIN.value,
+            Action.COUNCIL_SUMMARY.value,
+            Action.COUNCIL_HEARTBEAT.value,
+            Action.SUPER_LEADER_ANNOUNCE.value
+        }
+        
+        if action in global_messages:
+            return True
+        
+        # For neighborhood-scoped messages, check if they're for this neighborhood
+        neighborhood_scoped_messages = {
+            Action.ATTENDANCE.value,
+            Action.ATT_RESPONSE.value,
+            Action.D_LIST.value,
+            Action.CHECK_IN.value,
+            Action.CHECK_IN_RESPONSE.value,
+            Action.DELETE.value,
+            Action.CANDIDACY.value,
+            Action.NEW_LEADER.value,
+            Action.NEW_FOLLOWER.value
+        }
+        
+        if action in neighborhood_scoped_messages:
+            # For now, we'll add neighborhood filtering in the message payload later
+            # Currently, we assume these messages are properly scoped
+            return True
+        
+        return True  # Default to processing the message
+    
+    async def send_to_neighborhood(self, action: int, payload: int, leader_id: int, follower_id: int):
+        """Send message scoped to current neighborhood"""
+        if self.hierarchy_enabled:
+            # Encode neighborhood ID in the payload if needed
+            # For now, use existing send method - we'll add payload encoding later
+            await self.send(action, payload, leader_id, follower_id)
+        else:
+            await self.send(action, payload, leader_id, follower_id)
+    
+    async def send_council_message(self, action: int, payload: int, target_leader_id: int = 0):
+        """Send message to council members or super leader"""
+        if not self.hierarchy_enabled or not self.is_neighborhood_leader():
+            return
+        
+        await self.send(action, payload, self.id, target_leader_id)
+    
+    async def _handle_hierarchical_message(self, action: int, sender_id: int, target_id: int):
+        """Handle hierarchical neighborhood messages"""
+        try:
+            if action == Action.NEIGHBORHOOD_JOIN_REQUEST.value:
+                await self._handle_neighborhood_join_request(sender_id, target_id)
+            
+            elif action == Action.NEIGHBORHOOD_JOIN_ACCEPT.value:
+                await self._handle_neighborhood_join_accept(sender_id)
+            
+            elif action == Action.NEIGHBORHOOD_LEAVE.value:
+                await self._handle_neighborhood_leave(sender_id)
+            
+            elif action == Action.COUNCIL_JOIN.value:
+                await self._handle_council_join(sender_id, self.received_payload())
+            
+            elif action == Action.COUNCIL_SUMMARY.value:
+                await self._handle_council_summary(sender_id, self.received_payload())
+            
+            elif action == Action.COUNCIL_HEARTBEAT.value:
+                await self._handle_council_heartbeat(sender_id)
+            
+            elif action == Action.SUPER_LEADER_ANNOUNCE.value:
+                await self._handle_super_leader_announce(sender_id)
+            
+            elif action == Action.CROSS_NEIGHBORHOOD_ROUTE.value:
+                await self._handle_cross_neighborhood_route(sender_id, self.received_payload())
+            
+            elif action == Action.REBALANCE_REQUEST.value:
+                await self._handle_rebalance_request(sender_id, self.received_payload())
+            
+            elif action == Action.REBALANCE_ACCEPT.value:
+                await self._handle_rebalance_accept(sender_id, self.received_payload())
+                
+        except Exception as e:
+            print(f"Error handling hierarchical message (action={action}): {e}")
+    
+    async def _handle_neighborhood_join_request(self, device_id: int, target_id: int):
+        """Handle request from device to join neighborhood"""
+        if not self.is_neighborhood_leader() or target_id != self.id:
+            return
+        
+        print(f"Neighborhood leader {self.id} received join request from device {device_id}")
+        
+        # Check if we have capacity
+        current_devices = self.get_neighborhood_devices()
+        config_manager = get_config_manager()
+        max_size = config_manager.config.max_neighborhood_size
+        
+        if len(current_devices) >= max_size:
+            print(f"Neighborhood {self.neighborhood_id} at capacity, rejecting device {device_id}")
+            # Could implement rejection message here
+            return
+        
+        # Add device to neighborhood
+        if self.neighborhood_manager:
+            self.neighborhood_manager.assign_device_to_neighborhood(device_id, self.neighborhood_id)
+        
+        # Add to local device list
+        task = self.device_list.unused_tasks()[0] if self.device_list.unused_tasks() else 0
+        await self.device_list.add_device(device_id, task, self.id)
+        
+        # Send acceptance
+        await self.send(Action.NEIGHBORHOOD_JOIN_ACCEPT.value, 0, self.id, device_id)
+        
+        print(f"Device {device_id} joined neighborhood {self.neighborhood_id}")
+    
+    async def _handle_neighborhood_join_accept(self, leader_id: int):
+        """Handle acceptance of neighborhood join request"""
+        print(f"Device {self.id} accepted into neighborhood {self.neighborhood_id} by leader {leader_id}")
+        self.neighborhood_leader_id = leader_id
+        self.leader_id = leader_id  # Set as regular leader for existing protocol compatibility
+    
+    async def _handle_neighborhood_leave(self, device_id: int):
+        """Handle device leaving neighborhood"""
+        if not self.is_neighborhood_leader():
+            return
+        
+        print(f"Device {device_id} leaving neighborhood {self.neighborhood_id}")
+        
+        # Remove from neighborhood manager
+        if self.neighborhood_manager:
+            self.neighborhood_manager.remove_device_from_neighborhood(device_id)
+        
+        # Remove from device list
+        self.device_list.remove_device(device_id)
+    
+    async def _handle_council_join(self, leader_id: int, payload: int):
+        """Handle new leader joining council"""
+        if not self.is_super_leader():
+            return
+        
+        device_count, neighborhood_id = decode_council_payload(payload)
+        print(f"Super leader {self.id} received council join from leader {leader_id} (neighborhood {neighborhood_id}, {device_count} devices)")
+        
+        if self.council_manager:
+            self.council_manager.add_member(leader_id, neighborhood_id, device_count)
+        
+        if self.neighborhood_manager:
+            self.neighborhood_manager.update_neighborhood_leader(neighborhood_id, leader_id, device_count)
+    
+    async def _handle_council_summary(self, leader_id: int, payload: int):
+        """Handle periodic summary from neighborhood leader"""
+        if not self.is_super_leader():
+            return
+        
+        device_count, neighborhood_id = decode_council_payload(payload)
+        
+        if self.council_manager:
+            self.council_manager.update_member_summary(leader_id, device_count)
+        
+        if self.neighborhood_manager:
+            self.neighborhood_manager.update_neighborhood_leader(neighborhood_id, leader_id, device_count)
+    
+    async def _handle_council_heartbeat(self, leader_id: int):
+        """Handle heartbeat from council member"""
+        if not self.is_super_leader():
+            return
+        
+        if self.council_manager:
+            self.council_manager.update_member_heartbeat(leader_id)
+    
+    async def _handle_super_leader_announce(self, new_super_leader_id: int):
+        """Handle announcement of new super leader"""
+        if not self.is_neighborhood_leader():
+            return
+        
+        print(f"Neighborhood leader {self.id} acknowledging new super leader {new_super_leader_id}")
+        self.super_leader_id = new_super_leader_id
+        
+        # Update last contact time
+        self.last_super_leader_contact = time.time()
+        
+        # Send acknowledgment
+        await self.send(Action.COUNCIL_HEARTBEAT.value, 0, self.id, new_super_leader_id)
+    
+    async def _handle_cross_neighborhood_route(self, sender_id: int, payload: int):
+        """Handle cross-neighborhood message routing"""
+        # This is a placeholder for cross-neighborhood routing
+        # Implementation would depend on specific routing protocol
+        print(f"Device {self.id} received cross-neighborhood route message from {sender_id}")
+    
+    async def _handle_rebalance_request(self, sender_id: int, payload: int):
+        """Handle neighborhood rebalancing request"""
+        # Placeholder for rebalancing logic
+        print(f"Device {self.id} received rebalance request from {sender_id}")
+    
+    async def _handle_rebalance_accept(self, sender_id: int, payload: int):
+        """Handle neighborhood rebalancing acceptance"""
+        # Placeholder for rebalancing logic
+        print(f"Device {self.id} received rebalance accept from {sender_id}")
+    
+    async def promote_to_neighborhood_leader(self):
+        """Promote this device to neighborhood leader"""
+        if not self.hierarchy_enabled:
+            return
+        
+        print(f"Device {self.id} becoming neighborhood leader for neighborhood {self.neighborhood_id}")
+        self.role = NeighborhoodRole.NEIGHBORHOOD_LEADER
+        self.neighborhood_leader_id = self.id
+        
+        # Register with council
+        if self.council_manager:
+            device_count = len(self.get_neighborhood_devices())
+            self.council_manager.add_member(self.id, self.neighborhood_id, device_count)
+            
+            # Send council join message to super leader
+            if self.super_leader_id:
+                payload = encode_council_payload(device_count, self.neighborhood_id)
+                await self.send_council_message(Action.COUNCIL_JOIN.value, payload, self.super_leader_id)
+    
+    async def promote_to_super_leader(self):
+        """Promote this device to super leader"""
+        if not self.hierarchy_enabled or not self.is_neighborhood_leader():
+            return
+        
+        print(f"Device {self.id} becoming super leader")
+        self.role = NeighborhoodRole.SUPER_LEADER
+        self.super_leader_id = self.id
+        
+        if self.council_manager:
+            self.council_manager.super_leader_id = self.id
+        
+        # Announce to other neighborhood leaders
+        await self._announce_super_leader()
+    
+    async def _announce_super_leader(self):
+        """Announce this device as the new super leader"""
+        if not self.is_super_leader():
+            return
+        
+        print(f"Super leader {self.id} announcing to all neighborhood leaders")
+        
+        # Broadcast to all devices - neighborhood leaders will handle it
+        await self.send(Action.SUPER_LEADER_ANNOUNCE.value, 0, self.id, 0)
 
     async def send(self, action: int, payload: int, leader_id: int, follower_id: int, duration: float = 0.0):
         """
@@ -363,6 +663,27 @@ class ThisDevice(Device):
                                     return True
                             except Exception as e:
                                 print(f"Error handling SWIM message: {e}")
+                        
+                        # --- Handle Hierarchical Messages ---
+                        if self.hierarchy_enabled:
+                            await self._handle_hierarchical_message(received_action, received_leader, received_follower)
+                            
+                            # Check if we're looking for this specific hierarchical message
+                            hierarchical_actions = {
+                                Action.NEIGHBORHOOD_JOIN_REQUEST.value,
+                                Action.NEIGHBORHOOD_JOIN_ACCEPT.value,
+                                Action.NEIGHBORHOOD_LEAVE.value,
+                                Action.COUNCIL_JOIN.value,
+                                Action.COUNCIL_SUMMARY.value,
+                                Action.COUNCIL_HEARTBEAT.value,
+                                Action.SUPER_LEADER_ANNOUNCE.value,
+                                Action.CROSS_NEIGHBORHOOD_ROUTE.value,
+                                Action.REBALANCE_REQUEST.value,
+                                Action.REBALANCE_ACCEPT.value
+                            }
+                            
+                            if received_action in hierarchical_actions and action_value == received_action:
+                                return True
 
                         # --- Handle Activate/Deactivate ---
                         # These might change state but shouldn't necessarily stop the receive
@@ -622,21 +943,30 @@ class ThisDevice(Device):
                 if is_actual_failure:
                     print(f"Device {id} marked as failed after {device.missed} missed check-ins")
                     self.metrics_collector.record_node_failure(id)
-    async def _perform_leader_election(self):
+    async def _perform_leader_election(self, election_type: str = "neighborhood"):
         """
-        Performs the elader election by broadcasting candidacies and listening for others. currently, determines the device with the lowest ID. 
+        Performs leader election by broadcasting candidacies and listening for others. 
+        Election can be for neighborhood leadership or super leadership.
         Returns:
-        int: The ID of the determin ed elected leader.
+        int: The ID of the determined elected leader.
         """
-        print(f"Device {self.id} starting leader election...")
+        if self.hierarchy_enabled and election_type == "neighborhood":
+            print(f"Device {self.id} starting neighborhood leader election for neighborhood {self.neighborhood_id}...")
+        elif self.hierarchy_enabled and election_type == "super":
+            print(f"Device {self.id} starting super leader election...")
+        else:
+            print(f"Device {self.id} starting leader election...")
+            
         self.in_election = True
         self._election_start_time = time.time()  # Track election start time for metrics
-        self.log_status("STARTING ELECTION")
+        self.log_status(f"STARTING_{election_type.upper()}_ELECTION")
+        
         # Log to UI if this is happening after timeout
         global global_ui_update_queue
         if hasattr(self, 'ui_update_queue') and self.ui_update_queue:
-            log_data = {"level": "INFO", "message": f"Device {self.id} starting election after leader timeout."}
+            log_data = {"level": "INFO", "message": f"Device {self.id} starting {election_type} election after leader timeout."}
             await self.ui_update_queue.put(("log_event", log_data))
+        
         # Add a small random delay before broadcasting to reduce collisions
         await asyncio.sleep(random.uniform(0.1, 0.5))
         received_candidacies = {self.id} # Track IDs seen, including self
@@ -645,24 +975,35 @@ class ThisDevice(Device):
         lowest_id_seen = self.id
 
         # Broadcast candidacy multiple times initially
-        
         await self.broadcast_candidacy()
         await asyncio.sleep(random.uniform(0.1, 0.3)) # Space out broadcasts
 
-        print(f"Device {self.id} listening during election window ({election_duration}s)")
-        self.log_status("ELECTION_LISTENING")
+        print(f"Device {self.id} listening during {election_type} election window ({election_duration}s)")
+        self.log_status(f"{election_type.upper()}_ELECTION_LISTENING")
 
         election_end = time.time() + election_duration
         while time.time() < election_end:
             # Listen for short intervals within the election window
-            if await self.receive(duration=2): # Listen for 0.5s
+            if await self.receive(duration=2): # Listen for 2s
                 # Check if the received message is a candidacy broadcast
                 if self.received_action() == Action.CANDIDACY.value:
                     other_id = self.received_leader_id()
+                    
+                    # In hierarchical mode, filter candidacies by context
+                    if self.hierarchy_enabled and election_type == "neighborhood":
+                        # For neighborhood election, only consider devices in same neighborhood
+                        if (self.neighborhood_manager and 
+                            self.neighborhood_manager.get_device_neighborhood(other_id) != self.neighborhood_id):
+                            continue  # Ignore candidacies from other neighborhoods
+                    elif self.hierarchy_enabled and election_type == "super":
+                        # For super leader election, only consider neighborhood leaders
+                        # This would need additional logic to verify sender is a neighborhood leader
+                        pass
+                    
                     # Candidacy messages use the sender's ID in the leader_id field
                     if other_id != 0: # Ignore if leader_id is 0 (not a valid candidacy)
-                        print(f"Device {self.id} received candidacy from {other_id}")
-                        self.log_status(f"HEARD_CANDIDACY_FROM_{other_id}")
+                        print(f"Device {self.id} received {election_type} candidacy from {other_id}")
+                        self.log_status(f"HEARD_{election_type.upper()}_CANDIDACY_FROM_{other_id}")
                         received_candidacies.add(other_id)
                         if other_id < lowest_id_seen:
                             lowest_id_seen = other_id
@@ -670,13 +1011,169 @@ class ThisDevice(Device):
             # No need to constantly rebroadcast if nothing is heard;
             # rely on initial broadcasts and others' broadcasts.
 
-        print(f"Device {self.id} finished election window.")
-        print(f"Device {self.id} saw candidacies from: {received_candidacies}")
+        print(f"Device {self.id} finished {election_type} election window.")
+        print(f"Device {self.id} saw {election_type} candidacies from: {received_candidacies}")
         print(f"Device {self.id} determined lowest ID: {lowest_id_seen}")
 
         self.in_election = False # Mark election as complete
-        self.log_status(f"ELECTION_COMPLETE_LOWEST_ID_{lowest_id_seen}")
+        self.log_status(f"{election_type.upper()}_ELECTION_COMPLETE_LOWEST_ID_{lowest_id_seen}")
         return lowest_id_seen
+    
+    async def _perform_hierarchical_election(self):
+        """Perform hierarchical election - neighborhood leader first, then super leader"""
+        
+        # Step 1: Elect neighborhood leader
+        neighborhood_leader_id = await self._perform_leader_election("neighborhood")
+        
+        if neighborhood_leader_id == self.id:
+            # This device becomes neighborhood leader
+            await self.promote_to_neighborhood_leader()
+            await self.make_leader()  # Keep existing leader functionality
+            self.leader_id = self.id
+            
+            # Add self to device list with a task
+            if not self.device_list.find_device(self.id):
+                task = self.get_task() if hasattr(self, 'get_task') else 0
+                await self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
+            
+            print(f"--------Neighborhood Leader {self.neighborhood_id}---------")
+            
+            # Step 2: Participate in super leader election (only neighborhood leaders)
+            await asyncio.sleep(2)  # Allow other neighborhood elections to complete
+            
+            # Try to discover other neighborhood leaders or become super leader
+            await self._attempt_super_leader_election()
+            
+        else:
+            # This device becomes a regular follower
+            await self.make_follower()
+            self.leader_id = neighborhood_leader_id
+            self.neighborhood_leader_id = neighborhood_leader_id
+            print(f"--------Follower in neighborhood {self.neighborhood_id}--------")
+    
+    async def _attempt_super_leader_election(self):
+        """Attempt to become super leader or discover existing super leader"""
+        
+        # Listen for existing super leader announcements
+        print(f"Neighborhood leader {self.id} listening for super leader...")
+        
+        super_leader_found = False
+        listen_duration = 5.0  # Listen for existing super leader
+        
+        start_time = time.time()
+        while time.time() - start_time < listen_duration:
+            if await self.receive(duration=1.0):
+                if self.received_action() == Action.SUPER_LEADER_ANNOUNCE.value:
+                    super_leader_id = self.received_leader_id()
+                    if super_leader_id != self.id:
+                        print(f"Neighborhood leader {self.id} found existing super leader {super_leader_id}")
+                        self.super_leader_id = super_leader_id
+                        
+                        # Join the council
+                        device_count = len(self.get_neighborhood_devices())
+                        payload = encode_council_payload(device_count, self.neighborhood_id)
+                        await self.send_council_message(Action.COUNCIL_JOIN.value, payload, super_leader_id)
+                        
+                        super_leader_found = True
+                        break
+        
+        # If no super leader found, start super leader election among neighborhood leaders
+        if not super_leader_found:
+            print(f"Neighborhood leader {self.id} starting super leader election...")
+            
+            # For simplicity, the first neighborhood leader to complete becomes super leader
+            # In a real implementation, this would be a proper distributed election
+            await self.promote_to_super_leader()
+            print(f"--------Super Leader---------")
+    
+    async def _handle_super_leader_failure(self):
+        """Handle the failure of the current super leader"""
+        print(f"Neighborhood leader {self.id} handling super leader {self.super_leader_id} failure")
+        
+        # Clear the current super leader
+        old_super_leader_id = self.super_leader_id
+        self.super_leader_id = None
+        
+        # Log the failure
+        self.log_status(f"SUPER_LEADER_FAILURE_{old_super_leader_id}")
+        
+        # Wait a bit to let other neighborhood leaders detect the failure too
+        await asyncio.sleep(1.0 + (self.id % 3) * 0.5)  # Staggered delay based on ID
+        
+        # Attempt to elect a new super leader
+        await self._attempt_super_leader_election()
+    
+    async def _perform_hierarchical_leader_operations(self):
+        """Perform periodic hierarchical operations for leaders"""
+        current_time = time.time()
+        config_manager = get_config_manager()
+        
+        # Neighborhood leader operations
+        if self.is_neighborhood_leader():
+            # Send periodic summary to super leader
+            if (current_time - self.last_council_summary > config_manager.config.summary_report_interval and 
+                self.super_leader_id and self.super_leader_id != self.id):
+                
+                device_count = len(self.get_neighborhood_devices())
+                payload = encode_council_payload(device_count, self.neighborhood_id)
+                await self.send_council_message(Action.COUNCIL_SUMMARY.value, payload, self.super_leader_id)
+                self.last_council_summary = current_time
+            
+            # Send heartbeat to super leader
+            if (current_time - self.last_council_heartbeat > config_manager.config.council_heartbeat_interval and
+                self.super_leader_id and self.super_leader_id != self.id):
+                
+                await self.send_council_message(Action.COUNCIL_HEARTBEAT.value, 0, self.super_leader_id)
+                self.last_council_heartbeat = current_time
+            
+            # Check if super leader is still alive (if we're not the super leader)
+            if (self.super_leader_id and self.super_leader_id != self.id and 
+                hasattr(self, 'last_super_leader_contact') and
+                current_time - self.last_super_leader_contact > config_manager.config.council_heartbeat_interval * 3):
+                
+                print(f"Neighborhood leader {self.id} detected super leader {self.super_leader_id} timeout")
+                await self._handle_super_leader_failure()
+            elif not hasattr(self, 'last_super_leader_contact'):
+                # Initialize the timestamp
+                self.last_super_leader_contact = current_time
+        
+        # Super leader operations
+        if self.is_super_leader():
+            # Check for timed-out council members
+            if self.council_manager:
+                timed_out_members = self.council_manager.check_member_timeouts()
+                for member_id in timed_out_members:
+                    print(f"Super leader {self.id} detected timeout for council member {member_id}")
+                    # Could trigger rebalancing or leader re-election here
+            
+            # Check for neighborhood rebalancing needs
+            if (current_time - self.last_rebalance_check > config_manager.config.rebalance_cooldown and
+                self.neighborhood_manager):
+                
+                await self._check_rebalancing_needs()
+                self.last_rebalance_check = current_time
+    
+    async def _check_rebalancing_needs(self):
+        """Check if any neighborhoods need rebalancing"""
+        if not self.neighborhood_manager:
+            return
+        
+        config_manager = get_config_manager()
+        
+        for neighborhood_id in self.neighborhood_manager.get_active_neighborhoods():
+            info = self.neighborhood_manager.get_neighborhood_info(neighborhood_id)
+            if not info:
+                continue
+            
+            # Check if neighborhood should split
+            if self.neighborhood_manager.should_split_neighborhood(neighborhood_id, config_manager.config.max_neighborhood_size):
+                print(f"Super leader {self.id} detected neighborhood {neighborhood_id} needs splitting ({info.device_count} devices)")
+                # Placeholder for split logic
+                
+            # Check if neighborhood should merge
+            elif self.neighborhood_manager.should_merge_neighborhood(neighborhood_id, config_manager.config.min_neighborhood_size):
+                print(f"Super leader {self.id} detected neighborhood {neighborhood_id} needs merging ({info.device_count} devices)")
+                # Placeholder for merge logic
 
     async def leader_drop_disconnected_devices(self):
         """
@@ -1252,44 +1749,47 @@ class ThisDevice(Device):
                 await self.swim_protocol.start()
                 self.log_status("SWIM_PROTOCOL_STARTED")
             # --- Leader Election ---
-            # Perform election if eligible (e.g., not explicitly told to be follower)
-            # For simplicity, assume eligible unless known_leaders has entries preventing it.
-            if not self.known_leaders: # Check if we know we shouldn't be leader
-                elected_leader_id = await self._perform_leader_election()
-
-                # Become leader or follower based on election result
-                if elected_leader_id == self.id:
-                    print(f"Device {self.id} becoming leader (result of election)")
-                    await self.make_leader() # Sets self.leader=True, logs, sends NEW_LEADER
-                    self.leader_id = self.id
-                    # Ensure self is in device list
-                    if not self.device_list.find_device(self.id):
-                         # Use get_task() if available, else default 0
-                         task = self.get_task() if hasattr(self, 'get_task') else 0
-                         await self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
-                    print("--------Leader---------")
-                    await asyncio.sleep(1) # Allow followers to process election outcome
-                    await self.leader_send_attendance() # Announce leadership
-                else:
-                    print(f"Device {self.id} becoming follower of {elected_leader_id} (result of election)")
-                    await self.make_follower() # Sets self.leader=False, logs, sends NEW_FOLLOWER
-                    self.leader_id = elected_leader_id
-                    print("--------Follower, listening--------")
+            if self.hierarchy_enabled:
+                # Hierarchical election - first elect neighborhood leader, then super leader
+                await self._perform_hierarchical_election()
             else:
-                # If not eligible, start as follower and try to find the leader
-                print(f"Device {self.id} starting as follower (ineligible for election).")
-                await self.make_follower()
-                self.log_status("STARTING_AS_FOLLOWER_INELIGIBLE")
-                print(f"Device {self.id} listening for leader announcement...")
-                # Listen for ATTENDANCE to identify the actual leader
-                if await self.receive(duration=15, action_value=Action.ATTENDANCE.value):
-                     self.leader_id = self.received_leader_id()
-                     print(f"Device {self.id} identified leader {self.leader_id}")
-                     self.log_status(f"IDENTIFIED_LEADER_{self.leader_id}")
+                # Traditional flat election
+                if not self.known_leaders: # Check if we know we shouldn't be leader
+                    elected_leader_id = await self._perform_leader_election()
+
+                    # Become leader or follower based on election result
+                    if elected_leader_id == self.id:
+                        print(f"Device {self.id} becoming leader (result of election)")
+                        await self.make_leader() # Sets self.leader=True, logs, sends NEW_LEADER
+                        self.leader_id = self.id
+                        # Ensure self is in device list
+                        if not self.device_list.find_device(self.id):
+                             # Use get_task() if available, else default 0
+                             task = self.get_task() if hasattr(self, 'get_task') else 0
+                             await self.device_list.add_device(id=self.id, task_index=task, thisDeviceId=self.id)
+                        print("--------Leader---------")
+                        await asyncio.sleep(1) # Allow followers to process election outcome
+                        await self.leader_send_attendance() # Announce leadership
+                    else:
+                        print(f"Device {self.id} becoming follower of {elected_leader_id} (result of election)")
+                        await self.make_follower() # Sets self.leader=False, logs, sends NEW_FOLLOWER
+                        self.leader_id = elected_leader_id
+                        print("--------Follower, listening--------")
                 else:
-                     print(f"Device {self.id} could not identify leader after starting as follower.")
-                     self.log_status("ERROR_NO_LEADER_FOUND_AS_FOLLOWER")
-                     # Consider what to do here - maybe re-attempt election later?
+                    # If not eligible, start as follower and try to find the leader
+                    print(f"Device {self.id} starting as follower (ineligible for election).")
+                    await self.make_follower()
+                    self.log_status("STARTING_AS_FOLLOWER_INELIGIBLE")
+                    print(f"Device {self.id} listening for leader announcement...")
+                    # Listen for ATTENDANCE to identify the actual leader
+                    if await self.receive(duration=15, action_value=Action.ATTENDANCE.value):
+                         self.leader_id = self.received_leader_id()
+                         print(f"Device {self.id} identified leader {self.leader_id}")
+                         self.log_status(f"IDENTIFIED_LEADER_{self.leader_id}")
+                    else:
+                         print(f"Device {self.id} could not identify leader after starting as follower.")
+                         self.log_status("ERROR_NO_LEADER_FOUND_AS_FOLLOWER")
+                         # Consider what to do here - maybe re-attempt election later?
 
             # --- Main Operation Loop ---
             last_attendance_time = 0
@@ -1356,10 +1856,14 @@ class ThisDevice(Device):
                         # Drop disconnected devices
                         try:
                             # print(f"Leader {self.id} checking for disconnected") # Can be noisy
-                            self.leader_drop_disconnected_devices()
+                            await self.leader_drop_disconnected_devices()
                         except Exception as e:
                             print(f"Error dropping devices: {e}")
                             self.log_status(f"ERROR_LEADER_DROP_{e}")
+                        
+                        # Hierarchical operations for leaders
+                        if self.hierarchy_enabled:
+                            await self._perform_hierarchical_leader_operations()
 
                         await asyncio.sleep(1.0) # Prevent leader busy-loop
 
@@ -1430,12 +1934,17 @@ class ThisDevice(Device):
 
                         # Check if message is from the expected leader
                         # Handle case where leader_id might still be 0 if election failed
-                        if self.leader_id != 0 and abs(self.received_leader_id() - self.leader_id) > PRECISION_ALLOWANCE:
-                            print(f"Follower {self.id} received msg from unexpected source {self.received_leader_id()} (expected {self.leader_id}).")
-                            self.log_status(f"UNEXPECTED_SOURCE_{self.received_leader_id()}")
+                        try:
+                            received_leader = self.received_leader_id()
+                            if self.leader_id != 0 and abs(received_leader - self.leader_id) > PRECISION_ALLOWANCE:
+                                print(f"Follower {self.id} received msg from unexpected source {received_leader} (expected {self.leader_id}).")
+                                self.log_status(f"UNEXPECTED_SOURCE_{received_leader}")
                             # Potentially handle tiebreaker if it's another leader message
-                            await self.handle_tiebreaker(self.received_leader_id())
+                                await self.handle_tiebreaker(received_leader)
                             continue # Ignore this specific message
+                        except ValueError:
+                            # No message was received, skip this iteration
+                            continue
 
                         # Process the message from the leader
                         action = self.received_action()

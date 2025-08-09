@@ -6,13 +6,18 @@ export interface DeviceInfo {
   leader: boolean;
   missed: number;
   active: boolean; // Keep optional for now, but we'll primarily use missed
-  // Add other fields if they exist in the data sent from ui_device.py format_device_list
-  // e.g., leader_id: number | null;
+  // Hierarchy fields
+  neighborhood_id: number;
+  role: 'device' | 'neighborhood_leader' | 'super_leader';
+  neighborhood_leader_id: number | null;
+  super_leader_id: number | null;
+  is_neighborhood_leader: boolean;
+  is_super_leader: boolean;
 }
 
-export type WebSocketMessage = 
-  | InitialState 
-  | MessageLog 
-  | StatusChange 
-  | ReceivedMessage 
+export type WebSocketMessage =
+  | InitialState
+  | MessageLog
+  | StatusChange
+  | ReceivedMessage
   | DeviceListUpdate;

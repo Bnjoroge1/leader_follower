@@ -33,6 +33,17 @@ class ProtocolConfig:
     network_latency_ms: float = 10.0
     packet_loss_rate: float = 0.0
     network_partition_probability: float = 0.0
+    
+    # Hierarchical neighborhood parameters
+    hierarchy_enabled: bool = True
+    neighborhood_strategy: str = "hash"  # "hash", "geographic", "manual"
+    target_neighborhood_size: int = 8
+    max_neighborhood_size: int = 40
+    min_neighborhood_size: int = 10
+    council_heartbeat_interval: float = 10.0
+    cross_neighborhood_timeout: float = 5.0
+    rebalance_cooldown: float = 60.0
+    summary_report_interval: float = 30.0
 
 class ProtocolConfigManager:
     """Manages protocol configuration with runtime switching capabilities"""
@@ -128,6 +139,34 @@ class ProtocolConfigManager:
                 print(f"Invalid metrics parameter: {key}")
         
         self.save_config()
+    
+    def update_hierarchy_config(self, **kwargs):
+        """Update hierarchical neighborhood parameters"""
+        valid_params = {
+            'hierarchy_enabled', 'neighborhood_strategy', 'target_neighborhood_size',
+            'max_neighborhood_size', 'min_neighborhood_size', 'council_heartbeat_interval',
+            'cross_neighborhood_timeout', 'rebalance_cooldown', 'summary_report_interval'
+        }
+        
+        for key, value in kwargs.items():
+            if key in valid_params and hasattr(self.config, key):
+                setattr(self.config, key, value)
+                print(f"Updated {key} to {value}")
+            else:
+                print(f"Invalid hierarchy parameter: {key}")
+        
+        self.save_config()
+    
+    def enable_hierarchy(self, enable: bool = True):
+        """Enable or disable hierarchical neighborhoods"""
+        old_state = self.config.hierarchy_enabled
+        self.config.hierarchy_enabled = enable
+        self.save_config()
+        
+        print(f"Hierarchy {'enabled' if enable else 'disabled'} (was {'enabled' if old_state else 'disabled'})")
+        if enable != old_state:
+            print("Note: Restart devices for changes to take effect")
+        return True
     
     def get_current_protocol(self) -> str:
         """Get currently configured protocol"""

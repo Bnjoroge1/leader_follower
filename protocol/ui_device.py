@@ -147,6 +147,14 @@ class UIDevice(ThisDevice):
                         print(f"UI Detected DELETE for current leader {self.leader_id}. Resetting leader ID.")
                         self.leader_id = 0 # Reset leader ID as the leader is gone
                         leader_changed = True # Trigger a status update
+                    
+                    # Check if this was a super leader or neighborhood leader being deleted
+                    deleted_device = self.device_list.find_device(follower_id)
+                    if deleted_device:
+                        hierarchy_info = self._get_device_hierarchy_info(follower_id)
+                        if hierarchy_info.get('is_super_leader') or hierarchy_info.get('is_neighborhood_leader'):
+                            print(f"UI detected leader {follower_id} being deleted - forcing hierarchy recalculation")
+                            list_changed = True
                         
                     # Attempt to remove the device from the list
                     if self.device_list.remove_device(id=follower_id):
@@ -156,9 +164,24 @@ class UIDevice(ThisDevice):
                         print(f"UI INFO: DELETE received for {follower_id}, but it wasn't in the list.")
                 device_id_to_process = 0 # Don't process further after removal
 
+            elif action == Action.SUPER_LEADER_ANNOUNCE.value:  # New super leader announcement
+                device_id_to_process = leader_id  # The new super leader
+                print(f"UI detected new super leader announcement from {leader_id}")
+                # Force immediate recalculation of hierarchy
+                list_changed = True
+                
             elif action == Action.DEACTIVATE.value:  # Device being deactivated
                 deactivated_id = follower_id
                 print(f"UI detected device {deactivated_id} being deactivated")
+                
+                # Check if this was a super leader or neighborhood leader being deactivated
+                if deactivated_id != 0:
+                    deactivated_device = self.device_list.find_device(deactivated_id)
+                    if deactivated_device:
+                        hierarchy_info = self._get_device_hierarchy_info(deactivated_id)
+                        if hierarchy_info.get('is_super_leader') or hierarchy_info.get('is_neighborhood_leader'):
+                            print(f"UI detected leader {deactivated_id} being deactivated - forcing hierarchy recalculation")
+                            list_changed = True
                 
                 # If it exists in our device list, mark it as inactive
                 if deactivated_id != 0:
@@ -306,7 +329,7 @@ class UIDevice(ThisDevice):
             print(f"Client disconnected: {client_address[0]}:{client_address[1]}")
 
     def format_device_list(self) -> List[Dict]:
-        """Format device list for JSON serialization with active status"""
+        """Format device list for JSON serialization with active status and hierarchy info"""
         result = []
         try:
             current_leader = self.leader_id
@@ -321,13 +344,29 @@ class UIDevice(ThisDevice):
                     # Debug log for each device's active status
                     print(f"Device {device_id}: missed={missed}, threshold={MISSED_THRESHOLD}, active={is_active}")
                     
-                    result.append({
+                    # Get hierarchy information if available
+                    hierarchy_info = self._get_device_hierarchy_info(device_id)
+                    
+                    device_data = {
                         "id": device_id,
                         "task": device.get_task(),
                         "leader": device_id == current_leader,
                         "missed": missed,
-                        "active": is_active  # Add active status based on missed count
-                    })
+                        "active": is_active,  # Add active status based on missed count
+                        # Hierarchy information
+                        "neighborhood_id": hierarchy_info.get("neighborhood_id", 0),
+                        "role": hierarchy_info.get("role", "device"),
+                        "neighborhood_leader_id": hierarchy_info.get("neighborhood_leader_id"),
+                        "super_leader_id": hierarchy_info.get("super_leader_id"),
+                        "is_neighborhood_leader": hierarchy_info.get("is_neighborhood_leader", False),
+                        "is_super_leader": hierarchy_info.get("is_super_leader", False)
+                    }
+                    
+                    # Debug logging for hierarchy
+                    if device_id <= 20:  # Only log first 20 devices to avoid spam
+                        print(f"UI Device hierarchy for {device_id}: neighborhood={hierarchy_info.get('neighborhood_id')}, role={hierarchy_info.get('role')}, is_leader={hierarchy_info.get('is_neighborhood_leader')}")
+                    
+                    result.append(device_data)
                 else:
                     print(f"Object {device_id} is not an instance of Device: {type(device)}")
             print(f"Formatted device list: {result}")
@@ -341,6 +380,108 @@ class UIDevice(ThisDevice):
             traceback.print_exc()
             result = []
         return result
+    
+    def _get_device_hierarchy_info(self, device_id: int) -> Dict:
+        """Get hierarchy information for a device by examining network messages and state"""
+        hierarchy_info = {
+            "neighborhood_id": 0,
+            "role": "device",
+            "neighborhood_leader_id": None,
+            "super_leader_id": None,
+            "is_neighborhood_leader": False,
+            "is_super_leader": False
+        }
+        
+        # Try to get hierarchy info from the network by checking if any device 
+        # has sent hierarchy-related messages
+        from protocol_config import get_config_manager
+        config_manager = get_config_manager()
+        
+        if config_manager.config.hierarchy_enabled:
+            # For UI device, we need to infer hierarchy from network traffic
+            # This is a simplified approach - in a full implementation,
+            # devices would broadcast their hierarchy info periodically
+            
+            # Use the same assignment strategy as the actual protocol
+            target_size = config_manager.config.target_neighborhood_size
+            strategy = config_manager.config.neighborhood_strategy
+            
+            if target_size > 0:
+                if strategy == "hash":
+                    # Use consistent hashing like the actual implementation
+                    import hashlib
+                    hash_obj = hashlib.md5(str(device_id).encode())
+                    hash_int = int(hash_obj.hexdigest(), 16)
+                    # Estimate total neighborhoods based on current device count
+                    total_devices = len(self.device_list.get_device_list())
+                    total_neighborhoods = max(1, total_devices // target_size + 1)
+                    neighborhood_id = hash_int % total_neighborhoods
+                else:
+                    # Sequential assignment fallback
+                    neighborhood_id = (device_id - 1) // target_size
+                    
+                hierarchy_info["neighborhood_id"] = neighborhood_id
+                
+                # For hash-based assignment, we need to find the actual leader
+                # by checking which devices are in this neighborhood
+                devices_in_neighborhood = []
+                for dev_id, device in self.device_list.get_device_list().items():
+                    if isinstance(device, Device):
+                        # Calculate this device's neighborhood
+                        if strategy == "hash":
+                            dev_hash_obj = hashlib.md5(str(dev_id).encode())
+                            dev_hash_int = int(dev_hash_obj.hexdigest(), 16)
+                            dev_neighborhood_id = dev_hash_int % total_neighborhoods
+                        else:
+                            dev_neighborhood_id = (dev_id - 1) // target_size
+                            
+                        if dev_neighborhood_id == neighborhood_id:
+                            devices_in_neighborhood.append(dev_id)
+                
+                # Neighborhood leader is the device with the lowest ID in the neighborhood
+                if devices_in_neighborhood:
+                    neighborhood_leader_id = min(devices_in_neighborhood)
+                    hierarchy_info["neighborhood_leader_id"] = neighborhood_leader_id
+                    
+                    # Find the super leader (lowest ID among ALL neighborhood leaders)
+                    all_neighborhood_leaders = []
+                    for check_neighborhood_id in range(total_neighborhoods):
+                        neighborhood_devices = []
+                        for dev_id, device in self.device_list.get_device_list().items():
+                            if isinstance(device, Device):
+                                # Calculate this device's neighborhood
+                                if strategy == "hash":
+                                    dev_hash_obj = hashlib.md5(str(dev_id).encode())
+                                    dev_hash_int = int(dev_hash_obj.hexdigest(), 16)
+                                    dev_neighborhood_id = dev_hash_int % total_neighborhoods
+                                else:
+                                    dev_neighborhood_id = (dev_id - 1) // target_size
+                                    
+                                if dev_neighborhood_id == check_neighborhood_id:
+                                    neighborhood_devices.append(dev_id)
+                        
+                        if neighborhood_devices:
+                            all_neighborhood_leaders.append(min(neighborhood_devices))
+                    
+                    super_leader_id = min(all_neighborhood_leaders) if all_neighborhood_leaders else 1
+                    hierarchy_info["super_leader_id"] = super_leader_id
+                    
+                    # Debug logging for super leader calculation
+                    if device_id <= 10:  # Only log for first few devices
+                        print(f"Device {device_id}: neighborhood_leaders={all_neighborhood_leaders}, super_leader={super_leader_id}")
+                    
+                    # Check if this device is the neighborhood leader
+                    if device_id == neighborhood_leader_id:
+                        hierarchy_info["role"] = "neighborhood_leader"
+                        hierarchy_info["is_neighborhood_leader"] = True
+                        
+                        # Check if this neighborhood leader is also the super leader
+                        if device_id == super_leader_id:
+                            hierarchy_info["role"] = "super_leader"
+                            hierarchy_info["is_super_leader"] = True
+        
+        return hierarchy_info
+    
     async def broadcast_update(self, device_list_update, data):
         """Send update to all connected WebSocket clients"""
         if not self.connected_clients:

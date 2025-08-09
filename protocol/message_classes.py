@@ -58,5 +58,17 @@ class Action(Enum):
     
     # SWIM protocol messages
     SWIM_MESSAGE = 15
+    
+    # Hierarchical neighborhood messages
+    NEIGHBORHOOD_JOIN_REQUEST = 16
+    NEIGHBORHOOD_JOIN_ACCEPT = 17
+    NEIGHBORHOOD_LEAVE = 18
+    COUNCIL_JOIN = 19
+    COUNCIL_SUMMARY = 20
+    COUNCIL_HEARTBEAT = 21
+    SUPER_LEADER_ANNOUNCE = 22
+    CROSS_NEIGHBORHOOD_ROUTE = 23
+    REBALANCE_REQUEST = 24
+    REBALANCE_ACCEPT = 25
      
 
