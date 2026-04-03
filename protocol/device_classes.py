@@ -494,6 +494,9 @@ class ThisDevice(Device):
         self.role = NeighborhoodRole.NEIGHBORHOOD_LEADER
         self.neighborhood_leader_id = self.id
         
+        # Send a message that the UI can detect (using NEW_FOLLOWER as a notification mechanism)
+        await self.send(Action.NEW_FOLLOWER.value, self.neighborhood_id, self.id, 0)
+        
         # Register with council
         if self.council_manager:
             device_count = len(self.get_neighborhood_devices())
@@ -969,10 +972,16 @@ class ThisDevice(Device):
         
         # Add a small random delay before broadcasting to reduce collisions
         await asyncio.sleep(random.uniform(0.1, 0.5))
-        received_candidacies = {self.id} # Track IDs seen, including self
+        
+        # Only include self in candidacies if active
+        if self.active:
+            received_candidacies = {self.id} # Track IDs seen, including self
+            lowest_id_seen = self.id
+        else:
+            received_candidacies = set() # Don't include inactive self
+            lowest_id_seen = float('inf') # Use high value so any active device wins
 
         election_duration = 10.0  # Election window duration in seconds
-        lowest_id_seen = self.id
 
         # Broadcast candidacy multiple times initially
         await self.broadcast_candidacy()
@@ -1016,6 +1025,13 @@ class ThisDevice(Device):
         print(f"Device {self.id} determined lowest ID: {lowest_id_seen}")
 
         self.in_election = False # Mark election as complete
+        
+        # Handle case where no active candidates were found
+        if lowest_id_seen == float('inf'):
+            print(f"Device {self.id}: No active candidates found in {election_type} election")
+            self.log_status(f"{election_type.upper()}_ELECTION_NO_ACTIVE_CANDIDATES")
+            return 0  # Return 0 to indicate no leader elected
+        
         self.log_status(f"{election_type.upper()}_ELECTION_COMPLETE_LOWEST_ID_{lowest_id_seen}")
         return lowest_id_seen
     
@@ -1122,11 +1138,17 @@ class ThisDevice(Device):
         elected_leader_id = await self._perform_leader_election("neighborhood")
         
         # Update neighborhood leadership based on election result
-        if elected_leader_id == self.id:
+        if elected_leader_id == 0:
+            # No active candidates found
+            print(f"Device {self.id}: No active candidates found for neighborhood leader election")
+            self.neighborhood_leader_id = None
+            
+        elif elected_leader_id == self.id:
             # We became the new neighborhood leader
             self.neighborhood_leader_id = self.id
             await self.promote_to_neighborhood_leader()
             print(f"Device {self.id} became new neighborhood leader after failure")
+            
         else:
             # Someone else became the neighborhood leader
             self.neighborhood_leader_id = elected_leader_id
@@ -2056,7 +2078,13 @@ class ThisDevice(Device):
         """
         Broadcasts this device's candidacy for leadership using attendance message.
         Uses the device's own ID as leader_id to announce candidacy.
+        Only active devices should broadcast candidacy.
         """
+        # Only active devices can be candidates
+        if not self.active:
+            print(f"Device {self.id} is inactive, not broadcasting candidacy")
+            return
+            
         print(f"Device {self.id} broadcasting candidacy")
         candidacy_msg = Message(
             action=Action.CANDIDACY.value,  # Using attendance action for candidacy

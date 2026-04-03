@@ -40,6 +40,9 @@ class UIDevice(ThisDevice):
         print(f"--- UI Device  {self.id} Entered device_main ---") 
 
         print("UI Device: Main loop started. Passively listening...")
+        last_refresh_time = time.time()
+        refresh_interval = 5.0  # Refresh every 5 seconds to catch leadership changes
+        
         while True:
             try:
                 if self.transceiver: # Check if transceiver exists
@@ -48,6 +51,14 @@ class UIDevice(ThisDevice):
                      print(f"WARN: UI Device {self.id} has no transceiver, cannot receive.")
                      await asyncio.sleep(1.0) # Prevent busy loop if no transceiver
                      received_msg_int = None
+                
+                # Periodic refresh to catch missed leadership changes
+                current_time = time.time()
+                if current_time - last_refresh_time > refresh_interval:
+                    print("UI Device: Performing periodic refresh to catch leadership changes")
+                    formatted_list = self.format_device_list()
+                    await self.send_update("device_list", formatted_list)
+                    last_refresh_time = current_time
 
 
 
@@ -169,6 +180,19 @@ class UIDevice(ThisDevice):
                 print(f"UI detected new super leader announcement from {leader_id}")
                 # Force immediate recalculation of hierarchy
                 list_changed = True
+                
+            elif action == Action.NEW_FOLLOWER.value:  # New follower or potential leadership change
+                # Check if this might be a neighborhood leader promotion
+                device_id_to_process = follower_id
+                if device_id_to_process != 0:
+                    # Check if this device just became a neighborhood leader
+                    hierarchy_info = self._get_device_hierarchy_info(device_id_to_process)
+                    if hierarchy_info.get('is_neighborhood_leader'):
+                        print(f"UI detected potential neighborhood leader promotion for device {device_id_to_process}")
+                    
+                    # Force hierarchy recalculation to detect potential leadership changes
+                    print(f"UI detected NEW_FOLLOWER message from {device_id_to_process} - checking for leadership changes")
+                    list_changed = True
                 
             elif action == Action.DEACTIVATE.value:  # Device being deactivated
                 deactivated_id = follower_id
